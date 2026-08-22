@@ -1,0 +1,63 @@
+package com.storagemanager.storage_management.controller;
+
+import com.storagemanager.storage_management.dto.ClientRequest;
+import com.storagemanager.storage_management.model.Client;
+import com.storagemanager.storage_management.model.Payment;
+import com.storagemanager.storage_management.model.RentalAgreement;
+import com.storagemanager.storage_management.service.ClientService;
+import com.storagemanager.storage_management.service.PaymentService;
+import com.storagemanager.storage_management.service.RentalAgreementService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/clients")
+@RequiredArgsConstructor
+
+public class ClientController {
+
+    private final ClientService clientService;
+    private final RentalAgreementService rentalAgreementService;
+    private final PaymentService paymentService;
+
+    @GetMapping
+    public ResponseEntity<List<Client>> getAllClients(@RequestParam(required = false) String search) {
+        return ResponseEntity.ok(clientService.searchClients(search));
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<Client> getClientById(@PathVariable Long id) {
+        return ResponseEntity.ok(clientService.getClientById(id));
+    }
+
+    @GetMapping("/{id}/rentals")
+    public ResponseEntity<List<RentalAgreement>> getClientRentals(@PathVariable Long id) {
+        return ResponseEntity.ok(rentalAgreementService.getAgreementsByClient(id));
+    }
+
+    @GetMapping("/{id}/payments")
+    public ResponseEntity<List<Payment>> getClientPayments(@PathVariable Long id) {
+        return ResponseEntity.ok(paymentService.getPaymentsByClient(id));
+    }
+
+    @PostMapping
+    public ResponseEntity<Client> createClient(@Valid @RequestBody ClientRequest request) {
+        return new ResponseEntity<>(clientService.createClient(request), HttpStatus.CREATED);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Client> updateClient(@PathVariable Long id, @Valid @RequestBody ClientRequest request) {
+        return ResponseEntity.ok(clientService.updateClient(id, request));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteClient(@PathVariable Long id) {
+        clientService.deleteClient(id);
+        return ResponseEntity.noContent().build();
+    }
+}

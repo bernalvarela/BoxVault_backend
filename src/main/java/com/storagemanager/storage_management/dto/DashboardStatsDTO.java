@@ -1,0 +1,53 @@
+package com.storagemanager.storage_management.dto;
+
+import lombok.Builder;
+import lombok.Data;
+
+import java.math.BigDecimal;
+import java.util.List;
+
+@Data
+@Builder
+public class DashboardStatsDTO {
+    // Storage metrics
+    private long totalUnits;
+    private long occupiedUnits;
+    private long availableUnits;
+    private long maintenanceUnits;
+    private long reservedUnits;
+    private double occupancyRate; // e.g. 66.7 %
+
+    // Client & Rental metrics
+    private long totalClients;
+    private long activeRentals;
+
+    // Financial Overview (Gross with 21% VAT)
+    private BigDecimal monthlyPotentialRevenue; // 100% capacity (Con IVA)
+    private BigDecimal monthlyPotentialRevenueWithoutVat; // Base sin IVA
+    private BigDecimal monthlyPotentialVatAmount; // Cuota IVA 21%
+
+    private BigDecimal currentMonthExpectedRevenue; // Con IVA
+    private BigDecimal currentMonthExpectedRevenueWithoutVat; // Base sin IVA
+    private BigDecimal currentMonthExpectedVatAmount; // Cuota IVA 21%
+
+    private BigDecimal currentMonthCollectedRevenue; // Con IVA
+    private BigDecimal currentMonthCollectedRevenueWithoutVat; // Base sin IVA
+    private BigDecimal currentMonthCollectedVatAmount; // Cuota IVA 21%
+
+    private BigDecimal currentMonthPendingRevenue; // Con IVA
+    private BigDecimal currentMonthPendingRevenueWithoutVat; // Base sin IVA
+    private BigDecimal currentMonthPendingVatAmount; // Cuota IVA 21%
+
+    private BigDecimal totalOverdueAmount; // Con IVA
+    private BigDecimal totalOverdueWithoutVat; // Base sin IVA
+    private BigDecimal totalOverdueVatAmount; // Cuota IVA 21%
+    private long overduePaymentCount;
+
+    private BigDecimal totalRevenueAllTime; // Con IVA
+    private BigDecimal totalRevenueAllTimeWithoutVat; // Base sin IVA
+    private BigDecimal totalRevenueAllTimeVatAmount; // Cuota IVA 21%
+
+    // Breakdown lists
+    private List<MonthlyRevenueDTO> recentMonthlyRevenue;
+    private List<UnitOccupancyDTO> unitsSummary;
+}
