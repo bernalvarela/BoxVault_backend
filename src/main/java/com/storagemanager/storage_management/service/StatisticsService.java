@@ -22,12 +22,16 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Service
 @RequiredArgsConstructor
 public class StatisticsService {
+
+    private static final DateTimeFormatter MONTH_LABEL_FORMATTER =
+            DateTimeFormatter.ofPattern("MMM yyyy", new Locale("es", "ES"));
 
     private final StorageUnitRepository storageUnitRepository;
     private final ClientRepository clientRepository;
@@ -142,59 +146,67 @@ public class StatisticsService {
     }
 
     public List<MonthlyRevenueDTO> getRecentMonthlyTrends(int numberOfMonths) {
-        LocalDate current = LocalDate.now();
+        YearMonth current = YearMonth.now();
+        return getMonthlyTrendsBetween(current.minusMonths(numberOfMonths - 1L), current);
+    }
+
+    /**
+     * Month-by-month revenue for every month from {@code start} to {@code end} (both inclusive),
+     * in chronological order.
+     */
+    public List<MonthlyRevenueDTO> getMonthlyTrendsBetween(YearMonth start, YearMonth end) {
         List<MonthlyRevenueDTO> list = new ArrayList<>();
-        DateTimeFormatter monthFormatter = DateTimeFormatter.ofPattern("MMM yyyy", new Locale("es", "ES"));
-
-        for (int i = numberOfMonths - 1; i >= 0; i--) {
-            LocalDate targetDate = current.minusMonths(i);
-            int year = targetDate.getYear();
-            int month = targetDate.getMonthValue();
-            String label = targetDate.format(monthFormatter);
-
-            List<Payment> payments = paymentRepository.findByBillingPeriodYearAndBillingPeriodMonth(year, month);
-
-            BigDecimal expected = payments.stream()
-                    .map(Payment::getAmountDue)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-            BigDecimal collected = payments.stream()
-                    .filter(p -> p.getStatus() == PaymentStatus.PAID)
-                    .map(Payment::getAmountPaid)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-            BigDecimal pending = payments.stream()
-                    .filter(p -> p.getStatus() == PaymentStatus.PENDING || p.getStatus() == PaymentStatus.OVERDUE)
-                    .map(Payment::getAmountDue)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-            long paidCount = payments.stream().filter(p -> p.getStatus() == PaymentStatus.PAID).count();
-            long pendingCount = payments.stream().filter(p -> p.getStatus() == PaymentStatus.PENDING).count();
-            long overdueCount = payments.stream().filter(p -> p.getStatus() == PaymentStatus.OVERDUE).count();
-
-            list.add(MonthlyRevenueDTO.builder()
-                    .monthLabel(label)
-                    .year(year)
-                    .month(month)
-                    .expectedRevenue(expected)
-                    .expectedRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(expected))
-                    .expectedVatAmount(VatUtils.calculateVatAmount(expected))
-                    .collectedRevenue(collected)
-                    .collectedRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(collected))
-                    .collectedVatAmount(VatUtils.calculateVatAmount(collected))
-                    .pendingRevenue(pending)
-                    .pendingRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(pending))
-                    .pendingVatAmount(VatUtils.calculateVatAmount(pending))
-                    .paidCount(paidCount)
-                    .pendingCount(pendingCount)
-                    .overdueCount(overdueCount)
-                    .build());
+        for (YearMonth ym = start; !ym.isAfter(end); ym = ym.plusMonths(1)) {
+            list.add(buildMonthlyRevenue(ym));
         }
-
         return list;
+    }
+
+    private MonthlyRevenueDTO buildMonthlyRevenue(YearMonth yearMonth) {
+        int year = yearMonth.getYear();
+        int month = yearMonth.getMonthValue();
+        String label = yearMonth.format(MONTH_LABEL_FORMATTER);
+
+        List<Payment> payments = paymentRepository.findByBillingPeriodYearAndBillingPeriodMonth(year, month);
+
+        BigDecimal expected = payments.stream()
+                .map(Payment::getAmountDue)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal collected = payments.stream()
+                .filter(p -> p.getStatus() == PaymentStatus.PAID)
+                .map(Payment::getAmountPaid)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal pending = payments.stream()
+                .filter(p -> p.getStatus() == PaymentStatus.PENDING || p.getStatus() == PaymentStatus.OVERDUE)
+                .map(Payment::getAmountDue)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        long paidCount = payments.stream().filter(p -> p.getStatus() == PaymentStatus.PAID).count();
+        long pendingCount = payments.stream().filter(p -> p.getStatus() == PaymentStatus.PENDING).count();
+        long overdueCount = payments.stream().filter(p -> p.getStatus() == PaymentStatus.OVERDUE).count();
+
+        return MonthlyRevenueDTO.builder()
+                .monthLabel(label)
+                .year(year)
+                .month(month)
+                .expectedRevenue(expected)
+                .expectedRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(expected))
+                .expectedVatAmount(VatUtils.calculateVatAmount(expected))
+                .collectedRevenue(collected)
+                .collectedRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(collected))
+                .collectedVatAmount(VatUtils.calculateVatAmount(collected))
+                .pendingRevenue(pending)
+                .pendingRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(pending))
+                .pendingVatAmount(VatUtils.calculateVatAmount(pending))
+                .paidCount(paidCount)
+                .pendingCount(pendingCount)
+                .overdueCount(overdueCount)
+                .build();
     }
 
     /**
@@ -380,8 +392,9 @@ public class StatisticsService {
         BigDecimal totalRevenueAllTime = paymentRepository.sumTotalPaidRevenue();
         if (totalRevenueAllTime == null) totalRevenueAllTime = BigDecimal.ZERO;
 
-        // For date range stats, we don't have monthly trends, so we'll use an empty list
-        List<MonthlyRevenueDTO> recentMonthlyRevenue = Collections.emptyList();
+        // Month-by-month breakdown covering every month touched by the range
+        List<MonthlyRevenueDTO> recentMonthlyRevenue =
+                getMonthlyTrendsBetween(YearMonth.from(startDate), YearMonth.from(endDate));
 
         // Desglose de Trasteros (using all units for now, could be filtered by date range if needed)
         List<UnitOccupancyDTO> unitsSummary = getUnitSummaryList(allUnits);

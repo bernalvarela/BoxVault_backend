@@ -6,7 +6,8 @@ import com.storagemanager.storage_management.dto.QuarterlyRevenueDTO;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.http.ResponseEntity;
 
 import java.time.LocalDate;
@@ -15,6 +16,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureTestRestTemplate
 class StatisticsControllerTest {
 
     @Autowired
@@ -23,28 +25,28 @@ class StatisticsControllerTest {
     @Test
     void testGetDashboardStats() {
         ResponseEntity<DashboardStatsDTO> response = restTemplate.getForEntity("/api/statistics/dashboard", DashboardStatsDTO.class);
-        assertEquals(200, response.getStatusCodeValue());
+        assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
     }
 
     @Test
     void testGetMonthlyTrends() {
         ResponseEntity<List> response = restTemplate.getForEntity("/api/statistics/monthly-trends?months=3", List.class);
-        assertEquals(200, response.getStatusCodeValue());
+        assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
     }
 
     @Test
     void testGetQuarterlyTrends() {
         ResponseEntity<List> response = restTemplate.getForEntity("/api/statistics/quarterly-trends?quarters=2", List.class);
-        assertEquals(200, response.getStatusCodeValue());
+        assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
     }
 
     @Test
     void testGetAnnualTrends() {
         ResponseEntity<List> response = restTemplate.getForEntity("/api/statistics/annual-trends?years=2", List.class);
-        assertEquals(200, response.getStatusCodeValue());
+        assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
     }
 
@@ -59,7 +61,7 @@ class StatisticsControllerTest {
                 startDate,
                 endDate);
 
-        assertEquals(200, response.getStatusCodeValue());
+        assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
     }
 }

@@ -1,0 +1,2311 @@
+{
+  "clients": [
+    {
+      "fullName": "María Luisa Gómez Gómez",
+      "email": "maria.luisa.gomez.gomez@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    },
+    {
+      "fullName": "Nélida Raquel Aguirre Sánchez",
+      "email": "nelida.raquel.aguirre.sanchez@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    },
+    {
+      "fullName": "Valeria Carolina González Carmona",
+      "email": "valeria.carolina.gonzalez.carmona@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    },
+    {
+      "fullName": "Isabel Coronas Carballés",
+      "email": "isabel.coronas.carballes@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    },
+    {
+      "fullName": "Alejandro Gabriel De Giuli",
+      "email": "alejandro.gabriel.de.giuli@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    },
+    {
+      "fullName": "Marcos Rodríguez Seijido",
+      "email": "marcos.rodriguez.seijido@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    },
+    {
+      "fullName": "María Victoria Quintana Pasantes",
+      "email": "maria.victoria.quintana.pasantes@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    },
+    {
+      "fullName": "Francisco Elvira Serrano",
+      "email": "francisco.elvira.serrano@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    },
+    {
+      "fullName": "Uxía Valentina Docampo Cabanelas",
+      "email": "uxia.valentina.docampo.cabanelas@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    },
+    {
+      "fullName": "David Manteiga Ortega",
+      "email": "david.manteiga.ortega@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    },
+    {
+      "fullName": "Olalla Míguez Suárez",
+      "email": "olalla.miguez.suarez@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    },
+    {
+      "fullName": "Alfonso Rodríguez Abella",
+      "email": "alfonso.rodriguez.abella@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    },
+    {
+      "fullName": "Ricardo Amaral Lopes",
+      "email": "ricardo.amaral.lopes@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    },
+    {
+      "fullName": "Ildiana Gabriela González Torres",
+      "email": "ildiana.gabriela.gonzalez.torres@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    },
+    {
+      "fullName": "Severiano Andrés Rivas Rodríguez",
+      "email": "severiano.andres.rivas.rodriguez@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    },
+    {
+      "fullName": "Antonio Luis Torreiro Varela",
+      "email": "antonio.luis.torreiro.varela@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    },
+    {
+      "fullName": "Emilia Viñas Méndez",
+      "email": "emilia.vinas.mendez@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    },
+    {
+      "fullName": "Sergio Omar Iturri",
+      "email": "sergio.omar.iturri@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    },
+    {
+      "fullName": "Josefa Vales Castro",
+      "email": "josefa.vales.castro@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    },
+    {
+      "fullName": "Adrián Dual Salazar",
+      "email": "adrian.dual.salazar@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    },
+    {
+      "fullName": "Alberto Costas Caamaño",
+      "email": "alberto.costas.caamano@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    },
+    {
+      "fullName": "Pablo Cores Moldes",
+      "email": "pablo.cores.moldes@clientes.example.com",
+      "phone": "N/D",
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario."
+    }
+  ],
+  "units": [
+    {
+      "unitNumber": "1",
+      "name": "Trastero 1",
+      "sizeSquareMeters": 5,
+      "unitType": "STANDARD",
+      "location": "Avenida del Pasaje (A Pasaxe)",
+      "baseMonthlyRate": 55,
+      "status": "OCCUPIED",
+      "description": "Tamaño aproximado; ajustar con la medida real."
+    },
+    {
+      "unitNumber": "2",
+      "name": "Trastero 2",
+      "sizeSquareMeters": 5,
+      "unitType": "STANDARD",
+      "location": "Avenida del Pasaje (A Pasaxe)",
+      "baseMonthlyRate": 50,
+      "status": "OCCUPIED",
+      "description": "Tamaño aproximado; ajustar con la medida real."
+    },
+    {
+      "unitNumber": "3",
+      "name": "Trastero 3",
+      "sizeSquareMeters": 5,
+      "unitType": "STANDARD",
+      "location": "Avenida del Pasaje (A Pasaxe)",
+      "baseMonthlyRate": 55,
+      "status": "OCCUPIED",
+      "description": "Tamaño aproximado; ajustar con la medida real."
+    },
+    {
+      "unitNumber": "4",
+      "name": "Trastero 4",
+      "sizeSquareMeters": 5,
+      "unitType": "STANDARD",
+      "location": "Avenida del Pasaje (A Pasaxe)",
+      "baseMonthlyRate": 50,
+      "status": "OCCUPIED",
+      "description": "Tamaño aproximado; ajustar con la medida real."
+    },
+    {
+      "unitNumber": "5",
+      "name": "Trastero 5",
+      "sizeSquareMeters": 7,
+      "unitType": "STANDARD",
+      "location": "Avenida del Pasaje (A Pasaxe)",
+      "baseMonthlyRate": 65,
+      "status": "OCCUPIED",
+      "description": "Tamaño aproximado; ajustar con la medida real."
+    },
+    {
+      "unitNumber": "6",
+      "name": "Trastero 6",
+      "sizeSquareMeters": 5,
+      "unitType": "STANDARD",
+      "location": "Avenida del Pasaje (A Pasaxe)",
+      "baseMonthlyRate": 55,
+      "status": "OCCUPIED",
+      "description": "Tamaño aproximado; ajustar con la medida real."
+    },
+    {
+      "unitNumber": "7",
+      "name": "Trastero 7",
+      "sizeSquareMeters": 7,
+      "unitType": "STANDARD",
+      "location": "Avenida del Pasaje (A Pasaxe)",
+      "baseMonthlyRate": 60,
+      "status": "OCCUPIED",
+      "description": "Tamaño aproximado; ajustar con la medida real."
+    },
+    {
+      "unitNumber": "8",
+      "name": "Trastero 8",
+      "sizeSquareMeters": 7,
+      "unitType": "STANDARD",
+      "location": "Avenida del Pasaje (A Pasaxe)",
+      "baseMonthlyRate": 60,
+      "status": "OCCUPIED",
+      "description": "Tamaño aproximado; ajustar con la medida real."
+    },
+    {
+      "unitNumber": "9",
+      "name": "Trastero 9",
+      "sizeSquareMeters": 14,
+      "unitType": "STANDARD",
+      "location": "Avenida del Pasaje (A Pasaxe)",
+      "baseMonthlyRate": 130,
+      "status": "OCCUPIED",
+      "description": "Tamaño aproximado; ajustar con la medida real."
+    }
+  ],
+  "rentals": [
+    {
+      "ref": 1,
+      "unit": "1",
+      "client": "María Luisa Gómez Gómez",
+      "startDate": "2024-06-01",
+      "endDate": "2024-07-01",
+      "monthlyRent": 60,
+      "securityDeposit": 75,
+      "depositPaid": true,
+      "status": "TERMINATED",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 2,
+      "unit": "1",
+      "client": "Nélida Raquel Aguirre Sánchez",
+      "startDate": "2024-08-01",
+      "endDate": "2025-02-01",
+      "monthlyRent": 45,
+      "securityDeposit": 0,
+      "depositPaid": false,
+      "status": "TERMINATED",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 3,
+      "unit": "1",
+      "client": "Valeria Carolina González Carmona",
+      "startDate": "2025-04-01",
+      "endDate": "2025-12-01",
+      "monthlyRent": 50,
+      "securityDeposit": 100,
+      "depositPaid": true,
+      "status": "TERMINATED",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 4,
+      "unit": "1",
+      "client": "Isabel Coronas Carballés",
+      "startDate": "2025-12-01",
+      "endDate": "2026-04-01",
+      "monthlyRent": 55,
+      "securityDeposit": 110,
+      "depositPaid": true,
+      "status": "TERMINATED",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 5,
+      "unit": "1",
+      "client": "Alejandro Gabriel De Giuli",
+      "startDate": "2026-06-01",
+      "endDate": null,
+      "monthlyRent": 55,
+      "securityDeposit": 83,
+      "depositPaid": true,
+      "status": "ACTIVE",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 6,
+      "unit": "2",
+      "client": "Marcos Rodríguez Seijido",
+      "startDate": "2024-06-01",
+      "endDate": "2024-09-01",
+      "monthlyRent": 50,
+      "securityDeposit": 100,
+      "depositPaid": true,
+      "status": "TERMINATED",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 7,
+      "unit": "2",
+      "client": "María Victoria Quintana Pasantes",
+      "startDate": "2024-10-01",
+      "endDate": "2026-06-01",
+      "monthlyRent": 50,
+      "securityDeposit": 0,
+      "depositPaid": false,
+      "status": "TERMINATED",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 8,
+      "unit": "2",
+      "client": "Francisco Elvira Serrano",
+      "startDate": "2026-06-01",
+      "endDate": null,
+      "monthlyRent": 50,
+      "securityDeposit": 0,
+      "depositPaid": false,
+      "status": "ACTIVE",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 9,
+      "unit": "3",
+      "client": "Uxía Valentina Docampo Cabanelas",
+      "startDate": "2024-06-01",
+      "endDate": "2024-09-01",
+      "monthlyRent": 50,
+      "securityDeposit": 100,
+      "depositPaid": true,
+      "status": "TERMINATED",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 10,
+      "unit": "3",
+      "client": "David Manteiga Ortega",
+      "startDate": "2024-09-01",
+      "endDate": "2025-04-01",
+      "monthlyRent": 50,
+      "securityDeposit": 100,
+      "depositPaid": true,
+      "status": "TERMINATED",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 11,
+      "unit": "3",
+      "client": "Olalla Míguez Suárez",
+      "startDate": "2025-05-01",
+      "endDate": null,
+      "monthlyRent": 55,
+      "securityDeposit": 110,
+      "depositPaid": true,
+      "status": "ACTIVE",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 12,
+      "unit": "4",
+      "client": "Alfonso Rodríguez Abella",
+      "startDate": "2024-09-01",
+      "endDate": "2025-02-01",
+      "monthlyRent": 50,
+      "securityDeposit": 100,
+      "depositPaid": true,
+      "status": "TERMINATED",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 13,
+      "unit": "4",
+      "client": "Ricardo Amaral Lopes",
+      "startDate": "2025-09-01",
+      "endDate": "2025-12-01",
+      "monthlyRent": 50,
+      "securityDeposit": 0,
+      "depositPaid": false,
+      "status": "TERMINATED",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 14,
+      "unit": "4",
+      "client": "Ildiana Gabriela González Torres",
+      "startDate": "2026-03-01",
+      "endDate": "2026-04-01",
+      "monthlyRent": 50,
+      "securityDeposit": 135,
+      "depositPaid": true,
+      "status": "TERMINATED",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 15,
+      "unit": "4",
+      "client": "Severiano Andrés Rivas Rodríguez",
+      "startDate": "2026-07-01",
+      "endDate": null,
+      "monthlyRent": 50,
+      "securityDeposit": 100,
+      "depositPaid": true,
+      "status": "ACTIVE",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 16,
+      "unit": "5",
+      "client": "Antonio Luis Torreiro Varela",
+      "startDate": "2024-03-01",
+      "endDate": null,
+      "monthlyRent": 65,
+      "securityDeposit": 0,
+      "depositPaid": false,
+      "status": "ACTIVE",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 17,
+      "unit": "6",
+      "client": "Emilia Viñas Méndez",
+      "startDate": "2024-08-01",
+      "endDate": null,
+      "monthlyRent": 55,
+      "securityDeposit": 110,
+      "depositPaid": true,
+      "status": "ACTIVE",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 18,
+      "unit": "7",
+      "client": "Sergio Omar Iturri",
+      "startDate": "2024-09-01",
+      "endDate": "2026-01-01",
+      "monthlyRent": 60,
+      "securityDeposit": 120,
+      "depositPaid": true,
+      "status": "TERMINATED",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 19,
+      "unit": "7",
+      "client": "María Luisa Gómez Gómez",
+      "startDate": "2026-03-01",
+      "endDate": null,
+      "monthlyRent": 60,
+      "securityDeposit": 0,
+      "depositPaid": false,
+      "status": "ACTIVE",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 20,
+      "unit": "8",
+      "client": "Josefa Vales Castro",
+      "startDate": "2024-05-01",
+      "endDate": null,
+      "monthlyRent": 60,
+      "securityDeposit": 120,
+      "depositPaid": true,
+      "status": "ACTIVE",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 21,
+      "unit": "9",
+      "client": "Adrián Dual Salazar",
+      "startDate": "2024-08-01",
+      "endDate": "2025-02-01",
+      "monthlyRent": 100,
+      "securityDeposit": 0,
+      "depositPaid": false,
+      "status": "TERMINATED",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 22,
+      "unit": "9",
+      "client": "Alberto Costas Caamaño",
+      "startDate": "2025-05-01",
+      "endDate": "2025-06-01",
+      "monthlyRent": 130,
+      "securityDeposit": 0,
+      "depositPaid": false,
+      "status": "TERMINATED",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 23,
+      "unit": "9",
+      "client": "Ricardo Amaral Lopes",
+      "startDate": "2025-08-01",
+      "endDate": "2025-12-01",
+      "monthlyRent": 130,
+      "securityDeposit": 20,
+      "depositPaid": true,
+      "status": "TERMINATED",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    },
+    {
+      "ref": 24,
+      "unit": "9",
+      "client": "Pablo Cores Moldes",
+      "startDate": "2026-07-01",
+      "endDate": null,
+      "monthlyRent": 130,
+      "securityDeposit": 0,
+      "depositPaid": false,
+      "status": "ACTIVE",
+      "notes": "Importado del extracto bancario BBVA (mar 2024 - ago 2026)."
+    }
+  ],
+  "payments": [
+    {
+      "rentalRef": 16,
+      "year": 2024,
+      "month": 3,
+      "amount": 65,
+      "dueDate": "2024-03-01",
+      "paymentDate": "2024-03-07",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2024,
+      "month": 4,
+      "amount": 65,
+      "dueDate": "2024-04-01",
+      "paymentDate": "2024-04-08",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2024,
+      "month": 5,
+      "amount": 65,
+      "dueDate": "2024-05-01",
+      "paymentDate": "2024-05-07",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2024,
+      "month": 5,
+      "amount": 60,
+      "dueDate": "2024-05-01",
+      "paymentDate": "2024-05-03",
+      "notes": "JOSEFA VALES CASTRO 120- DE DEPOSITO SE DEVOLVERA [transferencia incluye fianza]"
+    },
+    {
+      "rentalRef": 1,
+      "year": 2024,
+      "month": 6,
+      "amount": 60,
+      "dueDate": "2024-06-01",
+      "paymentDate": "2024-06-28",
+      "notes": "MARIA LUISA GOMEZ GOMEZ Trasteiro numero 1 [transferencia incluye fianza]"
+    },
+    {
+      "rentalRef": 6,
+      "year": 2024,
+      "month": 6,
+      "amount": 50,
+      "dueDate": "2024-06-01",
+      "paymentDate": "2024-06-25",
+      "notes": "MARCOS RODRIGUEZ SEIJIDO Fianza y mes [transferencia incluye fianza]"
+    },
+    {
+      "rentalRef": 9,
+      "year": 2024,
+      "month": 6,
+      "amount": 50,
+      "dueDate": "2024-06-01",
+      "paymentDate": "2024-06-26",
+      "notes": "UXIA VALENTINA DOCAMPO CABANELAS fianza y mes de junio traster [transferencia incluye fianza]"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2024,
+      "month": 6,
+      "amount": 65,
+      "dueDate": "2024-06-01",
+      "paymentDate": "2024-06-07",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2024,
+      "month": 6,
+      "amount": 60,
+      "dueDate": "2024-06-01",
+      "paymentDate": "2024-06-03",
+      "notes": "JOSEFA VALES CASTRO TRASTERO N. 8"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2024,
+      "month": 7,
+      "amount": 65,
+      "dueDate": "2024-07-01",
+      "paymentDate": "2024-07-08",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2024,
+      "month": 7,
+      "amount": 60,
+      "dueDate": "2024-07-01",
+      "paymentDate": "2024-07-02",
+      "notes": "JOSEFA VALES CASTRO TRASTERO N.8"
+    },
+    {
+      "rentalRef": 2,
+      "year": 2024,
+      "month": 8,
+      "amount": 45,
+      "dueDate": "2024-08-01",
+      "paymentDate": "2024-08-08",
+      "notes": "NELIDA RAQUEL AGUIRRE SANCHEZ ALQUILER TRASTERO"
+    },
+    {
+      "rentalRef": 6,
+      "year": 2024,
+      "month": 8,
+      "amount": 50,
+      "dueDate": "2024-08-01",
+      "paymentDate": "2024-08-07",
+      "notes": "MARCOS RODRIGUEZ SEIJIDO Trastero mes Agosto"
+    },
+    {
+      "rentalRef": 9,
+      "year": 2024,
+      "month": 8,
+      "amount": 50,
+      "dueDate": "2024-08-01",
+      "paymentDate": "2024-07-24",
+      "notes": "UXIA VALENTINA DOCAMPO CABANELAS alquiler mes de agosto"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2024,
+      "month": 8,
+      "amount": 65,
+      "dueDate": "2024-08-01",
+      "paymentDate": "2024-08-07",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2024,
+      "month": 8,
+      "amount": 55,
+      "dueDate": "2024-08-01",
+      "paymentDate": "2024-08-14",
+      "notes": "VINAS MENDEZ EMILIA Fianza y mes de agosto (110+5 [transferencia incluye fianza]"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2024,
+      "month": 8,
+      "amount": 60,
+      "dueDate": "2024-08-01",
+      "paymentDate": "2024-08-01",
+      "notes": "JOSEFA VALES CASTRO TRASTERO N. 8"
+    },
+    {
+      "rentalRef": 21,
+      "year": 2024,
+      "month": 8,
+      "amount": 100,
+      "dueDate": "2024-08-01",
+      "paymentDate": "2024-08-09",
+      "notes": "ADRIAN DUAL SALAZAR ALQUILER TRASTERO"
+    },
+    {
+      "rentalRef": 10,
+      "year": 2024,
+      "month": 9,
+      "amount": 50,
+      "dueDate": "2024-09-01",
+      "paymentDate": "2024-09-03",
+      "notes": "DAVID MANTEIGA ORTEGA Trastero N3 [transferencia incluye fianza]"
+    },
+    {
+      "rentalRef": 12,
+      "year": 2024,
+      "month": 9,
+      "amount": 50,
+      "dueDate": "2024-09-01",
+      "paymentDate": "2024-08-29",
+      "notes": "ALFONSO RODRIGUEZ ABELLA Pago mes de Septiembre y fond [transferencia incluye fianza]"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2024,
+      "month": 9,
+      "amount": 65,
+      "dueDate": "2024-09-01",
+      "paymentDate": "2024-09-09",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2024,
+      "month": 9,
+      "amount": 55,
+      "dueDate": "2024-09-01",
+      "paymentDate": "2024-09-16",
+      "notes": "VINAS MENDEZ EMILIA Mes de septiembre trastero 6"
+    },
+    {
+      "rentalRef": 18,
+      "year": 2024,
+      "month": 9,
+      "amount": 60,
+      "dueDate": "2024-09-01",
+      "paymentDate": "2024-09-05",
+      "notes": "SERGIO OMAR ITURRI TRASTERO 7 [transferencia incluye fianza]"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2024,
+      "month": 9,
+      "amount": 60,
+      "dueDate": "2024-09-01",
+      "paymentDate": "2024-09-02",
+      "notes": "JOSEFA VALES CASTRO TRASTERO N.8"
+    },
+    {
+      "rentalRef": 21,
+      "year": 2024,
+      "month": 9,
+      "amount": 100,
+      "dueDate": "2024-09-01",
+      "paymentDate": "2024-09-09",
+      "notes": "ADRIAN DUAL SALAZAR ALQUILER"
+    },
+    {
+      "rentalRef": 7,
+      "year": 2024,
+      "month": 10,
+      "amount": 50,
+      "dueDate": "2024-10-01",
+      "paymentDate": "2024-10-02",
+      "notes": "QUINTANA PASANTES MARIA VICTORIA trastero 2"
+    },
+    {
+      "rentalRef": 10,
+      "year": 2024,
+      "month": 10,
+      "amount": 50,
+      "dueDate": "2024-10-01",
+      "paymentDate": "2024-10-01",
+      "notes": "DAVID MANTEIGA ORTEGA TRASTERO 3"
+    },
+    {
+      "rentalRef": 12,
+      "year": 2024,
+      "month": 10,
+      "amount": 50,
+      "dueDate": "2024-10-01",
+      "paymentDate": "2024-10-30",
+      "notes": "ALFONSO RODRIGUEZ ABELLA Pago mes de octubre trastero"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2024,
+      "month": 10,
+      "amount": 65,
+      "dueDate": "2024-10-01",
+      "paymentDate": "2024-10-07",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2024,
+      "month": 10,
+      "amount": 55,
+      "dueDate": "2024-10-01",
+      "paymentDate": "2024-10-02",
+      "notes": "VINAS MENDEZ EMILIA Mes de octubre trastero 6 Av"
+    },
+    {
+      "rentalRef": 18,
+      "year": 2024,
+      "month": 10,
+      "amount": 60,
+      "dueDate": "2024-10-01",
+      "paymentDate": "2024-10-07",
+      "notes": "SERGIO OMAR ITURRI PAGO MENSUALIDAD TRASTERO"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2024,
+      "month": 10,
+      "amount": 60,
+      "dueDate": "2024-10-01",
+      "paymentDate": "2024-10-01",
+      "notes": "JOSEFA VALES CASTRO TRASTERO N. 8 OCTUBRE 2024"
+    },
+    {
+      "rentalRef": 21,
+      "year": 2024,
+      "month": 10,
+      "amount": 100,
+      "dueDate": "2024-10-01",
+      "paymentDate": "2024-10-04",
+      "notes": "ADRIAN DUAL SALAZAR ALQUILER"
+    },
+    {
+      "rentalRef": 2,
+      "year": 2024,
+      "month": 11,
+      "amount": 45,
+      "dueDate": "2024-11-01",
+      "paymentDate": "2024-11-07",
+      "notes": "NELIDA RAQUEL AGUIRRE SANCHEZ ALQUILER TRASTERO"
+    },
+    {
+      "rentalRef": 7,
+      "year": 2024,
+      "month": 11,
+      "amount": 50,
+      "dueDate": "2024-11-01",
+      "paymentDate": "2024-11-05",
+      "notes": "QUINTANA PASANTES MARIA VICTORIA trastero 2 Victoria Quintana"
+    },
+    {
+      "rentalRef": 10,
+      "year": 2024,
+      "month": 11,
+      "amount": 50,
+      "dueDate": "2024-11-01",
+      "paymentDate": "2024-11-04",
+      "notes": "DAVID MANTEIGA ORTEGA TRASTERO 3"
+    },
+    {
+      "rentalRef": 12,
+      "year": 2024,
+      "month": 11,
+      "amount": 50,
+      "dueDate": "2024-11-01",
+      "paymentDate": "2024-11-04",
+      "notes": "ALFONSO RODRIGUEZ ABELLA Pagotrastero nmr 4 Av de Oza"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2024,
+      "month": 11,
+      "amount": 65,
+      "dueDate": "2024-11-01",
+      "paymentDate": "2024-11-07",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2024,
+      "month": 11,
+      "amount": 55,
+      "dueDate": "2024-11-01",
+      "paymentDate": "2024-11-12",
+      "notes": "VINAS MENDEZ EMILIA Mes de noviembre trastero 6 A"
+    },
+    {
+      "rentalRef": 18,
+      "year": 2024,
+      "month": 11,
+      "amount": 60,
+      "dueDate": "2024-11-01",
+      "paymentDate": "2024-11-11",
+      "notes": "SERGIO OMAR ITURRI PAGO MES NOVIEMBRE TRASTERO"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2024,
+      "month": 11,
+      "amount": 60,
+      "dueDate": "2024-11-01",
+      "paymentDate": "2024-11-04",
+      "notes": "JOSEFA VALES CASTRO TRASTERO N. 8 NOVIEMBRE 2024"
+    },
+    {
+      "rentalRef": 21,
+      "year": 2024,
+      "month": 11,
+      "amount": 100,
+      "dueDate": "2024-11-01",
+      "paymentDate": "2024-11-05",
+      "notes": "ADRIAN DUAL SALAZAR ALQUILER"
+    },
+    {
+      "rentalRef": 2,
+      "year": 2024,
+      "month": 12,
+      "amount": 45,
+      "dueDate": "2024-12-01",
+      "paymentDate": "2024-12-09",
+      "notes": "NELIDA RAQUEL AGUIRRE SANCHEZ ALQUILER TRASTERO"
+    },
+    {
+      "rentalRef": 7,
+      "year": 2024,
+      "month": 12,
+      "amount": 50,
+      "dueDate": "2024-12-01",
+      "paymentDate": "2024-12-03",
+      "notes": "QUINTANA PASANTES MARIA VICTORIA trastero n2 Avenida pasaje"
+    },
+    {
+      "rentalRef": 10,
+      "year": 2024,
+      "month": 12,
+      "amount": 50,
+      "dueDate": "2024-12-01",
+      "paymentDate": "2024-12-02",
+      "notes": "DAVID MANTEIGA ORTEGA TRASTERO 3"
+    },
+    {
+      "rentalRef": 12,
+      "year": 2024,
+      "month": 12,
+      "amount": 50,
+      "dueDate": "2024-12-01",
+      "paymentDate": "2024-12-02",
+      "notes": "ALFONSO RODRIGUEZ ABELLA Pago alquiler diciembre trast"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2024,
+      "month": 12,
+      "amount": 65,
+      "dueDate": "2024-12-01",
+      "paymentDate": "2024-12-09",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2024,
+      "month": 12,
+      "amount": 55,
+      "dueDate": "2024-12-01",
+      "paymentDate": "2024-12-13",
+      "notes": "VINAS MENDEZ EMILIA Mes de diciembre trastero 6 A"
+    },
+    {
+      "rentalRef": 18,
+      "year": 2024,
+      "month": 12,
+      "amount": 60,
+      "dueDate": "2024-12-01",
+      "paymentDate": "2024-12-23",
+      "notes": "SERGIO OMAR ITURRI PAGO ALQUILER TRASTERO MES DICIEMBR E PAGO NUMERO 7"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2024,
+      "month": 12,
+      "amount": 60,
+      "dueDate": "2024-12-01",
+      "paymentDate": "2024-12-02",
+      "notes": "JOSEFA VALES CASTRO TRASTERO N.8 DICIEMBRE 2024"
+    },
+    {
+      "rentalRef": 21,
+      "year": 2024,
+      "month": 12,
+      "amount": 100,
+      "dueDate": "2024-12-01",
+      "paymentDate": "2024-12-09",
+      "notes": "ADRIAN DUAL SALAZAR ALQUILER"
+    },
+    {
+      "rentalRef": 2,
+      "year": 2025,
+      "month": 1,
+      "amount": 45,
+      "dueDate": "2025-01-01",
+      "paymentDate": "2025-01-07",
+      "notes": "NELIDA RAQUEL AGUIRRE SANCHEZ ALQUILER TRASTERO"
+    },
+    {
+      "rentalRef": 7,
+      "year": 2025,
+      "month": 1,
+      "amount": 50,
+      "dueDate": "2025-01-01",
+      "paymentDate": "2025-01-03",
+      "notes": "QUINTANA PASANTES MARIA VICTORIA trastero Avenida Pasaje n2"
+    },
+    {
+      "rentalRef": 10,
+      "year": 2025,
+      "month": 1,
+      "amount": 50,
+      "dueDate": "2025-01-01",
+      "paymentDate": "2025-01-02",
+      "notes": "DAVID MANTEIGA ORTEGA TRASTERO 3"
+    },
+    {
+      "rentalRef": 12,
+      "year": 2025,
+      "month": 1,
+      "amount": 50,
+      "dueDate": "2025-01-01",
+      "paymentDate": "2024-12-04",
+      "notes": "ALFONSO RODRIGUEZ ABELLA Pagotrastero nmr 4 Av de Oza"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2025,
+      "month": 1,
+      "amount": 65,
+      "dueDate": "2025-01-01",
+      "paymentDate": "2025-01-10",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2025,
+      "month": 1,
+      "amount": 55,
+      "dueDate": "2025-01-01",
+      "paymentDate": "2025-01-08",
+      "notes": "VINAS MENDEZ EMILIA Mes de enero trastero 6 Av P"
+    },
+    {
+      "rentalRef": 18,
+      "year": 2025,
+      "month": 1,
+      "amount": 60,
+      "dueDate": "2025-01-01",
+      "paymentDate": "2025-01-07",
+      "notes": "SERGIO OMAR ITURRI PAGO ALQUILER MES ENERO TRATE"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2025,
+      "month": 1,
+      "amount": 60,
+      "dueDate": "2025-01-01",
+      "paymentDate": "2025-01-02",
+      "notes": "JOSEFA VALES CASTRO TRASTERO N. 8 ENERO 2025"
+    },
+    {
+      "rentalRef": 21,
+      "year": 2025,
+      "month": 1,
+      "amount": 100,
+      "dueDate": "2025-01-01",
+      "paymentDate": "2025-01-08",
+      "notes": "ADRIAN DUAL SALAZAR ALQUILER TRASTERO"
+    },
+    {
+      "rentalRef": 7,
+      "year": 2025,
+      "month": 2,
+      "amount": 50,
+      "dueDate": "2025-02-01",
+      "paymentDate": "2025-02-04",
+      "notes": "QUINTANA PASANTES MARIA VICTORIA trastero n2 Avenida Pasaje"
+    },
+    {
+      "rentalRef": 10,
+      "year": 2025,
+      "month": 2,
+      "amount": 50,
+      "dueDate": "2025-02-01",
+      "paymentDate": "2025-02-03",
+      "notes": "DAVID MANTEIGA ORTEGA TRASTERO 3"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2025,
+      "month": 2,
+      "amount": 65,
+      "dueDate": "2025-02-01",
+      "paymentDate": "2025-02-06",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2025,
+      "month": 2,
+      "amount": 55,
+      "dueDate": "2025-02-01",
+      "paymentDate": "2025-02-18",
+      "notes": "VINAS MENDEZ EMILIA Mes de febrero trastero 6 Av"
+    },
+    {
+      "rentalRef": 18,
+      "year": 2025,
+      "month": 2,
+      "amount": 60,
+      "dueDate": "2025-02-01",
+      "paymentDate": "2025-02-05",
+      "notes": "SERGIO OMAR ITURRI PAGO ALQUILER TRASTERO"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2025,
+      "month": 2,
+      "amount": 60,
+      "dueDate": "2025-02-01",
+      "paymentDate": "2025-02-03",
+      "notes": "JOSEFA VALES CASTRO TRASTERO N. 8 FEBRERO 2025"
+    },
+    {
+      "rentalRef": 7,
+      "year": 2025,
+      "month": 3,
+      "amount": 50,
+      "dueDate": "2025-03-01",
+      "paymentDate": "2025-03-05",
+      "notes": "QUINTANA PASANTES MARIA VICTORIA trastero n2 Avenida Pasaje"
+    },
+    {
+      "rentalRef": 10,
+      "year": 2025,
+      "month": 3,
+      "amount": 50,
+      "dueDate": "2025-03-01",
+      "paymentDate": "2025-03-03",
+      "notes": "DAVID MANTEIGA ORTEGA TRASTERO 3"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2025,
+      "month": 3,
+      "amount": 65,
+      "dueDate": "2025-03-01",
+      "paymentDate": "2025-03-06",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2025,
+      "month": 3,
+      "amount": 55,
+      "dueDate": "2025-03-01",
+      "paymentDate": "2025-03-04",
+      "notes": "VINAS MENDEZ EMILIA Mes de marzo trastero 6 Av Pa"
+    },
+    {
+      "rentalRef": 18,
+      "year": 2025,
+      "month": 3,
+      "amount": 60,
+      "dueDate": "2025-03-01",
+      "paymentDate": "2025-03-07",
+      "notes": "SERGIO OMAR ITURRI PAGO ALQUILER TRASTERO MES MARZO 20 25"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2025,
+      "month": 3,
+      "amount": 60,
+      "dueDate": "2025-03-01",
+      "paymentDate": "2025-03-03",
+      "notes": "JOSEFA VALES CASTRO TRASTERO N. 8 - MARZO 2025"
+    },
+    {
+      "rentalRef": 3,
+      "year": 2025,
+      "month": 4,
+      "amount": 50,
+      "dueDate": "2025-04-01",
+      "paymentDate": "2025-03-28",
+      "notes": "VALERIA CAROLINA GONZALEZ CARMONA PAGO MES DE ABRIL TRASTERO 1"
+    },
+    {
+      "rentalRef": 7,
+      "year": 2025,
+      "month": 4,
+      "amount": 50,
+      "dueDate": "2025-04-01",
+      "paymentDate": "2025-04-08",
+      "notes": "QUINTANA PASANTES MARIA VICTORIA trastero n2 Avenida Pasaje"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2025,
+      "month": 4,
+      "amount": 65,
+      "dueDate": "2025-04-01",
+      "paymentDate": "2025-04-07",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2025,
+      "month": 4,
+      "amount": 55,
+      "dueDate": "2025-04-01",
+      "paymentDate": "2025-04-15",
+      "notes": "VINAS MENDEZ EMILIA Mes de abril trastero 6 Av Pa"
+    },
+    {
+      "rentalRef": 18,
+      "year": 2025,
+      "month": 4,
+      "amount": 60,
+      "dueDate": "2025-04-01",
+      "paymentDate": "2025-04-24",
+      "notes": "SERGIO OMAR ITURRI PAGO ALQUILER TRASTERO MES ABRIL"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2025,
+      "month": 4,
+      "amount": 60,
+      "dueDate": "2025-04-01",
+      "paymentDate": "2025-04-01",
+      "notes": "JOSEFA VALES CASTRO TRASTERO N. 8- ABRIL 2025"
+    },
+    {
+      "rentalRef": 3,
+      "year": 2025,
+      "month": 5,
+      "amount": 50,
+      "dueDate": "2025-05-01",
+      "paymentDate": "2025-05-05",
+      "notes": "VALERIA CAROLINA GONZALEZ CARMONA PAGO MES DE MAYO TRASTERO 1"
+    },
+    {
+      "rentalRef": 7,
+      "year": 2025,
+      "month": 5,
+      "amount": 50,
+      "dueDate": "2025-05-01",
+      "paymentDate": "2025-05-06",
+      "notes": "QUINTANA PASANTES MARIA VICTORIA trastero n2 Avenida Pasaje"
+    },
+    {
+      "rentalRef": 11,
+      "year": 2025,
+      "month": 5,
+      "amount": 55,
+      "dueDate": "2025-05-01",
+      "paymentDate": "2025-05-05",
+      "notes": "OLALLA MIGUEZ SUAREZ ALQUILER MAYO 2025 TRASTERO N"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2025,
+      "month": 5,
+      "amount": 65,
+      "dueDate": "2025-05-01",
+      "paymentDate": "2025-05-09",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2025,
+      "month": 5,
+      "amount": 55,
+      "dueDate": "2025-05-01",
+      "paymentDate": "2025-05-15",
+      "notes": "VINAS MENDEZ EMILIA Mes de mayo trastero 6 Av Pas"
+    },
+    {
+      "rentalRef": 18,
+      "year": 2025,
+      "month": 5,
+      "amount": 60,
+      "dueDate": "2025-05-01",
+      "paymentDate": "2025-05-07",
+      "notes": "SERGIO OMAR ITURRI PAGO ALQUILER TRASTERO 7 MES MAYO"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2025,
+      "month": 5,
+      "amount": 60,
+      "dueDate": "2025-05-01",
+      "paymentDate": "2025-05-05",
+      "notes": "JOSEFA VALES CASTRO TRASTERO N. 8 - MAYO 2025"
+    },
+    {
+      "rentalRef": 22,
+      "year": 2025,
+      "month": 5,
+      "amount": 130,
+      "dueDate": "2025-05-01",
+      "paymentDate": "2025-05-20",
+      "notes": "ALBERTO COSTAS CAAMAnO ALQUILER TRASTERO"
+    },
+    {
+      "rentalRef": 3,
+      "year": 2025,
+      "month": 6,
+      "amount": 50,
+      "dueDate": "2025-06-01",
+      "paymentDate": "2025-06-05",
+      "notes": "VALERIA CAROLINA GONZALEZ CARMONA PAGO MES DE JUNIO TRASTERO 1"
+    },
+    {
+      "rentalRef": 7,
+      "year": 2025,
+      "month": 6,
+      "amount": 50,
+      "dueDate": "2025-06-01",
+      "paymentDate": "2025-06-06",
+      "notes": "QUINTANA PASANTES MARIA VICTORIA trastero n2 Avenida Pasaje"
+    },
+    {
+      "rentalRef": 11,
+      "year": 2025,
+      "month": 6,
+      "amount": 55,
+      "dueDate": "2025-06-01",
+      "paymentDate": "2025-06-03",
+      "notes": "OLALLA MIGUEZ SUAREZ MENSUALIDAD MES TRASTERO 3"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2025,
+      "month": 6,
+      "amount": 65,
+      "dueDate": "2025-06-01",
+      "paymentDate": "2025-06-09",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2025,
+      "month": 6,
+      "amount": 55,
+      "dueDate": "2025-06-01",
+      "paymentDate": "2025-06-10",
+      "notes": "VINAS MENDEZ EMILIA Mes de junio trastero 6 Av Pa"
+    },
+    {
+      "rentalRef": 18,
+      "year": 2025,
+      "month": 6,
+      "amount": 60,
+      "dueDate": "2025-06-01",
+      "paymentDate": "2025-06-26",
+      "notes": "SERGIO OMAR ITURRI PAGO TRASTERO 7 MES JUNIO"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2025,
+      "month": 6,
+      "amount": 60,
+      "dueDate": "2025-06-01",
+      "paymentDate": "2025-06-02",
+      "notes": "JOSEFA VALES CASTRO TRASTERO N. 8 JUNIO 2025"
+    },
+    {
+      "rentalRef": 3,
+      "year": 2025,
+      "month": 7,
+      "amount": 50,
+      "dueDate": "2025-07-01",
+      "paymentDate": "2025-07-07",
+      "notes": "VALERIA CAROLINA GONZALEZ CARMONA PAGO MES DE JULIO TRASTERO 1"
+    },
+    {
+      "rentalRef": 7,
+      "year": 2025,
+      "month": 7,
+      "amount": 50,
+      "dueDate": "2025-07-01",
+      "paymentDate": "2025-07-08",
+      "notes": "QUINTANA PASANTES MARIA VICTORIA trastero n2 Avenida Pasaje"
+    },
+    {
+      "rentalRef": 11,
+      "year": 2025,
+      "month": 7,
+      "amount": 55,
+      "dueDate": "2025-07-01",
+      "paymentDate": "2025-07-07",
+      "notes": "OLALLA MIGUEZ SUAREZ MENSUALIDAD MES TRASTERO 3"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2025,
+      "month": 7,
+      "amount": 65,
+      "dueDate": "2025-07-01",
+      "paymentDate": "2025-07-07",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2025,
+      "month": 7,
+      "amount": 55,
+      "dueDate": "2025-07-01",
+      "paymentDate": "2025-07-22",
+      "notes": "VINAS MENDEZ EMILIA Mes de julio trastero 6 Av Pa"
+    },
+    {
+      "rentalRef": 18,
+      "year": 2025,
+      "month": 7,
+      "amount": 60,
+      "dueDate": "2025-07-01",
+      "paymentDate": "2025-07-03",
+      "notes": "SERGIO OMAR ITURRI PAGO ALQUILER TRASTERO 7"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2025,
+      "month": 7,
+      "amount": 60,
+      "dueDate": "2025-07-01",
+      "paymentDate": "2025-07-01",
+      "notes": "JOSEFA VALES CASTRO TRASTERO N. 8 JULIO 2025"
+    },
+    {
+      "rentalRef": 3,
+      "year": 2025,
+      "month": 8,
+      "amount": 50,
+      "dueDate": "2025-08-01",
+      "paymentDate": "2025-08-05",
+      "notes": "VALERIA CAROLINA GONZALEZ CARMONA PAGO MES DE AGOSTO TRASTERO 1"
+    },
+    {
+      "rentalRef": 7,
+      "year": 2025,
+      "month": 8,
+      "amount": 50,
+      "dueDate": "2025-08-01",
+      "paymentDate": "2025-08-07",
+      "notes": "QUINTANA PASANTES MARIA VICTORIA trastero n2 Avenida Pasaje"
+    },
+    {
+      "rentalRef": 11,
+      "year": 2025,
+      "month": 8,
+      "amount": 55,
+      "dueDate": "2025-08-01",
+      "paymentDate": "2025-08-05",
+      "notes": "OLALLA MIGUEZ SUAREZ MENSUALIDAD MES TRASTERO 3"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2025,
+      "month": 8,
+      "amount": 65,
+      "dueDate": "2025-08-01",
+      "paymentDate": "2025-08-08",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2025,
+      "month": 8,
+      "amount": 55,
+      "dueDate": "2025-08-01",
+      "paymentDate": "2025-08-08",
+      "notes": "VINAS MENDEZ EMILIA Mes de agosto trastero 6 Av P"
+    },
+    {
+      "rentalRef": 18,
+      "year": 2025,
+      "month": 8,
+      "amount": 60,
+      "dueDate": "2025-08-01",
+      "paymentDate": "2025-08-04",
+      "notes": "SERGIO OMAR ITURRI PAGO ALQUILER TRASTERO 7"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2025,
+      "month": 8,
+      "amount": 60,
+      "dueDate": "2025-08-01",
+      "paymentDate": "2025-08-01",
+      "notes": "JOSEFA VALES CASTRO TRASTERO N. 8 AGOSTO 2025"
+    },
+    {
+      "rentalRef": 23,
+      "year": 2025,
+      "month": 8,
+      "amount": 130,
+      "dueDate": "2025-08-01",
+      "paymentDate": "2025-08-05",
+      "notes": "AMARAL LOPES RICARDO pago fianza mas mes de agosto [transferencia incluye fianza]"
+    },
+    {
+      "rentalRef": 3,
+      "year": 2025,
+      "month": 9,
+      "amount": 50,
+      "dueDate": "2025-09-01",
+      "paymentDate": "2025-09-08",
+      "notes": "VALERIA CAROLINA GONZALEZ CARMONA PAGO MES DE SEPTIEMBRE TRASTERO 1"
+    },
+    {
+      "rentalRef": 7,
+      "year": 2025,
+      "month": 9,
+      "amount": 50,
+      "dueDate": "2025-09-01",
+      "paymentDate": "2025-09-09",
+      "notes": "QUINTANA PASANTES MARIA VICTORIA trastero n2 Avenida Pasaje"
+    },
+    {
+      "rentalRef": 11,
+      "year": 2025,
+      "month": 9,
+      "amount": 55,
+      "dueDate": "2025-09-01",
+      "paymentDate": "2025-09-05",
+      "notes": "OLALLA MIGUEZ SUAREZ MENSUALIDAD MES TRASTERO 3"
+    },
+    {
+      "rentalRef": 13,
+      "year": 2025,
+      "month": 9,
+      "amount": 50,
+      "dueDate": "2025-09-01",
+      "paymentDate": "2025-09-04",
+      "notes": "AMARAL LOPES RICARDO alquiler trastero 4 mes en cu"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2025,
+      "month": 9,
+      "amount": 65,
+      "dueDate": "2025-09-01",
+      "paymentDate": "2025-09-08",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2025,
+      "month": 9,
+      "amount": 55,
+      "dueDate": "2025-09-01",
+      "paymentDate": "2025-09-09",
+      "notes": "VINAS MENDEZ EMILIA Mes de septiembre trastero 6"
+    },
+    {
+      "rentalRef": 18,
+      "year": 2025,
+      "month": 9,
+      "amount": 60,
+      "dueDate": "2025-09-01",
+      "paymentDate": "2025-09-03",
+      "notes": "SERGIO OMAR ITURRI PAGO ALQUILER TRASTERO 7"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2025,
+      "month": 9,
+      "amount": 60,
+      "dueDate": "2025-09-01",
+      "paymentDate": "2025-09-01",
+      "notes": "JOSEFA VALES CASTRO TRASTERO 8-SEPTIEMBRE 2025"
+    },
+    {
+      "rentalRef": 23,
+      "year": 2025,
+      "month": 9,
+      "amount": 130,
+      "dueDate": "2025-09-01",
+      "paymentDate": "2025-09-11",
+      "notes": "AMARAL LOPES RICARDO Alquiler Trastero Mes En Curs"
+    },
+    {
+      "rentalRef": 3,
+      "year": 2025,
+      "month": 10,
+      "amount": 50,
+      "dueDate": "2025-10-01",
+      "paymentDate": "2025-10-06",
+      "notes": "VALERIA CAROLINA GONZALEZ CARMONA PAGO MES DE OCTUBRE TRASTERO 1"
+    },
+    {
+      "rentalRef": 7,
+      "year": 2025,
+      "month": 10,
+      "amount": 50,
+      "dueDate": "2025-10-01",
+      "paymentDate": "2025-10-07",
+      "notes": "QUINTANA PASANTES MARIA VICTORIA trastero n2 Avenida Pasaje"
+    },
+    {
+      "rentalRef": 11,
+      "year": 2025,
+      "month": 10,
+      "amount": 55,
+      "dueDate": "2025-10-01",
+      "paymentDate": "2025-10-06",
+      "notes": "OLALLA MIGUEZ SUAREZ MENSUALIDAD MES TRASTERO 3"
+    },
+    {
+      "rentalRef": 13,
+      "year": 2025,
+      "month": 10,
+      "amount": 50,
+      "dueDate": "2025-10-01",
+      "paymentDate": "2025-10-06",
+      "notes": "AMARAL LOPES RICARDO alquiler trastero 4 mes en cu"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2025,
+      "month": 10,
+      "amount": 65,
+      "dueDate": "2025-10-01",
+      "paymentDate": "2025-10-06",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2025,
+      "month": 10,
+      "amount": 55,
+      "dueDate": "2025-10-01",
+      "paymentDate": "2025-10-06",
+      "notes": "VINAS MENDEZ EMILIA Mes de octubre trastero 6 Av"
+    },
+    {
+      "rentalRef": 18,
+      "year": 2025,
+      "month": 10,
+      "amount": 60,
+      "dueDate": "2025-10-01",
+      "paymentDate": "2025-10-03",
+      "notes": "SERGIO OMAR ITURRI PAGO ALQUILER TRASTERO 7"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2025,
+      "month": 10,
+      "amount": 60,
+      "dueDate": "2025-10-01",
+      "paymentDate": "2025-10-01",
+      "notes": "JOSEFA VALES CASTRO TRASTERO 8-OCTUBRE 2025"
+    },
+    {
+      "rentalRef": 23,
+      "year": 2025,
+      "month": 10,
+      "amount": 130,
+      "dueDate": "2025-10-01",
+      "paymentDate": "2025-10-06",
+      "notes": "AMARAL LOPES RICARDO alquiler trastero numero 9 me"
+    },
+    {
+      "rentalRef": 3,
+      "year": 2025,
+      "month": 11,
+      "amount": 50,
+      "dueDate": "2025-11-01",
+      "paymentDate": "2025-11-11",
+      "notes": "VALERIA CAROLINA GONZALEZ CARMONA PAGO MES DE NOVIEMBRE TRASTERO 1"
+    },
+    {
+      "rentalRef": 7,
+      "year": 2025,
+      "month": 11,
+      "amount": 50,
+      "dueDate": "2025-11-01",
+      "paymentDate": "2025-11-07",
+      "notes": "QUINTANA PASANTES MARIA VICTORIA trastero n2 Avenida Pasaje"
+    },
+    {
+      "rentalRef": 11,
+      "year": 2025,
+      "month": 11,
+      "amount": 55,
+      "dueDate": "2025-11-01",
+      "paymentDate": "2025-11-05",
+      "notes": "OLALLA MIGUEZ SUAREZ MENSUALIDAD MES TRASTERO 3"
+    },
+    {
+      "rentalRef": 13,
+      "year": 2025,
+      "month": 11,
+      "amount": 50,
+      "dueDate": "2025-11-01",
+      "paymentDate": "2025-11-24",
+      "notes": "AMARAL LOPES RICARDO Alquiler Trastero 4 Mes 11 En Curso"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2025,
+      "month": 11,
+      "amount": 65,
+      "dueDate": "2025-11-01",
+      "paymentDate": "2025-11-06",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2025,
+      "month": 11,
+      "amount": 55,
+      "dueDate": "2025-11-01",
+      "paymentDate": "2025-11-14",
+      "notes": "VINAS MENDEZ EMILIA Mes de noviembre trastero 6 A"
+    },
+    {
+      "rentalRef": 18,
+      "year": 2025,
+      "month": 11,
+      "amount": 60,
+      "dueDate": "2025-11-01",
+      "paymentDate": "2025-11-03",
+      "notes": "SERGIO OMAR ITURRI PAGO ALQUILER TRASTERO 7"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2025,
+      "month": 11,
+      "amount": 60,
+      "dueDate": "2025-11-01",
+      "paymentDate": "2025-11-03",
+      "notes": "JOSEFA VALES CASTRO TRASTERO 8 NOVIEMBRE 2025"
+    },
+    {
+      "rentalRef": 23,
+      "year": 2025,
+      "month": 11,
+      "amount": 130,
+      "dueDate": "2025-11-01",
+      "paymentDate": "2025-11-24",
+      "notes": "AMARAL LOPES RICARDO Alquiler Trastero Numero 9Mes 11 En Curso"
+    },
+    {
+      "rentalRef": 4,
+      "year": 2025,
+      "month": 12,
+      "amount": 55,
+      "dueDate": "2025-12-01",
+      "paymentDate": "2025-12-02",
+      "notes": "ISABEL CORONAS CARBALLES Alqulr trast. Pasaxe num 1 Di"
+    },
+    {
+      "rentalRef": 7,
+      "year": 2025,
+      "month": 12,
+      "amount": 50,
+      "dueDate": "2025-12-01",
+      "paymentDate": "2025-12-10",
+      "notes": "QUINTANA PASANTES MARIA VICTORIA trastero n2 Avenida Pasaje"
+    },
+    {
+      "rentalRef": 11,
+      "year": 2025,
+      "month": 12,
+      "amount": 55,
+      "dueDate": "2025-12-01",
+      "paymentDate": "2025-12-05",
+      "notes": "OLALLA MIGUEZ SUAREZ MENSUALIDAD MES TRASTERO 3"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2025,
+      "month": 12,
+      "amount": 65,
+      "dueDate": "2025-12-01",
+      "paymentDate": "2025-12-09",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2025,
+      "month": 12,
+      "amount": 55,
+      "dueDate": "2025-12-01",
+      "paymentDate": "2025-12-16",
+      "notes": "VINAS MENDEZ EMILIA Mes de diciembre trastero 6 A"
+    },
+    {
+      "rentalRef": 18,
+      "year": 2025,
+      "month": 12,
+      "amount": 60,
+      "dueDate": "2025-12-01",
+      "paymentDate": "2025-12-03",
+      "notes": "SERGIO OMAR ITURRI PAGO ALQUILER TRASTERO 7"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2025,
+      "month": 12,
+      "amount": 60,
+      "dueDate": "2025-12-01",
+      "paymentDate": "2025-12-01",
+      "notes": "JOSEFA VALES CASTRO TRASTERO 8 DICIEMBRE 2025"
+    },
+    {
+      "rentalRef": 4,
+      "year": 2026,
+      "month": 1,
+      "amount": 55,
+      "dueDate": "2026-01-01",
+      "paymentDate": "2026-01-02",
+      "notes": "ISABEL CORONAS CARBALLES Alqulr trstr Pasaxe num 1. Dic 2025"
+    },
+    {
+      "rentalRef": 7,
+      "year": 2026,
+      "month": 1,
+      "amount": 50,
+      "dueDate": "2026-01-01",
+      "paymentDate": "2026-01-07",
+      "notes": "QUINTANA PASANTES MARIA VICTORIA trastero n2 Avenida Pasaje"
+    },
+    {
+      "rentalRef": 11,
+      "year": 2026,
+      "month": 1,
+      "amount": 55,
+      "dueDate": "2026-01-01",
+      "paymentDate": "2026-01-09",
+      "notes": "OLALLA MIGUEZ SUAREZ MENSUALIDAD MES TRASTERO 3"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2026,
+      "month": 1,
+      "amount": 65,
+      "dueDate": "2026-01-01",
+      "paymentDate": "2026-01-07",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2026,
+      "month": 1,
+      "amount": 55,
+      "dueDate": "2026-01-01",
+      "paymentDate": "2026-01-08",
+      "notes": "VINAS MENDEZ EMILIA Mes de enero trastero 6 Av Pa"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2026,
+      "month": 1,
+      "amount": 60,
+      "dueDate": "2026-01-01",
+      "paymentDate": "2026-01-02",
+      "notes": "JOSEFA VALES CASTRO TRASTERO 8 ENERO 2026"
+    },
+    {
+      "rentalRef": 4,
+      "year": 2026,
+      "month": 2,
+      "amount": 55,
+      "dueDate": "2026-02-01",
+      "paymentDate": "2026-02-03",
+      "notes": "ISABEL CORONAS CARBALLES Alqulr trstr Pasaxe num 1."
+    },
+    {
+      "rentalRef": 7,
+      "year": 2026,
+      "month": 2,
+      "amount": 50,
+      "dueDate": "2026-02-01",
+      "paymentDate": "2026-02-09",
+      "notes": "QUINTANA PASANTES MARIA VICTORIA trastero n2 Avenida Pasaje"
+    },
+    {
+      "rentalRef": 11,
+      "year": 2026,
+      "month": 2,
+      "amount": 55,
+      "dueDate": "2026-02-01",
+      "paymentDate": "2026-02-05",
+      "notes": "OLALLA MIGUEZ SUAREZ MENSUALIDAD MES TRASTERO 3"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2026,
+      "month": 2,
+      "amount": 65,
+      "dueDate": "2026-02-01",
+      "paymentDate": "2026-02-06",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2026,
+      "month": 2,
+      "amount": 55,
+      "dueDate": "2026-02-01",
+      "paymentDate": "2026-02-13",
+      "notes": "VIÑAS MENDEZ EMILIA Mes de febrero trastero 6 Av Pasaxe"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2026,
+      "month": 2,
+      "amount": 60,
+      "dueDate": "2026-02-01",
+      "paymentDate": "2026-02-02",
+      "notes": "JOSEFA VALES CASTRO TRASTERO 8-FEBRERO 2026"
+    },
+    {
+      "rentalRef": 4,
+      "year": 2026,
+      "month": 3,
+      "amount": 55,
+      "dueDate": "2026-03-01",
+      "paymentDate": "2026-03-02",
+      "notes": "MARIA ISABEL VILLAVERDE CORONAS ISABEL CORONAS C TRAS BAJO 1"
+    },
+    {
+      "rentalRef": 7,
+      "year": 2026,
+      "month": 3,
+      "amount": 50,
+      "dueDate": "2026-03-01",
+      "paymentDate": "2026-03-06",
+      "notes": "QUINTANA PASANTES MARIA VICTORIA trastero n2 Avenida Pasaje"
+    },
+    {
+      "rentalRef": 11,
+      "year": 2026,
+      "month": 3,
+      "amount": 55,
+      "dueDate": "2026-03-01",
+      "paymentDate": "2026-03-05",
+      "notes": "OLALLA MIGUEZ SUAREZ MENSUALIDAD MES TRASTERO 3"
+    },
+    {
+      "rentalRef": 14,
+      "year": 2026,
+      "month": 3,
+      "amount": 50,
+      "dueDate": "2026-03-01",
+      "paymentDate": "2026-03-23",
+      "notes": "GONZALEZ TORRES ILDIANA GABRI pago trastero número 4 [transferencia incluye fianza]"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2026,
+      "month": 3,
+      "amount": 65,
+      "dueDate": "2026-03-01",
+      "paymentDate": "2026-03-06",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2026,
+      "month": 3,
+      "amount": 55,
+      "dueDate": "2026-03-01",
+      "paymentDate": "2026-03-10",
+      "notes": "VIÑAS MENDEZ EMILIA Mes de marzo trastero 6 Av Pasaxe"
+    },
+    {
+      "rentalRef": 19,
+      "year": 2026,
+      "month": 3,
+      "amount": 60,
+      "dueDate": "2026-03-01",
+      "paymentDate": "2026-03-12",
+      "notes": "MARIA LUISA GOMEZ GOMEZ Trasteiro 7"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2026,
+      "month": 3,
+      "amount": 60,
+      "dueDate": "2026-03-01",
+      "paymentDate": "2026-02-27",
+      "notes": "JOSEFA VALES CASTRO TRASTERO 8 MARZO 2026"
+    },
+    {
+      "rentalRef": 7,
+      "year": 2026,
+      "month": 4,
+      "amount": 50,
+      "dueDate": "2026-04-01",
+      "paymentDate": "2026-04-28",
+      "notes": "QUINTANA PASANTES MARIA VICTORIA trastero 2 avenida del pasaje [transferencia de 100 € cubre 2 meses]"
+    },
+    {
+      "rentalRef": 11,
+      "year": 2026,
+      "month": 4,
+      "amount": 55,
+      "dueDate": "2026-04-01",
+      "paymentDate": "2026-04-13",
+      "notes": "OLALLA MIGUEZ SUAREZ MENSUALIDAD MES TRASTERO 3"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2026,
+      "month": 4,
+      "amount": 65,
+      "dueDate": "2026-04-01",
+      "paymentDate": "2026-04-07",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2026,
+      "month": 4,
+      "amount": 55,
+      "dueDate": "2026-04-01",
+      "paymentDate": "2026-04-13",
+      "notes": "VIÑAS MENDEZ EMILIA Mes de abril trastero 6 Av Pasaxe"
+    },
+    {
+      "rentalRef": 19,
+      "year": 2026,
+      "month": 4,
+      "amount": 60,
+      "dueDate": "2026-04-01",
+      "paymentDate": "2026-04-14",
+      "notes": "MARIA LUISA GOMEZ GOMEZ Alquiler baixo 7"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2026,
+      "month": 4,
+      "amount": 60,
+      "dueDate": "2026-04-01",
+      "paymentDate": "2026-04-01",
+      "notes": "JOSEFA VALES CASTRO TRASTERO 8-ABRIL 2026"
+    },
+    {
+      "rentalRef": 7,
+      "year": 2026,
+      "month": 5,
+      "amount": 50,
+      "dueDate": "2026-05-01",
+      "paymentDate": "2026-04-28",
+      "notes": "QUINTANA PASANTES MARIA VICTORIA trastero 2 avenida del pasaje [transferencia de 100 € cubre 2 meses]"
+    },
+    {
+      "rentalRef": 11,
+      "year": 2026,
+      "month": 5,
+      "amount": 55,
+      "dueDate": "2026-05-01",
+      "paymentDate": "2026-05-05",
+      "notes": "OLALLA MIGUEZ SUAREZ MENSUALIDAD MES TRASTERO 3"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2026,
+      "month": 5,
+      "amount": 65,
+      "dueDate": "2026-05-01",
+      "paymentDate": "2026-05-06",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2026,
+      "month": 5,
+      "amount": 55,
+      "dueDate": "2026-05-01",
+      "paymentDate": "2026-05-18",
+      "notes": "VIÑAS MENDEZ EMILIA Mes de mayo trastero 6 Av Pasaxe"
+    },
+    {
+      "rentalRef": 19,
+      "year": 2026,
+      "month": 5,
+      "amount": 60,
+      "dueDate": "2026-05-01",
+      "paymentDate": "2026-05-11",
+      "notes": "MARIA LUISA GOMEZ GOMEZ Alquiler baixo 7"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2026,
+      "month": 5,
+      "amount": 60,
+      "dueDate": "2026-05-01",
+      "paymentDate": "2026-05-04",
+      "notes": "JOSEFA VALES CASTRO TRASTERO 8 - MAYO 2026"
+    },
+    {
+      "rentalRef": 5,
+      "year": 2026,
+      "month": 6,
+      "amount": 55,
+      "dueDate": "2026-06-01",
+      "paymentDate": "2026-06-17",
+      "notes": "ALEJANDRO GABRIEL DE GIULI TRASTERO MES JUNIO Y DOS FIANZAS. ALEJANDRO DE GIULI [transferencia incluye fianza]"
+    },
+    {
+      "rentalRef": 8,
+      "year": 2026,
+      "month": 6,
+      "amount": 50,
+      "dueDate": "2026-06-01",
+      "paymentDate": "2026-06-29",
+      "notes": "FRANCISCO ELVIRA SERRANO TRASTERO 2 AVENIDA DEL PASAJE. JUNIO Y JULIO [transferencia de 100 € cubre 2 meses]"
+    },
+    {
+      "rentalRef": 11,
+      "year": 2026,
+      "month": 6,
+      "amount": 55,
+      "dueDate": "2026-06-01",
+      "paymentDate": "2026-06-05",
+      "notes": "OLALLA MIGUEZ SUAREZ MENSUALIDAD MES TRASTERO 3"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2026,
+      "month": 6,
+      "amount": 65,
+      "dueDate": "2026-06-01",
+      "paymentDate": "2026-06-08",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2026,
+      "month": 6,
+      "amount": 55,
+      "dueDate": "2026-06-01",
+      "paymentDate": "2026-06-08",
+      "notes": "VIÑAS MENDEZ EMILIA Mes de junio trastero 6 Av Pasaxe"
+    },
+    {
+      "rentalRef": 19,
+      "year": 2026,
+      "month": 6,
+      "amount": 60,
+      "dueDate": "2026-06-01",
+      "paymentDate": "2026-06-16",
+      "notes": "MARIA LUISA GOMEZ GOMEZ Trasteiro 7"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2026,
+      "month": 6,
+      "amount": 60,
+      "dueDate": "2026-06-01",
+      "paymentDate": "2026-06-01",
+      "notes": "JOSEFA VALES CASTRO TRASTERO 8 - JUNIO 2026"
+    },
+    {
+      "rentalRef": 5,
+      "year": 2026,
+      "month": 7,
+      "amount": 55,
+      "dueDate": "2026-07-01",
+      "paymentDate": "2026-07-06",
+      "notes": "ALEJANDRO GABRIEL DE GIULI TRASTERO MES JULIO"
+    },
+    {
+      "rentalRef": 8,
+      "year": 2026,
+      "month": 7,
+      "amount": 50,
+      "dueDate": "2026-07-01",
+      "paymentDate": "2026-06-29",
+      "notes": "FRANCISCO ELVIRA SERRANO TRASTERO 2 AVENIDA DEL PASAJE. JUNIO Y JULIO [transferencia de 100 € cubre 2 meses]"
+    },
+    {
+      "rentalRef": 11,
+      "year": 2026,
+      "month": 7,
+      "amount": 55,
+      "dueDate": "2026-07-01",
+      "paymentDate": "2026-07-06",
+      "notes": "OLALLA MIGUEZ SUAREZ MENSUALIDAD MES TRASTERO 3"
+    },
+    {
+      "rentalRef": 15,
+      "year": 2026,
+      "month": 7,
+      "amount": 50,
+      "dueDate": "2026-07-01",
+      "paymentDate": "2026-07-06",
+      "notes": "RIVAS RODRIGUEZ SEVERIANO ANDRES pago de trastero número 4 [transferencia incluye fianza]"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2026,
+      "month": 7,
+      "amount": 65,
+      "dueDate": "2026-07-01",
+      "paymentDate": "2026-07-06",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2026,
+      "month": 7,
+      "amount": 55,
+      "dueDate": "2026-07-01",
+      "paymentDate": "2026-07-17",
+      "notes": "VIÑAS MENDEZ EMILIA Mes de julio y agosto trastero 6 Av Pasaxe [transferencia de 110 € cubre 2 meses]"
+    },
+    {
+      "rentalRef": 19,
+      "year": 2026,
+      "month": 7,
+      "amount": 60,
+      "dueDate": "2026-07-01",
+      "paymentDate": "2026-07-13",
+      "notes": "MARIA LUISA GOMEZ GOMEZ Trasteiro 7"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2026,
+      "month": 7,
+      "amount": 60,
+      "dueDate": "2026-07-01",
+      "paymentDate": "2026-07-01",
+      "notes": "JOSEFA VALES CASTRO TRASTERO 8 JULIO 2026"
+    },
+    {
+      "rentalRef": 24,
+      "year": 2026,
+      "month": 7,
+      "amount": 130,
+      "dueDate": "2026-07-01",
+      "paymentDate": "2026-07-01",
+      "notes": "PABLO CORES MOLDES BAIXO TRASTEIRO 9 PASAXE"
+    },
+    {
+      "rentalRef": 5,
+      "year": 2026,
+      "month": 8,
+      "amount": 55,
+      "dueDate": "2026-08-01",
+      "paymentDate": "2026-08-04",
+      "notes": "ALEJANDRO GABRIEL DE GIULI TRASTERO MES AGOSTO"
+    },
+    {
+      "rentalRef": 8,
+      "year": 2026,
+      "month": 8,
+      "amount": 50,
+      "dueDate": "2026-08-01",
+      "paymentDate": "2026-08-07",
+      "notes": "FRANCISCO ELVIRA SERRANO TRASTERO 2 AVENIDA DEL PASAJE. AGOSTO"
+    },
+    {
+      "rentalRef": 11,
+      "year": 2026,
+      "month": 8,
+      "amount": 55,
+      "dueDate": "2026-08-01",
+      "paymentDate": "2026-08-05",
+      "notes": "OLALLA MIGUEZ SUAREZ MENSUALIDAD MES TRASTERO 3"
+    },
+    {
+      "rentalRef": 15,
+      "year": 2026,
+      "month": 8,
+      "amount": 50,
+      "dueDate": "2026-08-01",
+      "paymentDate": "2026-08-05",
+      "notes": "RIVAS RODRIGUEZ SEVERIANO ANDRES juan Mar.a"
+    },
+    {
+      "rentalRef": 16,
+      "year": 2026,
+      "month": 8,
+      "amount": 65,
+      "dueDate": "2026-08-01",
+      "paymentDate": "2026-08-06",
+      "notes": "ANTONIO LUIS TORREIRO VARELA TRASTERO NUMERO 5 PONTE PASAX"
+    },
+    {
+      "rentalRef": 17,
+      "year": 2026,
+      "month": 8,
+      "amount": 55,
+      "dueDate": "2026-08-01",
+      "paymentDate": "2026-07-17",
+      "notes": "VIÑAS MENDEZ EMILIA Mes de julio y agosto trastero 6 Av Pasaxe [transferencia de 110 € cubre 2 meses]"
+    },
+    {
+      "rentalRef": 19,
+      "year": 2026,
+      "month": 8,
+      "amount": 60,
+      "dueDate": "2026-08-01",
+      "paymentDate": "2026-08-04",
+      "notes": "MARIA LUISA GOMEZ GOMEZ Baixo 7"
+    },
+    {
+      "rentalRef": 20,
+      "year": 2026,
+      "month": 8,
+      "amount": 60,
+      "dueDate": "2026-08-01",
+      "paymentDate": "2026-07-30",
+      "notes": "JOSEFA VALES CASTRO TRASTERO 8 AGOSTO 2026"
+    },
+    {
+      "rentalRef": 24,
+      "year": 2026,
+      "month": 8,
+      "amount": 130,
+      "dueDate": "2026-08-01",
+      "paymentDate": "2026-08-03",
+      "notes": "PABLO CORES MOLDES BAIXO TRASTEIRO 9 PASAXE"
+    }
+  ]
+}
