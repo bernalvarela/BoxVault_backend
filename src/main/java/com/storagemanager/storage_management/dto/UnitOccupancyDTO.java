@@ -1,7 +1,6 @@
 package com.storagemanager.storage_management.dto;
 
 import com.storagemanager.storage_management.model.enums.UnitStatus;
-import com.storagemanager.storage_management.model.enums.UnitType;
 import lombok.Builder;
 import lombok.Data;
 
@@ -14,7 +13,6 @@ public class UnitOccupancyDTO {
     private String unitNumber;
     private String name;
     private Double sizeSquareMeters;
-    private UnitType type;
     private UnitStatus status;
     private String location;
     private String currentClientName;

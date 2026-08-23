@@ -1,9 +1,9 @@
 package com.storagemanager.storage_management.controller;
 
 import com.storagemanager.storage_management.dto.StorageUnitRequest;
+import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.model.StorageUnit;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
-import com.storagemanager.storage_management.model.enums.UnitType;
 import com.storagemanager.storage_management.service.StorageUnitService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,13 +23,9 @@ public class StorageUnitController {
 
     @GetMapping
     public ResponseEntity<List<StorageUnit>> getAllUnits(
-            @RequestParam(required = false) UnitStatus status,
-            @RequestParam(required = false) UnitType type) {
+            @RequestParam(required = false) UnitStatus status) {
         if (status != null) {
             return ResponseEntity.ok(storageUnitService.getUnitsByStatus(status));
-        }
-        if (type != null) {
-            return ResponseEntity.ok(storageUnitService.getUnitsByType(type));
         }
         return ResponseEntity.ok(storageUnitService.getAllUnits());
     }
@@ -37,6 +33,13 @@ public class StorageUnitController {
     @GetMapping("/{id}")
     public ResponseEntity<StorageUnit> getUnitById(@PathVariable Long id) {
         return ResponseEntity.ok(storageUnitService.getUnitById(id));
+    }
+
+    @GetMapping("/{id}/client")
+    public ResponseEntity<Client> getClientByUnitId(@PathVariable Long id) {
+        return storageUnitService.getClientByUnitId(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.noContent().build());
     }
 
     @PostMapping

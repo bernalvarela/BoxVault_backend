@@ -1,7 +1,6 @@
 package com.storagemanager.storage_management.dto;
 
 import com.storagemanager.storage_management.model.enums.UnitStatus;
-import com.storagemanager.storage_management.model.enums.UnitType;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -23,9 +22,6 @@ public class StorageUnitRequest {
 
     private String dimensions;
 
-    @NotNull(message = "Unit type is required")
-    private UnitType type;
-
     private String location;
 
     @NotNull(message = "Monthly rate is required")
@@ -33,8 +29,6 @@ public class StorageUnitRequest {
     private BigDecimal baseMonthlyRate;
 
     private UnitStatus status;
-
-    private String features;
 
     private String description;
 }

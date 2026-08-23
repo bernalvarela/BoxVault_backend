@@ -19,6 +19,9 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     List<Payment> findByClientId(Long clientId);
     List<Payment> findByStorageUnitId(Long storageUnitId);
     List<Payment> findByBillingPeriodYearAndBillingPeriodMonth(Integer year, Integer month);
+    List<Payment> findByBillingPeriodYearAndBillingPeriodMonthBetween(int startYear, int startMonth, int endYear, int endMonth);
+    List<Payment> findByBillingPeriodYear(int year);
+    List<Payment> findByDueDateBetween(LocalDate startDate, LocalDate endDate);
 
     Optional<Payment> findByRentalAgreementIdAndBillingPeriodYearAndBillingPeriodMonth(
             Long rentalAgreementId, Integer year, Integer month);
@@ -42,4 +45,18 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
            "FROM Payment p WHERE p.status = 'PAID' " +
            "GROUP BY p.storageUnit.id, p.storageUnit.unitNumber")
     List<Object[]> sumRevenueByStorageUnit();
+
+    // Quarterly aggregation methods
+    @Query("SELECT COALESCE(SUM(p.amountPaid), 0) FROM Payment p WHERE p.status = 'PAID' AND p.billingPeriodYear = :year AND p.billingPeriodMonth >= :startMonth AND p.billingPeriodMonth <= :endMonth")
+    BigDecimal sumRevenueForQuarter(@Param("year") Integer year, @Param("startMonth") Integer startMonth, @Param("endMonth") Integer endMonth);
+
+    @Query("SELECT COALESCE(SUM(p.amountDue), 0) FROM Payment p WHERE (p.status = 'PENDING' OR p.status = 'OVERDUE') AND p.billingPeriodYear = :year AND p.billingPeriodMonth >= :startMonth AND p.billingPeriodMonth <= :endMonth")
+    BigDecimal sumPendingRevenueForQuarter(@Param("year") Integer year, @Param("startMonth") Integer startMonth, @Param("endMonth") Integer endMonth);
+
+    // Annual aggregation methods
+    @Query("SELECT COALESCE(SUM(p.amountPaid), 0) FROM Payment p WHERE p.status = 'PAID' AND p.billingPeriodYear = :year")
+    BigDecimal sumRevenueForYear(@Param("year") Integer year);
+
+    @Query("SELECT COALESCE(SUM(p.amountDue), 0) FROM Payment p WHERE (p.status = 'PENDING' OR p.status = 'OVERDUE') AND p.billingPeriodYear = :year")
+    BigDecimal sumPendingRevenueForYear(@Param("year") Integer year);
 }

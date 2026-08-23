@@ -43,11 +43,9 @@ public class DataSeeder implements CommandLineRunner {
                 .name("Unit 1 - Compact Standard")
                 .sizeSquareMeters(5.0)
                 .dimensions("2.0m x 2.5m x 3.0m")
-                .type(UnitType.STANDARD)
                 .location("Building A - Ground Floor")
                 .baseMonthlyRate(new BigDecimal("60.00"))
                 .status(UnitStatus.OCCUPIED)
-                .features("Standard security, Roll-up door, Ground level access")
                 .description("Ideal for boxes, seasonal items, and small furniture.")
                 .build());
 
@@ -56,11 +54,9 @@ public class DataSeeder implements CommandLineRunner {
                 .name("Unit 2 - Small Standard")
                 .sizeSquareMeters(6.0)
                 .dimensions("2.0m x 3.0m x 3.0m")
-                .type(UnitType.STANDARD)
                 .location("Building A - Ground Floor")
                 .baseMonthlyRate(new BigDecimal("70.00"))
                 .status(UnitStatus.AVAILABLE)
-                .features("Standard security, Roll-up door, Motion sensor light")
                 .description("Great for luggage, bicycles, and household storage.")
                 .build());
 
@@ -69,11 +65,9 @@ public class DataSeeder implements CommandLineRunner {
                 .name("Unit 3 - Medium Climate Controlled")
                 .sizeSquareMeters(10.0)
                 .dimensions("2.5m x 4.0m x 3.0m")
-                .type(UnitType.CLIMATE_CONTROLLED)
                 .location("Building A - Ground Floor (Climate Wing)")
                 .baseMonthlyRate(new BigDecimal("120.00"))
                 .status(UnitStatus.OCCUPIED)
-                .features("24/7 CCTV, Climate Control (18-22°C), Humidity Regulation, Digital Keypad")
                 .description("Perfect for electronics, artwork, documents, and wooden antiques.")
                 .build());
 
@@ -82,11 +76,9 @@ public class DataSeeder implements CommandLineRunner {
                 .name("Unit 4 - Large Climate Controlled")
                 .sizeSquareMeters(12.0)
                 .dimensions("3.0m x 4.0m x 3.0m")
-                .type(UnitType.CLIMATE_CONTROLLED)
                 .location("Building B - First Floor")
                 .baseMonthlyRate(new BigDecimal("140.00"))
                 .status(UnitStatus.OCCUPIED)
-                .features("Climate Control, Freight Elevator Access, Heavy-duty shelving")
                 .description("Suitable for full 2-bedroom apartment furniture and inventory.")
                 .build());
 
@@ -95,11 +87,9 @@ public class DataSeeder implements CommandLineRunner {
                 .name("Unit 5 - Medium Drive-Up")
                 .sizeSquareMeters(16.0)
                 .dimensions("4.0m x 4.0m x 3.2m")
-                .type(UnitType.DRIVE_UP)
                 .location("Building B - External Bay")
                 .baseMonthlyRate(new BigDecimal("180.00"))
                 .status(UnitStatus.OCCUPIED)
-                .features("Direct Vehicle Drive-up, 24/7 Gate Access, High Ceiling")
                 .description("Direct drive-up loading for equipment, trade tools, and large goods.")
                 .build());
 
@@ -108,11 +98,9 @@ public class DataSeeder implements CommandLineRunner {
                 .name("Unit 6 - Large Drive-Up")
                 .sizeSquareMeters(20.0)
                 .dimensions("4.0m x 5.0m x 3.2m")
-                .type(UnitType.DRIVE_UP)
                 .location("Building B - External Bay")
                 .baseMonthlyRate(new BigDecimal("220.00"))
                 .status(UnitStatus.OCCUPIED)
-                .features("Direct Vehicle Drive-up, Extra Wide Door, High Ceiling, Electrical Outlet")
                 .description("Large capacity for commercial inventory, vehicle, or 3-4 bedroom house contents.")
                 .build());
 
@@ -121,11 +109,9 @@ public class DataSeeder implements CommandLineRunner {
                 .name("Unit 7 - Extra Large Commercial")
                 .sizeSquareMeters(25.0)
                 .dimensions("5.0m x 5.0m x 3.5m")
-                .type(UnitType.DRIVE_UP)
                 .location("Building C - Yard Level")
                 .baseMonthlyRate(new BigDecimal("275.00"))
                 .status(UnitStatus.AVAILABLE)
-                .features("Drive-up, Commercial Grade Door, 3-Phase Power Available, Heavy Pallet Access")
                 .description("Commercial warehouse storage for businesses and distribution.")
                 .build());
 
@@ -134,11 +120,9 @@ public class DataSeeder implements CommandLineRunner {
                 .name("Unit 8 - High-Security Vault")
                 .sizeSquareMeters(8.0)
                 .dimensions("2.5m x 3.2m x 3.0m")
-                .type(UnitType.SECURE_VAULT)
                 .location("Building C - Secure Inner Vault")
                 .baseMonthlyRate(new BigDecimal("160.00"))
                 .status(UnitStatus.OCCUPIED)
-                .features("Biometric Access, Fireproof Safe Walls, 24/7 Monitored Alarm, Reinforced Steel Door")
                 .description("Maximum security storage for luxury valuables, collectibles, and critical archives.")
                 .build());
 
@@ -147,11 +131,9 @@ public class DataSeeder implements CommandLineRunner {
                 .name("Unit 9 - Medium Standard")
                 .sizeSquareMeters(10.0)
                 .dimensions("2.5m x 4.0m x 3.0m")
-                .type(UnitType.STANDARD)
                 .location("Building C - Ground Floor")
                 .baseMonthlyRate(new BigDecimal("110.00"))
                 .status(UnitStatus.MAINTENANCE)
-                .features("Standard security, Roll-up door, Motion sensor light")
                 .description("Currently undergoing routine maintenance on roller door mechanism.")
                 .build());
 

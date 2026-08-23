@@ -5,19 +5,24 @@ import com.storagemanager.storage_management.exception.BadRequestException;
 import com.storagemanager.storage_management.exception.ResourceNotFoundException;
 import com.storagemanager.storage_management.model.StorageUnit;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
-import com.storagemanager.storage_management.model.enums.UnitType;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.storagemanager.storage_management.model.Client;
+import com.storagemanager.storage_management.model.enums.RentalStatus;
+import com.storagemanager.storage_management.repository.RentalAgreementRepository;
+
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 public class StorageUnitService {
 
     private final StorageUnitRepository storageUnitRepository;
+    private final RentalAgreementRepository rentalAgreementRepository;
 
     public List<StorageUnit> getAllUnits() {
         return storageUnitRepository.findAll();
@@ -28,13 +33,18 @@ public class StorageUnitService {
                 .orElseThrow(() -> new ResourceNotFoundException("Storage unit not found with id: " + id));
     }
 
+    public Optional<Client> getClientByUnitId(Long id) {
+        // Verify the unit exists first
+        getUnitById(id);
+        return rentalAgreementRepository
+                .findByStorageUnitIdAndStatus(id, RentalStatus.ACTIVE)
+                .map(ra -> ra.getClient());
+    }
+
     public List<StorageUnit> getUnitsByStatus(UnitStatus status) {
         return storageUnitRepository.findByStatus(status);
     }
 
-    public List<StorageUnit> getUnitsByType(UnitType type) {
-        return storageUnitRepository.findByType(type);
-    }
 
     @Transactional
     public StorageUnit createUnit(StorageUnitRequest request) {
@@ -47,11 +57,9 @@ public class StorageUnitService {
                 .name(request.getName())
                 .sizeSquareMeters(request.getSizeSquareMeters())
                 .dimensions(request.getDimensions())
-                .type(request.getType())
                 .location(request.getLocation())
                 .baseMonthlyRate(request.getBaseMonthlyRate())
                 .status(request.getStatus() != null ? request.getStatus() : UnitStatus.AVAILABLE)
-                .features(request.getFeatures())
                 .description(request.getDescription())
                 .build();
 
@@ -71,13 +79,11 @@ public class StorageUnitService {
         unit.setName(request.getName());
         unit.setSizeSquareMeters(request.getSizeSquareMeters());
         unit.setDimensions(request.getDimensions());
-        unit.setType(request.getType());
         unit.setLocation(request.getLocation());
         unit.setBaseMonthlyRate(request.getBaseMonthlyRate());
         if (request.getStatus() != null) {
             unit.setStatus(request.getStatus());
         }
-        unit.setFeatures(request.getFeatures());
         unit.setDescription(request.getDescription());
 
         return storageUnitRepository.save(unit);

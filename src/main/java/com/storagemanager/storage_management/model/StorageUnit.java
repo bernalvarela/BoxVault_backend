@@ -1,7 +1,6 @@
 package com.storagemanager.storage_management.model;
 
 import com.storagemanager.storage_management.model.enums.UnitStatus;
-import com.storagemanager.storage_management.model.enums.UnitType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -35,10 +34,6 @@ public class StorageUnit {
     @Column(length = 50)
     private String dimensions;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 30)
-    private UnitType type;
-
     @Column(length = 100)
     private String location;
 
@@ -49,9 +44,6 @@ public class StorageUnit {
     @Column(nullable = false, length = 30)
     @Builder.Default
     private UnitStatus status = UnitStatus.AVAILABLE;
-
-    @Column(length = 500)
-    private String features;
 
     @Column(columnDefinition = "TEXT")
     private String description;
