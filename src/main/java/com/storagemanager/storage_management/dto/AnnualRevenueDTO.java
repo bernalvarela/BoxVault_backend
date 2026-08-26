@@ -36,4 +36,9 @@ public class AnnualRevenueDTO {
     private long paidCount;
     private long pendingCount;
     private long overdueCount;
+
+    // Gastos del periodo y resultado neto (cobrado - gastos)
+    private BigDecimal expenses;
+    private long expenseCount;
+    private BigDecimal netResult;
 }

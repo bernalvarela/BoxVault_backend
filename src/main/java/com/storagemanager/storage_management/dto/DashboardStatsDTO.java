@@ -23,6 +23,7 @@ public class DashboardStatsDTO {
 
     // Client & Rental metrics
     private long totalClients;
+    private long activeClients; // Clientes con al menos un alquiler activo
     private long activeRentals;
 
     // Financial Overview (Gross with 21% VAT)
@@ -51,7 +52,17 @@ public class DashboardStatsDTO {
     private BigDecimal totalRevenueAllTimeWithoutVat; // Base sin IVA
     private BigDecimal totalRevenueAllTimeVatAmount; // Cuota IVA 21%
 
+    // Gastos (importe pagado, sin desglose de IVA) y resultado neto = cobrado - gastos.
+    // En /dashboard "currentMonth*" se refiere al mes en curso; en /range, al rango pedido.
+    private BigDecimal currentMonthExpenses;
+    private long currentMonthExpenseCount;
+    private BigDecimal currentMonthNetResult;
+
+    private BigDecimal totalExpensesAllTime;
+    private BigDecimal netResultAllTime;
+
     // Breakdown lists
     private List<MonthlyRevenueDTO> recentMonthlyRevenue;
     private List<UnitOccupancyDTO> unitsSummary;
+    private List<ExpenseCategorySummaryDTO> expensesByCategory; // Histórico total en /dashboard; rango en /range
 }

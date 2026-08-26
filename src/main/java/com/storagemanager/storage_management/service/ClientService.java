@@ -1,21 +1,26 @@
 package com.storagemanager.storage_management.service;
 
+import com.storagemanager.storage_management.dto.ClientDTO;
 import com.storagemanager.storage_management.dto.ClientRequest;
 import com.storagemanager.storage_management.exception.BadRequestException;
 import com.storagemanager.storage_management.exception.ResourceNotFoundException;
 import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.repository.ClientRepository;
+import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class ClientService {
 
     private final ClientRepository clientRepository;
+    private final RentalAgreementRepository rentalAgreementRepository;
 
     public List<Client> getAllClients() {
         return clientRepository.findAll();
@@ -31,6 +36,28 @@ public class ClientService {
             return getAllClients();
         }
         return clientRepository.searchClients(query.trim());
+    }
+
+    public List<ClientDTO> searchClientSummaries(String query) {
+        Map<Long, Long> activeRentalsByClient = rentalAgreementRepository.findAllActiveRentals().stream()
+                .collect(Collectors.groupingBy(r -> r.getClient().getId(), Collectors.counting()));
+
+        return searchClients(query).stream()
+                .map(c -> ClientDTO.builder()
+                        .id(c.getId())
+                        .fullName(c.getFullName())
+                        .email(c.getEmail())
+                        .phone(c.getPhone())
+                        .documentId(c.getDocumentId())
+                        .address(c.getAddress())
+                        .emergencyContact(c.getEmergencyContact())
+                        .notes(c.getNotes())
+                        .createdAt(c.getCreatedAt())
+                        .updatedAt(c.getUpdatedAt())
+                        .active(activeRentalsByClient.containsKey(c.getId()))
+                        .activeRentalsCount(activeRentalsByClient.getOrDefault(c.getId(), 0L))
+                        .build())
+                .toList();
     }
 
     @Transactional

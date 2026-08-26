@@ -19,6 +19,8 @@ public class UnitOccupancyDTO {
     private Double sizeSquareMeters;
     private UnitStatus status;
     private String location;
+    private Long storageGroupId;
+    private String storageGroupName;
     private String currentClientName;
     private String currentAgreementNumber;
 
@@ -34,4 +36,8 @@ public class UnitOccupancyDTO {
     private BigDecimal totalRevenueGenerated; // Total con IVA
     private BigDecimal totalRevenueGeneratedWithoutVat; // Base sin IVA
     private BigDecimal totalRevenueGeneratedVatAmount; // IVA 21%
+
+    // Gastos imputados directamente a este trastero y resultado neto (ingresos - gastos)
+    private BigDecimal totalExpenses;
+    private BigDecimal netResult;
 }

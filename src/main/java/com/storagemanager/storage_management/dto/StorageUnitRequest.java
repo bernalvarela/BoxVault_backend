@@ -16,6 +16,9 @@ public class StorageUnitRequest {
     @NotBlank(message = "Unit name is required")
     private String name;
 
+    @NotNull(message = "Storage group is required")
+    private Long storageGroupId;
+
     @NotNull(message = "Size is required")
     @DecimalMin(value = "0.1", message = "Size must be greater than 0")
     private Double sizeSquareMeters;

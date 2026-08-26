@@ -51,6 +51,24 @@ class StatisticsControllerTest {
     }
 
     @Test
+    void testTrendsWithZeroPeriodsReturnCurrentPeriod() {
+        ResponseEntity<List> annual = restTemplate.getForEntity("/api/statistics/annual-trends?years=0", List.class);
+        assertEquals(200, annual.getStatusCode().value());
+        assertNotNull(annual.getBody());
+        assertEquals(1, annual.getBody().size());
+
+        ResponseEntity<List> quarterly = restTemplate.getForEntity("/api/statistics/quarterly-trends?quarters=0", List.class);
+        assertEquals(200, quarterly.getStatusCode().value());
+        assertNotNull(quarterly.getBody());
+        assertEquals(1, quarterly.getBody().size());
+
+        ResponseEntity<List> monthly = restTemplate.getForEntity("/api/statistics/monthly-trends?months=0", List.class);
+        assertEquals(200, monthly.getStatusCode().value());
+        assertNotNull(monthly.getBody());
+        assertEquals(1, monthly.getBody().size());
+    }
+
+    @Test
     void testGetStatisticsByDateRange() {
         LocalDate startDate = LocalDate.of(2026, 1, 1);
         LocalDate endDate = LocalDate.of(2026, 6, 30);

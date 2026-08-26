@@ -25,6 +25,16 @@ public class StorageUnit {
     @Column(nullable = false, unique = true, length = 50)
     private String unitNumber;
 
+    /**
+     * Group (building / premises) this unit belongs to. Nullable at the database
+     * level so existing rows survive the schema update; {@code DataSeeder} moves
+     * any ungrouped unit into the default group at start-up and the API always
+     * requires a group when creating or updating a unit.
+     */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "storage_group_id")
+    private StorageGroup storageGroup;
+
     @Column(nullable = false, length = 100)
     private String name;
 

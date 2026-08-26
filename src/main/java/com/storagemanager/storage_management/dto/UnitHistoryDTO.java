@@ -21,6 +21,15 @@ public class UnitHistoryDTO {
     private String unitName;
     private BigDecimal currentMonthlyPrice;
 
+    // Ingresos totales cobrados de este trastero
+    private BigDecimal totalRevenue;           // Bruto (total con IVA)
+    private BigDecimal totalRevenueWithoutVat; // Neto (base sin IVA)
+    private BigDecimal totalRevenueVatAmount;  // IVA 21%
+
+    // Gastos imputados a este trastero y resultado neto (bruto cobrado - gastos)
+    private BigDecimal totalExpenses;
+    private BigDecimal netResult;
+
     private List<PriceEntry> priceHistory;
     private List<RentalEntry> rentalHistory;
 

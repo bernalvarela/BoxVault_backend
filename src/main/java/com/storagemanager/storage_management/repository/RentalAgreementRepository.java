@@ -20,4 +20,7 @@ public interface RentalAgreementRepository extends JpaRepository<RentalAgreement
 
     @Query("SELECT r FROM RentalAgreement r WHERE r.status = 'ACTIVE'")
     List<RentalAgreement> findAllActiveRentals();
+
+    @Query("SELECT COUNT(DISTINCT r.client.id) FROM RentalAgreement r WHERE r.status = 'ACTIVE'")
+    long countDistinctActiveClients();
 }

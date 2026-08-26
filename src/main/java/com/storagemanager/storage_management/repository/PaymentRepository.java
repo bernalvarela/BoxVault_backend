@@ -19,7 +19,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     List<Payment> findByClientId(Long clientId);
     List<Payment> findByStorageUnitId(Long storageUnitId);
     List<Payment> findByBillingPeriodYearAndBillingPeriodMonth(Integer year, Integer month);
-    List<Payment> findByBillingPeriodYearAndBillingPeriodMonthBetween(int startYear, int startMonth, int endYear, int endMonth);
+    /** Payments of one year whose billing month is within [startMonth, endMonth]. */
+    List<Payment> findByBillingPeriodYearAndBillingPeriodMonthBetween(int year, int startMonth, int endMonth);
     List<Payment> findByBillingPeriodYear(int year);
     List<Payment> findByDueDateBetween(LocalDate startDate, LocalDate endDate);
 
@@ -45,6 +46,9 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
            "FROM Payment p WHERE p.status = 'PAID' " +
            "GROUP BY p.storageUnit.id, p.storageUnit.unitNumber")
     List<Object[]> sumRevenueByStorageUnit();
+
+    @Query("SELECT COALESCE(SUM(p.amountPaid), 0) FROM Payment p WHERE p.status = 'PAID' AND p.storageUnit.id = :unitId")
+    BigDecimal sumPaidRevenueForUnit(@Param("unitId") Long unitId);
 
     // Quarterly aggregation methods
     @Query("SELECT COALESCE(SUM(p.amountPaid), 0) FROM Payment p WHERE p.status = 'PAID' AND p.billingPeriodYear = :year AND p.billingPeriodMonth >= :startMonth AND p.billingPeriodMonth <= :endMonth")

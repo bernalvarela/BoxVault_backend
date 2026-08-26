@@ -14,43 +14,57 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.List;
 
+/**
+ * Statistics endpoints. Every endpoint accepts an optional {@code groupIds} query
+ * parameter (repeated, e.g. {@code ?groupIds=1&groupIds=2}, or comma separated,
+ * {@code ?groupIds=1,2}) restricting the figures to those storage groups. Omitting
+ * it, or passing an empty value, returns the figures for all groups.
+ */
 @RestController
 @RequestMapping("/api/statistics")
 @RequiredArgsConstructor
-
 public class StatisticsController {
 
     private final StatisticsService statisticsService;
 
     @GetMapping("/dashboard")
-    public ResponseEntity<DashboardStatsDTO> getDashboardStats() {
-        return ResponseEntity.ok(statisticsService.getDashboardStats());
+    public ResponseEntity<DashboardStatsDTO> getDashboardStats(
+            @RequestParam(required = false) List<Long> groupIds) {
+        return ResponseEntity.ok(statisticsService.getDashboardStats(groupIds));
     }
 
     @GetMapping("/monthly-trends")
-    public ResponseEntity<List<MonthlyRevenueDTO>> getMonthlyTrends(@RequestParam(defaultValue = "6") int months) {
-        return ResponseEntity.ok(statisticsService.getRecentMonthlyTrends(months));
+    public ResponseEntity<List<MonthlyRevenueDTO>> getMonthlyTrends(
+            @RequestParam(defaultValue = "6") int months,
+            @RequestParam(required = false) List<Long> groupIds) {
+        return ResponseEntity.ok(statisticsService.getRecentMonthlyTrends(months, groupIds));
     }
 
     @GetMapping("/quarterly-trends")
-    public ResponseEntity<List<QuarterlyRevenueDTO>> getQuarterlyTrends(@RequestParam(defaultValue = "4") int quarters) {
-        return ResponseEntity.ok(statisticsService.getQuarterlyTrends(quarters));
+    public ResponseEntity<List<QuarterlyRevenueDTO>> getQuarterlyTrends(
+            @RequestParam(defaultValue = "4") int quarters,
+            @RequestParam(required = false) List<Long> groupIds) {
+        return ResponseEntity.ok(statisticsService.getQuarterlyTrends(quarters, groupIds));
     }
 
     @GetMapping("/annual-trends")
-    public ResponseEntity<List<AnnualRevenueDTO>> getAnnualTrends(@RequestParam(defaultValue = "3") int years) {
-        return ResponseEntity.ok(statisticsService.getAnnualTrends(years));
+    public ResponseEntity<List<AnnualRevenueDTO>> getAnnualTrends(
+            @RequestParam(defaultValue = "3") int years,
+            @RequestParam(required = false) List<Long> groupIds) {
+        return ResponseEntity.ok(statisticsService.getAnnualTrends(years, groupIds));
     }
 
     @GetMapping("/range")
     public ResponseEntity<DashboardStatsDTO> getStatisticsByDateRange(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
-        return ResponseEntity.ok(statisticsService.getStatisticsByDateRange(startDate, endDate));
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false) List<Long> groupIds) {
+        return ResponseEntity.ok(statisticsService.getStatisticsByDateRange(startDate, endDate, groupIds));
     }
 
     @GetMapping("/unit-revenues")
-    public ResponseEntity<List<UnitRevenueDTO>> getUnitRevenues() {
-        return ResponseEntity.ok(statisticsService.getUnitRevenues());
+    public ResponseEntity<List<UnitRevenueDTO>> getUnitRevenues(
+            @RequestParam(required = false) List<Long> groupIds) {
+        return ResponseEntity.ok(statisticsService.getUnitRevenues(groupIds));
     }
 }

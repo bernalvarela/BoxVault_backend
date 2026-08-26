@@ -5,9 +5,13 @@ import com.storagemanager.storage_management.dto.StorageUnitRequest;
 import com.storagemanager.storage_management.dto.UnitHistoryDTO;
 import com.storagemanager.storage_management.exception.BadRequestException;
 import com.storagemanager.storage_management.exception.ResourceNotFoundException;
+import com.storagemanager.storage_management.model.StorageGroup;
 import com.storagemanager.storage_management.model.StorageUnit;
 import com.storagemanager.storage_management.model.UnitPriceHistory;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
+import com.storagemanager.storage_management.repository.ExpenseRepository;
+import com.storagemanager.storage_management.repository.PaymentRepository;
+import com.storagemanager.storage_management.repository.StorageGroupRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
 import com.storagemanager.storage_management.repository.UnitPriceHistoryRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,9 +33,24 @@ public class StorageUnitService {
     private final StorageUnitRepository storageUnitRepository;
     private final RentalAgreementRepository rentalAgreementRepository;
     private final UnitPriceHistoryRepository unitPriceHistoryRepository;
+    private final PaymentRepository paymentRepository;
+    private final ExpenseRepository expenseRepository;
+    private final StorageGroupRepository storageGroupRepository;
 
     public List<StorageUnit> getAllUnits() {
         return storageUnitRepository.findAll();
+    }
+
+    public List<StorageUnit> getUnitsByGroup(Long groupId) {
+        return storageUnitRepository.findByStorageGroupIdIn(List.of(groupId));
+    }
+
+    private StorageGroup resolveGroup(Long groupId) {
+        if (groupId == null) {
+            throw new BadRequestException("Storage group is required");
+        }
+        return storageGroupRepository.findById(groupId)
+                .orElseThrow(() -> new ResourceNotFoundException("Storage group not found with id: " + groupId));
     }
 
     public StorageUnit getUnitById(Long id) {
@@ -61,6 +80,7 @@ public class StorageUnitService {
         StorageUnit unit = StorageUnit.builder()
                 .unitNumber(request.getUnitNumber())
                 .name(request.getName())
+                .storageGroup(resolveGroup(request.getStorageGroupId()))
                 .sizeSquareMeters(request.getSizeSquareMeters())
                 .dimensions(request.getDimensions())
                 .location(request.getLocation())
@@ -88,6 +108,7 @@ public class StorageUnitService {
 
         unit.setUnitNumber(request.getUnitNumber());
         unit.setName(request.getName());
+        unit.setStorageGroup(resolveGroup(request.getStorageGroupId()));
         unit.setSizeSquareMeters(request.getSizeSquareMeters());
         unit.setDimensions(request.getDimensions());
         unit.setLocation(request.getLocation());
@@ -153,11 +174,22 @@ public class StorageUnitService {
                         .build())
                 .toList();
 
+        java.math.BigDecimal totalRevenue = paymentRepository.sumPaidRevenueForUnit(id);
+        if (totalRevenue == null) totalRevenue = java.math.BigDecimal.ZERO;
+
+        java.math.BigDecimal totalExpenses = expenseRepository.sumExpensesForUnit(id);
+        if (totalExpenses == null) totalExpenses = java.math.BigDecimal.ZERO;
+
         return UnitHistoryDTO.builder()
                 .unitId(unit.getId())
                 .unitNumber(unit.getUnitNumber())
                 .unitName(unit.getName())
                 .currentMonthlyPrice(unit.getBaseMonthlyRate())
+                .totalRevenue(totalRevenue)
+                .totalRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(totalRevenue))
+                .totalRevenueVatAmount(VatUtils.calculateVatAmount(totalRevenue))
+                .totalExpenses(totalExpenses)
+                .netResult(totalRevenue.subtract(totalExpenses))
                 .priceHistory(prices)
                 .rentalHistory(rentals)
                 .build();

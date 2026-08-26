@@ -1,5 +1,6 @@
 package com.storagemanager.storage_management.controller;
 
+import com.storagemanager.storage_management.dto.ClientDTO;
 import com.storagemanager.storage_management.dto.ClientRequest;
 import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.model.Payment;
@@ -26,8 +27,8 @@ public class ClientController {
     private final PaymentService paymentService;
 
     @GetMapping
-    public ResponseEntity<List<Client>> getAllClients(@RequestParam(required = false) String search) {
-        return ResponseEntity.ok(clientService.searchClients(search));
+    public ResponseEntity<List<ClientDTO>> getAllClients(@RequestParam(required = false) String search) {
+        return ResponseEntity.ok(clientService.searchClientSummaries(search));
     }
 
     @GetMapping("/{id}")
