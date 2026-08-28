@@ -2,6 +2,7 @@ package com.storagemanager.storage_management;
 
 import com.storagemanager.storage_management.dto.AnnualRevenueDTO;
 import com.storagemanager.storage_management.dto.DashboardStatsDTO;
+import com.storagemanager.storage_management.dto.HistoryRangeDTO;
 import com.storagemanager.storage_management.dto.QuarterlyRevenueDTO;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -81,5 +82,36 @@ class StatisticsControllerTest {
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
+    }
+
+    @Test
+    void historyRangeSpansFromTheFirstPaymentOrExpense() {
+        ResponseEntity<HistoryRangeDTO> response = restTemplate.getForEntity(
+                "/api/statistics/history-range", HistoryRangeDTO.class);
+        assertEquals(200, response.getStatusCode().value());
+        HistoryRangeDTO range = response.getBody();
+        assertNotNull(range);
+        assertNotNull(range.getFirstDate());
+        assertNotNull(range.getLastDate());
+        // The seed starts with the flats statement (2021) and the first storage expense (Nov 2023)
+        assertFalse(range.getFirstDate().isAfter(LocalDate.of(2023, 11, 6)));
+        assertFalse(range.getLastDate().isBefore(LocalDate.of(2026, 8, 1)));
+        assertFalse(range.getFirstDate().isAfter(range.getLastDate()));
+
+        // The whole history can be fed straight back into the range statistics
+        ResponseEntity<DashboardStatsDTO> all = restTemplate.getForEntity(
+                "/api/statistics/range?startDate={startDate}&endDate={endDate}",
+                DashboardStatsDTO.class, range.getFirstDate(), range.getLastDate());
+        assertEquals(200, all.getStatusCode().value());
+        assertNotNull(all.getBody());
+        assertTrue(all.getBody().getCurrentMonthExpenseCount() >= 232);
+
+        // A group without activity has no range
+        ResponseEntity<HistoryRangeDTO> none = restTemplate.getForEntity(
+                "/api/statistics/history-range?groupIds=999999", HistoryRangeDTO.class);
+        assertEquals(200, none.getStatusCode().value());
+        assertNotNull(none.getBody());
+        assertNull(none.getBody().getFirstDate());
+        assertNull(none.getBody().getLastDate());
     }
 }

@@ -1,5 +1,6 @@
 package com.storagemanager.storage_management.dto;
 
+import com.storagemanager.storage_management.model.enums.UnitKind;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -18,6 +19,9 @@ public class StorageUnitRequest {
 
     @NotNull(message = "Storage group is required")
     private Long storageGroupId;
+
+    /** STORAGE_UNIT (default) or APARTMENT (VAT exempt). */
+    private UnitKind kind;
 
     @NotNull(message = "Size is required")
     @DecimalMin(value = "0.1", message = "Size must be greater than 0")

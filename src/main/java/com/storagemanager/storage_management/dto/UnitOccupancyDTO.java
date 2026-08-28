@@ -1,5 +1,6 @@
 package com.storagemanager.storage_management.dto;
 
+import com.storagemanager.storage_management.model.enums.UnitKind;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,6 +17,8 @@ public class UnitOccupancyDTO {
     private Long id;
     private String unitNumber;
     private String name;
+    private UnitKind kind;
+    private boolean vatApplicable; // false for apartments: base == total, VAT == 0
     private Double sizeSquareMeters;
     private UnitStatus status;
     private String location;

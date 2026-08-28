@@ -1,9 +1,11 @@
 package com.storagemanager.storage_management.service;
 
 import com.storagemanager.storage_management.config.VatUtils;
+import com.storagemanager.storage_management.config.VatUtils.Breakdown;
 import com.storagemanager.storage_management.dto.AnnualRevenueDTO;
 import com.storagemanager.storage_management.dto.DashboardStatsDTO;
 import com.storagemanager.storage_management.dto.ExpenseCategorySummaryDTO;
+import com.storagemanager.storage_management.dto.HistoryRangeDTO;
 import com.storagemanager.storage_management.dto.MonthlyRevenueDTO;
 import com.storagemanager.storage_management.dto.QuarterlyRevenueDTO;
 import com.storagemanager.storage_management.dto.UnitOccupancyDTO;
@@ -13,6 +15,7 @@ import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.StorageUnit;
 import com.storagemanager.storage_management.model.enums.PaymentStatus;
 import com.storagemanager.storage_management.model.enums.RentalStatus;
+import com.storagemanager.storage_management.model.enums.UnitKind;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
 import com.storagemanager.storage_management.repository.ClientRepository;
 import com.storagemanager.storage_management.repository.PaymentRepository;
@@ -37,6 +40,10 @@ import java.util.function.Predicate;
  * those groups - and their rentals, payments and expenses - are taken into account.
  * Group filtering is applied in memory on top of the period queries, which is more
  * than fast enough for the size of this data set and keeps a single code path.
+ * <p>
+ * VAT breakdowns are accumulated payment by payment (or unit by unit), because
+ * storage units carry 21% VAT while apartments are exempt: the base of a mixed
+ * total is the sum of each item's base, not the total divided by 1.21.
  */
 @Service
 @RequiredArgsConstructor
@@ -85,12 +92,24 @@ public class StatisticsService {
         return rentals.stream().filter(r -> unitInGroups(r.getStorageUnit(), groupIds)).toList();
     }
 
-    private static BigDecimal sum(List<Payment> payments, Predicate<Payment> filter, Function<Payment, BigDecimal> amount) {
-        return payments.stream()
-                .filter(filter)
-                .map(amount)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    // ------------------------------------------------------------------
+    // VAT-aware sums
+    // ------------------------------------------------------------------
+
+    private static boolean vatOf(StorageUnit unit) {
+        return unit == null || unit.isVatApplicable();
+    }
+
+    /** Sums an amount of the matching payments, splitting base/VAT according to each payment's unit. */
+    private static Breakdown sum(List<Payment> payments, Predicate<Payment> filter, Function<Payment, BigDecimal> amount) {
+        Breakdown acc = Breakdown.ZERO;
+        for (Payment p : payments) {
+            if (!filter.test(p)) continue;
+            BigDecimal value = amount.apply(p);
+            if (value == null) continue;
+            acc = acc.plus(VatUtils.breakdown(value, vatOf(p.getStorageUnit())));
+        }
+        return acc;
     }
 
     private static long count(List<Payment> payments, PaymentStatus status) {
@@ -106,7 +125,7 @@ public class StatisticsService {
      * expected = every amount due, collected = amount paid of PAID payments,
      * pending = amount due of PENDING/OVERDUE payments.
      */
-    private record PeriodTotals(BigDecimal expected, BigDecimal collected, BigDecimal pending,
+    private record PeriodTotals(Breakdown expected, Breakdown collected, Breakdown pending,
                                 long paidCount, long pendingCount, long overdueCount) {
         static PeriodTotals of(List<Payment> payments) {
             return new PeriodTotals(
@@ -137,13 +156,15 @@ public class StatisticsService {
                 groupIds);
         PeriodTotals month = PeriodTotals.of(currentMonthPayments);
 
-        BigDecimal expected = month.expected();
-        if (expected.compareTo(BigDecimal.ZERO) == 0) {
+        Breakdown expected = month.expected();
+        if (expected.total().compareTo(BigDecimal.ZERO) == 0) {
             // Si aún no se generaron facturas en el mes, calcular en base a contratos activos
-            expected = rentalsIn(rentalAgreementRepository.findAllActiveRentals(), groupIds).stream()
-                    .map(RentalAgreement::getMonthlyRent)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            expected = Breakdown.ZERO;
+            for (RentalAgreement r : rentalsIn(rentalAgreementRepository.findAllActiveRentals(), groupIds)) {
+                if (r.getMonthlyRent() != null) {
+                    expected = expected.plus(VatUtils.breakdown(r.getMonthlyRent(), vatOf(r.getStorageUnit())));
+                }
+            }
         }
 
         // Gastos del mes en curso y desglose histórico por categoría
@@ -190,20 +211,44 @@ public class StatisticsService {
     }
 
     /**
+     * First and last date with recorded activity for the groups - a payment due date
+     * (the same date the range statistics filter on) or an expense - so the UI can
+     * offer a "whole history" range. Both dates are null when nothing is recorded.
+     */
+    public HistoryRangeDTO getHistoryRange(Collection<Long> groupIdsParam) {
+        Set<Long> groupIds = normalizeGroupIds(groupIdsParam);
+        LocalDate first = null;
+        LocalDate last = null;
+        for (Payment p : paymentsIn(paymentRepository.findAll(), groupIds)) {
+            LocalDate due = p.getDueDate();
+            if (due == null) continue;
+            if (first == null || due.isBefore(first)) first = due;
+            if (last == null || due.isAfter(last)) last = due;
+        }
+        LocalDate firstExpense = expenseService.firstExpenseDate(groupIds);
+        LocalDate lastExpense = expenseService.lastExpenseDate(groupIds);
+        if (firstExpense != null && (first == null || firstExpense.isBefore(first))) first = firstExpense;
+        if (lastExpense != null && (last == null || lastExpense.isAfter(last))) last = lastExpense;
+        return HistoryRangeDTO.builder().firstDate(first).lastDate(last).build();
+    }
+
+    /**
      * Assembles the dashboard DTO: the "current period" figures are supplied by the
      * caller (current month or custom range); the structural and all-time figures
      * (units, clients, overdue, historical totals) are computed here for the groups.
      */
     private DashboardStatsDTO buildStats(Set<Long> groupIds,
-                                         BigDecimal periodExpected,
-                                         BigDecimal periodCollected,
-                                         BigDecimal periodPending,
+                                         Breakdown periodExpected,
+                                         Breakdown periodCollected,
+                                         Breakdown periodPending,
                                          BigDecimal periodExpenses,
                                          long periodExpenseCount,
                                          List<MonthlyRevenueDTO> recentMonthlyRevenue,
                                          List<ExpenseCategorySummaryDTO> expensesByCategory) {
         List<StorageUnit> units = unitsIn(groupIds);
         long totalUnits = units.size();
+        long storageUnitCount = units.stream().filter(u -> u.getKind() == UnitKind.STORAGE_UNIT).count();
+        long apartmentCount = units.stream().filter(u -> u.getKind() == UnitKind.APARTMENT).count();
         long occupiedUnits = units.stream().filter(u -> u.getStatus() == UnitStatus.OCCUPIED).count();
         long availableUnits = units.stream().filter(u -> u.getStatus() == UnitStatus.AVAILABLE).count();
         long maintenanceUnits = units.stream().filter(u -> u.getStatus() == UnitStatus.MAINTENANCE).count();
@@ -220,16 +265,18 @@ public class StatisticsService {
                 : rentalsIn(rentalAgreementRepository.findAll(), groupIds).stream()
                         .map(r -> r.getClient().getId()).distinct().count();
 
-        BigDecimal potentialRevenue = units.stream()
-                .map(StorageUnit::getBaseMonthlyRate)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        Breakdown potential = Breakdown.ZERO;
+        for (StorageUnit unit : units) {
+            if (unit.getBaseMonthlyRate() != null) {
+                potential = potential.plus(VatUtils.breakdown(unit.getBaseMonthlyRate(), unit.isVatApplicable()));
+            }
+        }
 
         List<Payment> overduePayments = paymentsIn(paymentRepository.findByStatus(PaymentStatus.OVERDUE), groupIds);
-        BigDecimal totalOverdueAmount = sum(overduePayments, p -> true, Payment::getAmountDue);
+        Breakdown overdue = sum(overduePayments, p -> true, Payment::getAmountDue);
 
-        BigDecimal totalRevenueAllTime = sum(
-                paymentsIn(paymentRepository.findByStatus(PaymentStatus.PAID), groupIds), p -> true, Payment::getAmountPaid);
+        Breakdown allTime = sum(paymentsIn(paymentRepository.findByStatus(PaymentStatus.PAID), groupIds),
+                p -> true, Payment::getAmountPaid);
         BigDecimal totalExpensesAllTime = expenseService.sumTotalExpenses(groupIds);
 
         // Desglose de Trasteros
@@ -237,6 +284,8 @@ public class StatisticsService {
 
         return DashboardStatsDTO.builder()
                 .totalUnits(totalUnits)
+                .storageUnitCount(storageUnitCount)
+                .apartmentCount(apartmentCount)
                 .occupiedUnits(occupiedUnits)
                 .availableUnits(availableUnits)
                 .maintenanceUnits(maintenanceUnits)
@@ -246,36 +295,36 @@ public class StatisticsService {
                 .activeClients(activeClients)
                 .activeRentals(activeRentals.size())
                 // Potencial mensual con IVA y desglose
-                .monthlyPotentialRevenue(potentialRevenue)
-                .monthlyPotentialRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(potentialRevenue))
-                .monthlyPotentialVatAmount(VatUtils.calculateVatAmount(potentialRevenue))
+                .monthlyPotentialRevenue(potential.total())
+                .monthlyPotentialRevenueWithoutVat(potential.base())
+                .monthlyPotentialVatAmount(potential.vat())
                 // Esperado en el periodo con IVA y desglose
-                .currentMonthExpectedRevenue(periodExpected)
-                .currentMonthExpectedRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(periodExpected))
-                .currentMonthExpectedVatAmount(VatUtils.calculateVatAmount(periodExpected))
+                .currentMonthExpectedRevenue(periodExpected.total())
+                .currentMonthExpectedRevenueWithoutVat(periodExpected.base())
+                .currentMonthExpectedVatAmount(periodExpected.vat())
                 // Cobrado en el periodo con IVA y desglose
-                .currentMonthCollectedRevenue(periodCollected)
-                .currentMonthCollectedRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(periodCollected))
-                .currentMonthCollectedVatAmount(VatUtils.calculateVatAmount(periodCollected))
+                .currentMonthCollectedRevenue(periodCollected.total())
+                .currentMonthCollectedRevenueWithoutVat(periodCollected.base())
+                .currentMonthCollectedVatAmount(periodCollected.vat())
                 // Pendiente en el periodo con IVA y desglose
-                .currentMonthPendingRevenue(periodPending)
-                .currentMonthPendingRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(periodPending))
-                .currentMonthPendingVatAmount(VatUtils.calculateVatAmount(periodPending))
+                .currentMonthPendingRevenue(periodPending.total())
+                .currentMonthPendingRevenueWithoutVat(periodPending.base())
+                .currentMonthPendingVatAmount(periodPending.vat())
                 // Vencidos con IVA y desglose
-                .totalOverdueAmount(totalOverdueAmount)
-                .totalOverdueWithoutVat(VatUtils.calculateBaseWithoutVat(totalOverdueAmount))
-                .totalOverdueVatAmount(VatUtils.calculateVatAmount(totalOverdueAmount))
+                .totalOverdueAmount(overdue.total())
+                .totalOverdueWithoutVat(overdue.base())
+                .totalOverdueVatAmount(overdue.vat())
                 .overduePaymentCount(overduePayments.size())
                 // Histórico total con IVA y desglose
-                .totalRevenueAllTime(totalRevenueAllTime)
-                .totalRevenueAllTimeWithoutVat(VatUtils.calculateBaseWithoutVat(totalRevenueAllTime))
-                .totalRevenueAllTimeVatAmount(VatUtils.calculateVatAmount(totalRevenueAllTime))
+                .totalRevenueAllTime(allTime.total())
+                .totalRevenueAllTimeWithoutVat(allTime.base())
+                .totalRevenueAllTimeVatAmount(allTime.vat())
                 // Gastos y resultado neto
                 .currentMonthExpenses(periodExpenses)
                 .currentMonthExpenseCount(periodExpenseCount)
-                .currentMonthNetResult(periodCollected.subtract(periodExpenses))
+                .currentMonthNetResult(periodCollected.total().subtract(periodExpenses))
                 .totalExpensesAllTime(totalExpensesAllTime)
-                .netResultAllTime(totalRevenueAllTime.subtract(totalExpensesAllTime))
+                .netResultAllTime(allTime.total().subtract(totalExpensesAllTime))
                 .recentMonthlyRevenue(recentMonthlyRevenue)
                 .unitsSummary(unitsSummary)
                 .expensesByCategory(expensesByCategory)
@@ -329,21 +378,21 @@ public class StatisticsService {
                 .monthLabel(label)
                 .year(year)
                 .month(month)
-                .expectedRevenue(t.expected())
-                .expectedRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(t.expected()))
-                .expectedVatAmount(VatUtils.calculateVatAmount(t.expected()))
-                .collectedRevenue(t.collected())
-                .collectedRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(t.collected()))
-                .collectedVatAmount(VatUtils.calculateVatAmount(t.collected()))
-                .pendingRevenue(t.pending())
-                .pendingRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(t.pending()))
-                .pendingVatAmount(VatUtils.calculateVatAmount(t.pending()))
+                .expectedRevenue(t.expected().total())
+                .expectedRevenueWithoutVat(t.expected().base())
+                .expectedVatAmount(t.expected().vat())
+                .collectedRevenue(t.collected().total())
+                .collectedRevenueWithoutVat(t.collected().base())
+                .collectedVatAmount(t.collected().vat())
+                .pendingRevenue(t.pending().total())
+                .pendingRevenueWithoutVat(t.pending().base())
+                .pendingVatAmount(t.pending().vat())
                 .paidCount(t.paidCount())
                 .pendingCount(t.pendingCount())
                 .overdueCount(t.overdueCount())
                 .expenses(expenses)
                 .expenseCount(expenseCount)
-                .netResult(t.collected().subtract(expenses))
+                .netResult(t.collected().total().subtract(expenses))
                 .build();
     }
 
@@ -384,21 +433,21 @@ public class StatisticsService {
                     .quarterLabel("Q" + quarter + " " + year)
                     .year(year)
                     .quarter(quarter)
-                    .expectedRevenue(t.expected())
-                    .expectedRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(t.expected()))
-                    .expectedVatAmount(VatUtils.calculateVatAmount(t.expected()))
-                    .collectedRevenue(t.collected())
-                    .collectedRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(t.collected()))
-                    .collectedVatAmount(VatUtils.calculateVatAmount(t.collected()))
-                    .pendingRevenue(t.pending())
-                    .pendingRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(t.pending()))
-                    .pendingVatAmount(VatUtils.calculateVatAmount(t.pending()))
+                    .expectedRevenue(t.expected().total())
+                    .expectedRevenueWithoutVat(t.expected().base())
+                    .expectedVatAmount(t.expected().vat())
+                    .collectedRevenue(t.collected().total())
+                    .collectedRevenueWithoutVat(t.collected().base())
+                    .collectedVatAmount(t.collected().vat())
+                    .pendingRevenue(t.pending().total())
+                    .pendingRevenueWithoutVat(t.pending().base())
+                    .pendingVatAmount(t.pending().vat())
                     .paidCount(t.paidCount())
                     .pendingCount(t.pendingCount())
                     .overdueCount(t.overdueCount())
                     .expenses(expenses)
                     .expenseCount(expenseCount)
-                    .netResult(t.collected().subtract(expenses))
+                    .netResult(t.collected().total().subtract(expenses))
                     .build());
         }
 
@@ -434,21 +483,21 @@ public class StatisticsService {
             list.add(AnnualRevenueDTO.builder()
                     .yearLabel(String.valueOf(year))
                     .year(year)
-                    .expectedRevenue(t.expected())
-                    .expectedRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(t.expected()))
-                    .expectedVatAmount(VatUtils.calculateVatAmount(t.expected()))
-                    .collectedRevenue(t.collected())
-                    .collectedRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(t.collected()))
-                    .collectedVatAmount(VatUtils.calculateVatAmount(t.collected()))
-                    .pendingRevenue(t.pending())
-                    .pendingRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(t.pending()))
-                    .pendingVatAmount(VatUtils.calculateVatAmount(t.pending()))
+                    .expectedRevenue(t.expected().total())
+                    .expectedRevenueWithoutVat(t.expected().base())
+                    .expectedVatAmount(t.expected().vat())
+                    .collectedRevenue(t.collected().total())
+                    .collectedRevenueWithoutVat(t.collected().base())
+                    .collectedVatAmount(t.collected().vat())
+                    .pendingRevenue(t.pending().total())
+                    .pendingRevenueWithoutVat(t.pending().base())
+                    .pendingVatAmount(t.pending().vat())
                     .paidCount(t.paidCount())
                     .pendingCount(t.pendingCount())
                     .overdueCount(t.overdueCount())
                     .expenses(expenses)
                     .expenseCount(expenseCount)
-                    .netResult(t.collected().subtract(expenses))
+                    .netResult(t.collected().total().subtract(expenses))
                     .build());
         }
 
@@ -473,15 +522,20 @@ public class StatisticsService {
 
         List<UnitOccupancyDTO> result = new ArrayList<>();
         for (StorageUnit unit : units) {
+            boolean vat = unit.isVatApplicable();
             RentalAgreement active = unitToAgreement.get(unit.getId());
-            BigDecimal rev = unitRevenues.getOrDefault(unit.getId(), BigDecimal.ZERO);
+            Breakdown rate = VatUtils.breakdown(unit.getBaseMonthlyRate(), vat);
+            Breakdown rev = VatUtils.breakdown(unitRevenues.getOrDefault(unit.getId(), BigDecimal.ZERO), vat);
             BigDecimal exp = unitExpenses.getOrDefault(unit.getId(), BigDecimal.ZERO);
-            BigDecimal monthlyRent = active != null ? active.getMonthlyRent() : null;
+            Breakdown rent = active != null && active.getMonthlyRent() != null
+                    ? VatUtils.breakdown(active.getMonthlyRent(), vat) : null;
 
             result.add(UnitOccupancyDTO.builder()
                     .id(unit.getId())
                     .unitNumber(unit.getUnitNumber())
                     .name(unit.getName())
+                    .kind(unit.getKind())
+                    .vatApplicable(vat)
                     .sizeSquareMeters(unit.getSizeSquareMeters())
                     .status(unit.getStatus())
                     .location(unit.getLocation())
@@ -491,19 +545,19 @@ public class StatisticsService {
                     .currentAgreementNumber(active != null ? active.getAgreementNumber() : null)
                     // Tarifa Base (con IVA y desglose)
                     .baseMonthlyRate(unit.getBaseMonthlyRate())
-                    .baseMonthlyRateWithoutVat(VatUtils.calculateBaseWithoutVat(unit.getBaseMonthlyRate()))
-                    .baseMonthlyRateVatAmount(VatUtils.calculateVatAmount(unit.getBaseMonthlyRate()))
+                    .baseMonthlyRateWithoutVat(rate.base())
+                    .baseMonthlyRateVatAmount(rate.vat())
                     // Alquiler Actual
-                    .actualMonthlyRent(monthlyRent)
-                    .actualMonthlyRentWithoutVat(monthlyRent != null ? VatUtils.calculateBaseWithoutVat(monthlyRent) : null)
-                    .actualMonthlyRentVatAmount(monthlyRent != null ? VatUtils.calculateVatAmount(monthlyRent) : null)
+                    .actualMonthlyRent(active != null ? active.getMonthlyRent() : null)
+                    .actualMonthlyRentWithoutVat(rent != null ? rent.base() : null)
+                    .actualMonthlyRentVatAmount(rent != null ? rent.vat() : null)
                     // Ingresos acumulados
-                    .totalRevenueGenerated(rev)
-                    .totalRevenueGeneratedWithoutVat(VatUtils.calculateBaseWithoutVat(rev))
-                    .totalRevenueGeneratedVatAmount(VatUtils.calculateVatAmount(rev))
+                    .totalRevenueGenerated(rev.total())
+                    .totalRevenueGeneratedWithoutVat(rev.base())
+                    .totalRevenueGeneratedVatAmount(rev.vat())
                     // Gastos imputados al trastero y resultado neto
                     .totalExpenses(exp)
-                    .netResult(rev.subtract(exp))
+                    .netResult(rev.total().subtract(exp))
                     .build());
         }
 

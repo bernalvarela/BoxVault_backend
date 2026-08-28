@@ -8,6 +8,7 @@ import com.storagemanager.storage_management.exception.ResourceNotFoundException
 import com.storagemanager.storage_management.model.StorageGroup;
 import com.storagemanager.storage_management.model.StorageUnit;
 import com.storagemanager.storage_management.model.UnitPriceHistory;
+import com.storagemanager.storage_management.model.enums.UnitKind;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
 import com.storagemanager.storage_management.repository.ExpenseRepository;
 import com.storagemanager.storage_management.repository.PaymentRepository;
@@ -70,6 +71,14 @@ public class StorageUnitService {
         return storageUnitRepository.findByStatus(status);
     }
 
+    /** Units filtered by kind and/or status; both null returns everything. */
+    public List<StorageUnit> getUnits(UnitKind kind, UnitStatus status) {
+        if (kind != null && status != null) return storageUnitRepository.findByKindAndStatus(kind, status);
+        if (kind != null) return storageUnitRepository.findByKind(kind);
+        if (status != null) return storageUnitRepository.findByStatus(status);
+        return storageUnitRepository.findAll();
+    }
+
 
     @Transactional
     public StorageUnit createUnit(StorageUnitRequest request) {
@@ -80,6 +89,7 @@ public class StorageUnitService {
         StorageUnit unit = StorageUnit.builder()
                 .unitNumber(request.getUnitNumber())
                 .name(request.getName())
+                .kind(request.getKind() != null ? request.getKind() : UnitKind.STORAGE_UNIT)
                 .storageGroup(resolveGroup(request.getStorageGroupId()))
                 .sizeSquareMeters(request.getSizeSquareMeters())
                 .dimensions(request.getDimensions())
@@ -108,6 +118,9 @@ public class StorageUnitService {
 
         unit.setUnitNumber(request.getUnitNumber());
         unit.setName(request.getName());
+        if (request.getKind() != null) {
+            unit.setKind(request.getKind());
+        }
         unit.setStorageGroup(resolveGroup(request.getStorageGroupId()));
         unit.setSizeSquareMeters(request.getSizeSquareMeters());
         unit.setDimensions(request.getDimensions());
@@ -148,14 +161,15 @@ public class StorageUnitService {
      */
     public UnitHistoryDTO getUnitHistory(Long id) {
         StorageUnit unit = getUnitById(id);
+        boolean vat = unit.isVatApplicable();
 
         List<UnitHistoryDTO.PriceEntry> prices = unitPriceHistoryRepository
                 .findByStorageUnitIdOrderByEffectiveFromAscIdAsc(id).stream()
                 .map(h -> UnitHistoryDTO.PriceEntry.builder()
                         .effectiveFrom(h.getEffectiveFrom())
                         .monthlyPrice(h.getMonthlyPrice())
-                        .monthlyPriceWithoutVat(VatUtils.calculateBaseWithoutVat(h.getMonthlyPrice()))
-                        .monthlyPriceVatAmount(VatUtils.calculateVatAmount(h.getMonthlyPrice()))
+                        .monthlyPriceWithoutVat(VatUtils.calculateBaseWithoutVat(h.getMonthlyPrice(), vat))
+                        .monthlyPriceVatAmount(VatUtils.calculateVatAmount(h.getMonthlyPrice(), vat))
                         .notes(h.getNotes())
                         .build())
                 .toList();
@@ -186,8 +200,8 @@ public class StorageUnitService {
                 .unitName(unit.getName())
                 .currentMonthlyPrice(unit.getBaseMonthlyRate())
                 .totalRevenue(totalRevenue)
-                .totalRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(totalRevenue))
-                .totalRevenueVatAmount(VatUtils.calculateVatAmount(totalRevenue))
+                .totalRevenueWithoutVat(VatUtils.calculateBaseWithoutVat(totalRevenue, vat))
+                .totalRevenueVatAmount(VatUtils.calculateVatAmount(totalRevenue, vat))
                 .totalExpenses(totalExpenses)
                 .netResult(totalRevenue.subtract(totalExpenses))
                 .priceHistory(prices)

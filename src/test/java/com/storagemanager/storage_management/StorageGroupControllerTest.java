@@ -153,16 +153,21 @@ class StorageGroupControllerTest {
         assertTrue(onlyDefault.getBody().getTotalExpensesAllTime().compareTo(BigDecimal.ZERO) > 0,
                 "General seeded expenses are attributed to the default group");
 
-        // Both groups (comma separated) == no filter
+        // Two groups (comma separated) == the sum of both; no filter covers at least that
+        // (the seed also holds the "Pisos Pasaxe 29" apartments group)
         ResponseEntity<DashboardStatsDTO> both = restTemplate.getForEntity(
                 "/api/statistics/dashboard?groupIds=" + defaultGroup.getId() + "," + newGroup.getId(), DashboardStatsDTO.class);
         ResponseEntity<DashboardStatsDTO> all = restTemplate.getForEntity("/api/statistics/dashboard", DashboardStatsDTO.class);
         assertNotNull(both.getBody());
         assertNotNull(all.getBody());
-        assertEquals(all.getBody().getTotalUnits(), both.getBody().getTotalUnits());
-        assertEquals(0, all.getBody().getTotalRevenueAllTime().compareTo(both.getBody().getTotalRevenueAllTime()));
-        assertEquals(0, all.getBody().getTotalExpensesAllTime().compareTo(both.getBody().getTotalExpensesAllTime()));
-        assertEquals(onlyDefault.getBody().getTotalUnits() + onlyNew.getBody().getTotalUnits(), all.getBody().getTotalUnits());
+        assertEquals(onlyDefault.getBody().getTotalUnits() + onlyNew.getBody().getTotalUnits(), both.getBody().getTotalUnits());
+        assertEquals(0, onlyDefault.getBody().getTotalRevenueAllTime().add(onlyNew.getBody().getTotalRevenueAllTime())
+                .compareTo(both.getBody().getTotalRevenueAllTime()));
+        assertEquals(0, onlyDefault.getBody().getTotalExpensesAllTime().add(onlyNew.getBody().getTotalExpensesAllTime())
+                .compareTo(both.getBody().getTotalExpensesAllTime()));
+        assertTrue(all.getBody().getTotalUnits() >= both.getBody().getTotalUnits() + 2,
+                "Unfiltered stats also include the seeded apartments");
+        assertTrue(all.getBody().getTotalRevenueAllTime().compareTo(both.getBody().getTotalRevenueAllTime()) > 0);
 
         // Trends accept the same filter
         ResponseEntity<List> monthly = restTemplate.getForEntity(

@@ -1,5 +1,7 @@
 package com.storagemanager.storage_management.model;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.storagemanager.storage_management.model.enums.UnitKind;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -9,6 +11,11 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+/**
+ * A rentable unit. Historically only storage units ("trasteros") existed, hence the
+ * name; {@link #kind} now distinguishes storage units from apartments, which share
+ * the same attributes for now but are VAT exempt.
+ */
 @Entity
 @Table(name = "storage_units")
 @Getter
@@ -24,6 +31,16 @@ public class StorageUnit {
 
     @Column(nullable = false, unique = true, length = 50)
     private String unitNumber;
+
+    /**
+     * Storage unit or apartment. Nullable at the database level so rows created
+     * before the column existed survive the schema update; a null is read as
+     * {@link UnitKind#STORAGE_UNIT} and {@code DataSeeder} backfills it at start-up.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 30)
+    @Builder.Default
+    private UnitKind kind = UnitKind.STORAGE_UNIT;
 
     /**
      * Group (building / premises) this unit belongs to. Nullable at the database
@@ -64,4 +81,15 @@ public class StorageUnit {
 
     @UpdateTimestamp
     private LocalDateTime updatedAt;
+
+    /** Never null: legacy rows without a kind are storage units. */
+    public UnitKind getKind() {
+        return kind == null ? UnitKind.STORAGE_UNIT : kind;
+    }
+
+    /** Whether this unit's prices carry 21% VAT (storage units) or are exempt (apartments). Serialised as {@code vatApplicable}. */
+    @JsonProperty("vatApplicable")
+    public boolean isVatApplicable() {
+        return getKind().isVatApplicable();
+    }
 }

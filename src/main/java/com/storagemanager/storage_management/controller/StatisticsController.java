@@ -2,6 +2,7 @@ package com.storagemanager.storage_management.controller;
 
 import com.storagemanager.storage_management.dto.AnnualRevenueDTO;
 import com.storagemanager.storage_management.dto.DashboardStatsDTO;
+import com.storagemanager.storage_management.dto.HistoryRangeDTO;
 import com.storagemanager.storage_management.dto.MonthlyRevenueDTO;
 import com.storagemanager.storage_management.dto.QuarterlyRevenueDTO;
 import com.storagemanager.storage_management.dto.UnitRevenueDTO;
@@ -60,6 +61,13 @@ public class StatisticsController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(required = false) List<Long> groupIds) {
         return ResponseEntity.ok(statisticsService.getStatisticsByDateRange(startDate, endDate, groupIds));
+    }
+
+    /** First and last activity date of the groups, for the "whole history" statistics range. */
+    @GetMapping("/history-range")
+    public ResponseEntity<HistoryRangeDTO> getHistoryRange(
+            @RequestParam(required = false) List<Long> groupIds) {
+        return ResponseEntity.ok(statisticsService.getHistoryRange(groupIds));
     }
 
     @GetMapping("/unit-revenues")

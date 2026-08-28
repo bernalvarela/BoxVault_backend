@@ -25,27 +25,48 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * Seeds an empty database with the real historical data of the 9 trasteros
- * (Avenida del Pasaje), reconstructed from the BBVA bank statement covering
- * March 2024 - August 2026. The data lives in src/main/resources/seed-data.json.
- *
+ * Seeds an empty database with the real historical data reconstructed from the
+ * BBVA bank statements. The data lives in src/main/resources/seed-data.json:
+ * <ul>
+ *   <li>the 9 trasteros of group {@value #DEFAULT_GROUP_NAME} (statement of the
+ *       storage account, March 2024 - August 2026);</li>
+ *   <li>the 2 apartments of group "Pisos Pasaxe 29" (statement of the flats
+ *       account, July 2021 - August 2026), which are VAT exempt.</li>
+ * </ul>
  * Notes on the reconstruction:
- * - Only incoming bank transfers appear in the statement; months without a
+ * - Only incoming bank transfers appear in the statements; months without a
  *   transfer inside a tenancy may have been paid in cash and are NOT seeded.
- * - Deposits ("fianzas") are stored on the rental agreement, not as payments.
+ * - Deposits ("fianzas") are stored on the rental agreement, not as payments;
+ *   deposit refunds coming back from the IGVS are not seeded either.
  * - Client emails/phones are placeholders pending real contact data.
- * - Expenses come from the outgoing side of the same statement (Nov 2023 - Aug 2026):
- *   electricity, AEAT tax payments, IBI / municipal fees, repairs and insurance.
- *   Deposit refunds ("devolución fianza") are NOT expenses and are not seeded.
- * - All 9 units (and every general expense) belong to the storage group
- *   {@value #DEFAULT_GROUP_NAME}. Databases created before groups existed are
- *   migrated at start-up: any unit / general expense without a group is moved
- *   into that group (see {@link #assignUngroupedToDefaultGroup()}).
+ * - Expenses come from the outgoing side of both statements. Storage account
+ *   (Nov 2023 - Aug 2026): electricity, AEAT tax payments, IBI / municipal fees,
+ *   repairs and insurance. Flats account (Jul 2024 - Aug 2026, attributed to the
+ *   "Pisos Pasaxe 29" group): IBI, electricity, water, the monthly transfers to
+ *   the owners and card payments (restaurants and shopping). The monthly 53,40 EUR community transfer
+ *   ("XIAO BERNAL TERCEIROS E BAIXOS") is split into 20 EUR per apartment (unit
+ *   expenses of 3D and 3E), 6,70 EUR for the trasteros group and 6,70 EUR for the
+ *   "Pasaxe 29 Baixo traseiro" group (no units yet). Excluded from the flats
+ *   statement: "ABONO NOMINA" transfers, the 2.000 / 2.100 EUR transfers from Bernal Varela
+ *   Gomez, any outflow reimbursed by an inflow of the same amount (tenant supply
+ *   refunds, card payments repaid by the owners) and the deposit forwarded to the IGVS;
+ *   the January 2026 electricity bills, only partly refunded by the tenants, are
+ *   seeded for the uncovered 2,10 EUR.
+ * <p>
+ * On an already-seeded database the seeder is incremental and idempotent: it
+ * backfills price history / groups / kinds when missing, loads the expenses of
+ * every group that has none yet, and any unit present in seed-data.json but
+ * absent from the database is loaded together with its clients, rentals and
+ * payments (this is how the apartments reach a database created before they
+ * existed).
  */
 @Slf4j
 @Component
@@ -66,23 +87,20 @@ public class DataSeeder implements CommandLineRunner {
     private final ExpenseRepository expenseRepository;
 
     @Override
-    @SuppressWarnings("unchecked")
     public void run(String... args) throws Exception {
         if (storageUnitRepository.count() > 0) {
             boolean legacyDemoData = storageUnitRepository.findAll().stream()
                     .anyMatch(u -> "A-101".equals(u.getUnitNumber()));
             if (!legacyDemoData) {
+                Map<String, Object> root = parseSeedData();
                 if (unitPriceHistoryRepository.count() == 0) {
                     log.info("Backfilling unit price history from existing rental agreements...");
-                    seedPriceHistoryFromRentals();
-                }
-                if (expenseRepository.count() == 0) {
-                    log.info("Backfilling expenses from seed-data.json...");
-                    int n = seedExpenses(parseSeedData());
-                    log.info("Seeded {} expenses.", n);
+                    seedPriceHistoryFromRentals(storageUnitRepository.findAll());
                 }
                 assignUngroupedToDefaultGroup();
-                log.info("Database already seeded with {} storage units in {} group(s).",
+                seedMissingUnits(root);
+                seedMissingExpenses(root);
+                log.info("Database already seeded with {} units in {} group(s).",
                         storageUnitRepository.count(), storageGroupRepository.count());
                 return;
             }
@@ -96,34 +114,121 @@ public class DataSeeder implements CommandLineRunner {
             storageGroupRepository.deleteAll();
         }
 
-        log.info("Seeding database from seed-data.json (real data, BBVA statement mar 2024 - ago 2026)...");
+        log.info("Seeding database from seed-data.json (real data from the BBVA statements)...");
 
         Map<String, Object> root = parseSeedData();
 
-        // 0. Storage group holding every unit
-        StorageGroup defaultGroup = ensureDefaultGroup();
+        // 0. Storage groups
+        Map<String, StorageGroup> groupsByName = seedGroups(root);
 
         // 1. Clients
-        Map<String, Client> clientsByName = new HashMap<>();
+        Map<String, Client> clientsByName = seedClients(root, new HashMap<>());
+
+        // 2. Units (trasteros and apartments)
+        Map<String, StorageUnit> unitsByNumber = new HashMap<>();
+        List<StorageUnit> units = seedUnits(root, groupsByName, unitsByNumber);
+
+        // 3. Rental agreements
+        Map<Integer, RentalAgreement> rentalsByRef = seedRentals(root, unitsByNumber, clientsByName, null);
+
+        // 4. Payments (all PAID by bank transfer, from the statements)
+        int paymentCount = seedPayments(root, rentalsByRef);
+
+        // 5. Price history, derived from how each unit's rent evolved across tenancies
+        seedPriceHistoryFromRentals(units);
+
+        // 6. Expenses (outgoing side of both bank statements)
+        int expenseCount = seedExpenses(root, null);
+
+        log.info("Seeding complete: {} groups, {} clients, {} units, {} rentals, {} payments, {} price-history entries, {} expenses.",
+                groupsByName.size(), clientsByName.size(), units.size(), rentalsByRef.size(), paymentCount,
+                unitPriceHistoryRepository.count(), expenseCount);
+    }
+
+    private static Map<String, Object> parseSeedData() throws java.io.IOException {
+        String json = new String(new ClassPathResource("seed-data.json").getInputStream().readAllBytes(),
+                StandardCharsets.UTF_8);
+        return JsonParserFactory.getJsonParser().parseMap(json);
+    }
+
+    // ------------------------------------------------------------------
+    // Building blocks (each one only creates what does not exist yet)
+    // ------------------------------------------------------------------
+
+    /** Groups from the "groups" array plus the default one; keyed by name. */
+    @SuppressWarnings("unchecked")
+    private Map<String, StorageGroup> seedGroups(Map<String, Object> root) {
+        Map<String, StorageGroup> byName = new HashMap<>();
+        for (StorageGroup g : storageGroupRepository.findAll()) {
+            byName.put(g.getName(), g);
+        }
+        StorageGroup defaultGroup = ensureDefaultGroup();
+        byName.put(defaultGroup.getName(), defaultGroup);
+
+        List<Object> entries = (List<Object>) root.get("groups");
+        if (entries == null) return byName;
+        for (Object o : entries) {
+            Map<String, Object> g = (Map<String, Object>) o;
+            String name = str(g, "name");
+            if (name == null || byName.containsKey(name)) continue;
+            StorageGroup group = storageGroupRepository.findByNameIgnoreCase(name)
+                    .orElseGet(() -> {
+                        log.info("Creating storage group '{}'...", name);
+                        return storageGroupRepository.save(StorageGroup.builder()
+                                .name(name)
+                                .description(str(g, "description"))
+                                .build());
+                    });
+            byName.put(group.getName(), group);
+        }
+        return byName;
+    }
+
+    /** Clients from the "clients" array that are not in {@code existing} (keyed by full name). */
+    @SuppressWarnings("unchecked")
+    private Map<String, Client> seedClients(Map<String, Object> root, Map<String, Client> existing) {
+        Map<String, Client> byName = new HashMap<>(existing);
         for (Object o : (List<Object>) root.get("clients")) {
             Map<String, Object> c = (Map<String, Object>) o;
+            String name = str(c, "fullName");
+            if (byName.containsKey(name)) continue;
             Client client = clientRepository.save(Client.builder()
-                    .fullName(str(c, "fullName"))
+                    .fullName(name)
                     .email(str(c, "email"))
                     .phone(str(c, "phone"))
                     .notes(str(c, "notes"))
                     .build());
-            clientsByName.put(client.getFullName(), client);
+            byName.put(client.getFullName(), client);
         }
+        return byName;
+    }
 
-        // 2. Storage units
-        Map<String, StorageUnit> unitsByNumber = new HashMap<>();
+    /**
+     * Units from the "units" array that are not yet in {@code unitsByNumber}; the map
+     * is completed with the created ones. Returns only the units created by this call.
+     */
+    @SuppressWarnings("unchecked")
+    private List<StorageUnit> seedUnits(Map<String, Object> root, Map<String, StorageGroup> groupsByName,
+                                        Map<String, StorageUnit> unitsByNumber) {
+        List<StorageUnit> created = new ArrayList<>();
         for (Object o : (List<Object>) root.get("units")) {
             Map<String, Object> u = (Map<String, Object>) o;
+            String number = str(u, "unitNumber");
+            if (unitsByNumber.containsKey(number)) continue;
+
+            String groupName = str(u, "group");
+            StorageGroup group = groupName != null ? groupsByName.get(groupName) : null;
+            if (group == null) {
+                if (groupName != null) log.warn("Unknown group '{}' for unit {}; using the default group.", groupName, number);
+                group = groupsByName.get(DEFAULT_GROUP_NAME);
+            }
+            String kind = str(u, "kind");
+
             StorageUnit unit = storageUnitRepository.save(StorageUnit.builder()
-                    .unitNumber(str(u, "unitNumber"))
+                    .unitNumber(number)
                     .name(str(u, "name"))
-                    .storageGroup(defaultGroup)
+                    .kind(kind == null ? UnitKind.STORAGE_UNIT : UnitKind.valueOf(kind))
+                    .storageGroup(group)
                     .sizeSquareMeters(Double.valueOf(str(u, "sizeSquareMeters")))
                     .location(str(u, "location"))
                     .baseMonthlyRate(dec(u, "baseMonthlyRate"))
@@ -131,20 +236,44 @@ public class DataSeeder implements CommandLineRunner {
                     .description(str(u, "description"))
                     .build());
             unitsByNumber.put(unit.getUnitNumber(), unit);
+            created.add(unit);
         }
+        return created;
+    }
 
-        // 3. Rental agreements
+    /**
+     * Rental agreements from the "rentals" array, keyed by their seed "ref". When
+     * {@code onlyUnits} is given, only the rentals of those unit numbers are created.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<Integer, RentalAgreement> seedRentals(Map<String, Object> root, Map<String, StorageUnit> unitsByNumber,
+                                                      Map<String, Client> clientsByName, Set<String> onlyUnits) {
         Map<Integer, RentalAgreement> rentalsByRef = new HashMap<>();
-        int seq = 0;
+        long seq = rentalAgreementRepository.count();
         for (Object o : (List<Object>) root.get("rentals")) {
             Map<String, Object> r = (Map<String, Object>) o;
-            seq++;
+            String unitNumber = str(r, "unit");
+            if (onlyUnits != null && !onlyUnits.contains(unitNumber)) continue;
+
+            StorageUnit unit = unitsByNumber.get(unitNumber);
+            Client client = clientsByName.get(str(r, "client"));
+            if (unit == null || client == null) {
+                log.warn("Skipping rental ref {}: unknown unit '{}' or client '{}'.", r.get("ref"), unitNumber, str(r, "client"));
+                continue;
+            }
             LocalDate start = LocalDate.parse(str(r, "startDate"));
             boolean active = r.get("endDate") == null;
+
+            String agreementNumber;
+            do {
+                seq++;
+                agreementNumber = String.format("RNT-%d-%03d", start.getYear(), seq);
+            } while (rentalAgreementRepository.findByAgreementNumber(agreementNumber).isPresent());
+
             RentalAgreement rental = rentalAgreementRepository.save(RentalAgreement.builder()
-                    .agreementNumber(String.format("RNT-%d-%03d", start.getYear(), seq))
-                    .storageUnit(unitsByNumber.get(str(r, "unit")))
-                    .client(clientsByName.get(str(r, "client")))
+                    .agreementNumber(agreementNumber)
+                    .storageUnit(unit)
+                    .client(client)
                     .startDate(start)
                     .endDate(active ? null : LocalDate.parse(str(r, "endDate")))
                     .billingDayOfMonth(1)
@@ -157,13 +286,22 @@ public class DataSeeder implements CommandLineRunner {
                     .build());
             rentalsByRef.put(((Number) r.get("ref")).intValue(), rental);
         }
+        return rentalsByRef;
+    }
 
-        // 4. Payments (all PAID by bank transfer, from the statement)
-        int paymentCount = 0;
+    /**
+     * Payments from the "payments" array whose rentalRef is in {@code rentalsByRef}.
+     * "amount" is the rent due; an optional "amountPaid" records a larger transfer.
+     */
+    @SuppressWarnings("unchecked")
+    private int seedPayments(Map<String, Object> root, Map<Integer, RentalAgreement> rentalsByRef) {
+        int count = 0;
         for (Object o : (List<Object>) root.get("payments")) {
             Map<String, Object> p = (Map<String, Object>) o;
             RentalAgreement rental = rentalsByRef.get(((Number) p.get("rentalRef")).intValue());
+            if (rental == null) continue;
             BigDecimal amount = dec(p, "amount");
+            BigDecimal amountPaid = p.get("amountPaid") != null ? dec(p, "amountPaid") : amount;
             paymentRepository.save(Payment.builder()
                     .rentalAgreement(rental)
                     .storageUnit(rental.getStorageUnit())
@@ -171,31 +309,48 @@ public class DataSeeder implements CommandLineRunner {
                     .billingPeriodYear(((Number) p.get("year")).intValue())
                     .billingPeriodMonth(((Number) p.get("month")).intValue())
                     .amountDue(amount)
-                    .amountPaid(amount)
+                    .amountPaid(amountPaid)
                     .dueDate(LocalDate.parse(str(p, "dueDate")))
                     .paymentDate(LocalDate.parse(str(p, "paymentDate")))
                     .status(PaymentStatus.PAID)
                     .paymentMethod(PaymentMethod.BANK_TRANSFER)
                     .notes(str(p, "notes"))
                     .build());
-            paymentCount++;
+            count++;
         }
-
-        // 5. Price history, derived from how each unit's rent evolved across tenancies
-        seedPriceHistoryFromRentals();
-
-        // 6. Expenses (outgoing side of the bank statement)
-        int expenseCount = seedExpenses(root);
-
-        log.info("Seeding complete: {} clients, {} units, {} rentals, {} payments, {} price-history entries, {} expenses.",
-                clientsByName.size(), unitsByNumber.size(), rentalsByRef.size(), paymentCount,
-                unitPriceHistoryRepository.count(), expenseCount);
+        return count;
     }
 
-    private static Map<String, Object> parseSeedData() throws java.io.IOException {
-        String json = new String(new ClassPathResource("seed-data.json").getInputStream().readAllBytes(),
-                StandardCharsets.UTF_8);
-        return JsonParserFactory.getJsonParser().parseMap(json);
+    /**
+     * Incremental load for an already-seeded database: every unit of seed-data.json
+     * missing from the database is created together with its clients, rentals,
+     * payments and price history. Existing units are left untouched.
+     */
+    private void seedMissingUnits(Map<String, Object> root) {
+        Map<String, StorageUnit> unitsByNumber = new HashMap<>();
+        for (StorageUnit u : storageUnitRepository.findAll()) {
+            unitsByNumber.put(u.getUnitNumber(), u);
+        }
+        Map<String, StorageGroup> groupsByName = seedGroups(root);
+        List<StorageUnit> created = seedUnits(root, groupsByName, unitsByNumber);
+        if (created.isEmpty()) return;
+
+        Set<String> createdNumbers = new HashSet<>();
+        for (StorageUnit u : created) {
+            createdNumbers.add(u.getUnitNumber());
+        }
+        log.info("Loading {} new unit(s) from seed-data.json: {}", created.size(), createdNumbers);
+
+        Map<String, Client> existingClients = new HashMap<>();
+        for (Client c : clientRepository.findAll()) {
+            existingClients.put(c.getFullName(), c);
+        }
+        Map<String, Client> clientsByName = seedClients(root, existingClients);
+        Map<Integer, RentalAgreement> rentalsByRef = seedRentals(root, unitsByNumber, clientsByName, createdNumbers);
+        int payments = seedPayments(root, rentalsByRef);
+        seedPriceHistoryFromRentals(created);
+
+        log.info("Loaded {} rental(s) and {} payment(s) for the new unit(s).", rentalsByRef.size(), payments);
     }
 
     /** Returns the default storage group, creating it if it does not exist yet. */
@@ -211,11 +366,22 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     /**
-     * One-off migration for databases created before storage groups existed: every
-     * unit without a group, and every general expense without a group, is placed in
-     * the default group. Idempotent - does nothing once everything is grouped.
+     * One-off migration for databases created before storage groups / unit kinds
+     * existed: units without a kind become storage units; every unit without a
+     * group, and every general expense without a group, is placed in the default
+     * group. Idempotent - does nothing once everything is grouped.
      */
     private void assignUngroupedToDefaultGroup() {
+        // Rows created before unit kinds existed are storage units
+        List<StorageUnit> unkindUnits = storageUnitRepository.findByKindIsNull();
+        if (!unkindUnits.isEmpty()) {
+            for (StorageUnit unit : unkindUnits) {
+                unit.setKind(UnitKind.STORAGE_UNIT);
+            }
+            storageUnitRepository.saveAll(unkindUnits);
+            log.info("Marked {} unit(s) without a kind as STORAGE_UNIT.", unkindUnits.size());
+        }
+
         List<StorageUnit> ungroupedUnits = storageUnitRepository.findByStorageGroupIsNull();
         List<Expense> ungroupedExpenses = expenseRepository.findByStorageUnitIsNullAndStorageGroupIsNull();
         if (ungroupedUnits.isEmpty() && ungroupedExpenses.isEmpty()) return;
@@ -235,10 +401,13 @@ public class DataSeeder implements CommandLineRunner {
 
     /**
      * Seeds the "expenses" array. An entry may name a unit ("unit": "3") to attribute
-     * the cost to that trastero; otherwise it is a general expense of the default group.
+     * the cost to that unit, or a group ("group": "Pisos Pasaxe 29") for a general
+     * expense of that group; otherwise it is a general expense of the default group.
+     * When {@code onlyGroups} is given, only the entries attributed to those group
+     * names are created.
      */
     @SuppressWarnings("unchecked")
-    private int seedExpenses(Map<String, Object> root) {
+    private int seedExpenses(Map<String, Object> root, Set<String> onlyGroups) {
         List<Object> entries = (List<Object>) root.get("expenses");
         if (entries == null) return 0;
 
@@ -246,16 +415,29 @@ public class DataSeeder implements CommandLineRunner {
         for (StorageUnit u : storageUnitRepository.findAll()) {
             unitsByNumber.put(u.getUnitNumber(), u);
         }
-        StorageGroup defaultGroup = ensureDefaultGroup();
+        Map<String, StorageGroup> groupsByName = seedGroups(root);
+        StorageGroup defaultGroup = groupsByName.get(DEFAULT_GROUP_NAME);
 
         int count = 0;
         for (Object o : entries) {
             Map<String, Object> e = (Map<String, Object>) o;
             String unitNumber = str(e, "unit");
             StorageUnit unit = unitNumber == null ? null : unitsByNumber.get(unitNumber);
+            StorageGroup group = null;
+            if (unit == null) {
+                String groupName = str(e, "group");
+                group = groupName == null ? null : groupsByName.get(groupName);
+                if (group == null) {
+                    if (groupName != null) log.warn("Unknown group '{}' for expense '{}'; using the default group.", groupName, str(e, "description"));
+                    group = defaultGroup;
+                }
+            }
+            String targetGroup = unit != null ? unit.getStorageGroup().getName() : group.getName();
+            if (onlyGroups != null && !onlyGroups.contains(targetGroup)) continue;
+
             expenseRepository.save(Expense.builder()
                     .storageUnit(unit)
-                    .storageGroup(unit == null ? defaultGroup : null)
+                    .storageGroup(group)
                     .expenseDate(LocalDate.parse(str(e, "date")))
                     .amount(dec(e, "amount"))
                     .description(str(e, "description"))
@@ -267,11 +449,28 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     /**
-     * Rebuilds each unit's price history from its rental agreements: one entry
-     * per change of rent, in chronological order of agreement start date.
+     * Incremental load for an already-seeded database: the expenses of every group
+     * that has no expense yet (neither general nor tied to one of its units) are
+     * created from seed-data.json. Groups that already have expenses are left untouched.
      */
-    private void seedPriceHistoryFromRentals() {
-        for (StorageUnit unit : storageUnitRepository.findAll()) {
+    private void seedMissingExpenses(Map<String, Object> root) {
+        Set<String> groupsWithoutExpenses = new HashSet<>();
+        for (StorageGroup g : storageGroupRepository.findAll()) {
+            if (expenseRepository.countByStorageGroupIdOrStorageUnitStorageGroupId(g.getId(), g.getId()) == 0) {
+                groupsWithoutExpenses.add(g.getName());
+            }
+        }
+        if (groupsWithoutExpenses.isEmpty()) return;
+        int n = seedExpenses(root, groupsWithoutExpenses);
+        if (n > 0) log.info("Backfilled {} expense(s) for group(s) without expenses: {}", n, groupsWithoutExpenses);
+    }
+
+    /**
+     * Rebuilds the price history of the given units from their rental agreements:
+     * one entry per change of rent, in chronological order of agreement start date.
+     */
+    private void seedPriceHistoryFromRentals(List<StorageUnit> units) {
+        for (StorageUnit unit : units) {
             BigDecimal previous = null;
             List<RentalAgreement> agreements = rentalAgreementRepository.findByStorageUnitId(unit.getId())
                     .stream()

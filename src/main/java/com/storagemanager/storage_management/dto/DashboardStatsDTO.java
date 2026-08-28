@@ -13,8 +13,10 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class DashboardStatsDTO {
-    // Storage metrics
+    // Storage metrics (totalUnits = storageUnitCount + apartmentCount)
     private long totalUnits;
+    private long storageUnitCount;
+    private long apartmentCount;
     private long occupiedUnits;
     private long availableUnits;
     private long maintenanceUnits;

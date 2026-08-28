@@ -4,6 +4,7 @@ import com.storagemanager.storage_management.dto.StorageUnitRequest;
 import com.storagemanager.storage_management.dto.UnitHistoryDTO;
 import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.model.StorageUnit;
+import com.storagemanager.storage_management.model.enums.UnitKind;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
 import com.storagemanager.storage_management.service.StorageUnitService;
 import jakarta.validation.Valid;
@@ -22,13 +23,12 @@ public class StorageUnitController {
 
     private final StorageUnitService storageUnitService;
 
+    /** Lists units, optionally filtered by status and/or kind (STORAGE_UNIT / APARTMENT). */
     @GetMapping
     public ResponseEntity<List<StorageUnit>> getAllUnits(
-            @RequestParam(required = false) UnitStatus status) {
-        if (status != null) {
-            return ResponseEntity.ok(storageUnitService.getUnitsByStatus(status));
-        }
-        return ResponseEntity.ok(storageUnitService.getAllUnits());
+            @RequestParam(required = false) UnitStatus status,
+            @RequestParam(required = false) UnitKind kind) {
+        return ResponseEntity.ok(storageUnitService.getUnits(kind, status));
     }
 
     @GetMapping("/{id}")

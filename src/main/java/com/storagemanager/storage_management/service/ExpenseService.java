@@ -224,6 +224,22 @@ public class ExpenseService {
         return countExpensesBetween(ym.atDay(1), ym.atEndOfMonth(), groupIds);
     }
 
+    /** Earliest expense date of the given groups (null = all groups); null when there are none. */
+    public LocalDate firstExpenseDate(Set<Long> groupIds) {
+        return expensesIn(null, null, groupIds).stream()
+                .map(Expense::getExpenseDate)
+                .min(java.util.Comparator.naturalOrder())
+                .orElse(null);
+    }
+
+    /** Latest expense date of the given groups (null = all groups); null when there are none. */
+    public LocalDate lastExpenseDate(Set<Long> groupIds) {
+        return expensesIn(null, null, groupIds).stream()
+                .map(Expense::getExpenseDate)
+                .max(java.util.Comparator.naturalOrder())
+                .orElse(null);
+    }
+
     /** Expenses in [start, end] (both null = all time) that belong to the given groups. */
     private List<Expense> expensesIn(LocalDate start, LocalDate end, Set<Long> groupIds) {
         List<Expense> list = (start == null || end == null)

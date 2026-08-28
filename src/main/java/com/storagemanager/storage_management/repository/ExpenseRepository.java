@@ -20,6 +20,8 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
     List<Expense> findByCategory(ExpenseCategory category);
     List<Expense> findByStorageUnitIsNullAndStorageGroupIsNull();
     long countByStorageGroupId(Long storageGroupId);
+    /** Expenses attributable to a group: general ones of the group plus those tied to one of its units. */
+    long countByStorageGroupIdOrStorageUnitStorageGroupId(Long storageGroupId, Long unitStorageGroupId);
 
     @Query("SELECT COALESCE(SUM(e.amount), 0) FROM Expense e")
     BigDecimal sumTotalExpenses();

@@ -36,7 +36,7 @@ class ExpenseControllerTest {
         assertEquals(200, response.getStatusCode().value());
         Expense[] expenses = response.getBody();
         assertNotNull(expenses);
-        assertTrue(expenses.length >= 52, "The 52 statement expenses should be seeded");
+        assertTrue(expenses.length >= 232, "The 77 storage + 130 apartment + 25 'baixo traseiro' statement expenses should be seeded");
         for (int i = 1; i < expenses.length; i++) {
             assertFalse(expenses[i].getExpenseDate().isAfter(expenses[i - 1].getExpenseDate()),
                     "Expenses must be ordered by date descending");
@@ -48,7 +48,7 @@ class ExpenseControllerTest {
         ResponseEntity<Expense[]> july2026 = restTemplate.getForEntity(
                 "/api/expenses?year=2026&month=7", Expense[].class);
         assertNotNull(july2026.getBody());
-        assertEquals(4, july2026.getBody().length, "July 2026 has 4 seeded expenses");
+        assertEquals(12, july2026.getBody().length, "July 2026 has 5 storage + 6 apartment + 1 'baixo traseiro' seeded expenses");
         for (Expense e : july2026.getBody()) {
             assertEquals(2026, e.getExpenseDate().getYear());
             assertEquals(7, e.getExpenseDate().getMonthValue());
@@ -189,14 +189,16 @@ class ExpenseControllerTest {
 
     @Test
     void rangeStatisticsSumExpensesInsideTheRange() {
-        // July 2026: 227.89 + 125.78 + 203.55 + 14.71 = 571.93
+        // July 2026, storage account: 227.89 + 125.78 + 203.55 + 14.71 = 571.93 (4 expenses)
+        // July 2026, flats account: 300 + 300 owner transfers, 20 + 20 + 6.70 + 6.70 community,
+        //                           182.03 + 148.65 IBI = 984.08 (8 expenses)
         ResponseEntity<DashboardStatsDTO> response = restTemplate.getForEntity(
                 "/api/statistics/range?startDate=2026-07-01&endDate=2026-07-31", DashboardStatsDTO.class);
         assertEquals(200, response.getStatusCode().value());
         DashboardStatsDTO stats = response.getBody();
         assertNotNull(stats);
-        assertEquals(0, new BigDecimal("571.93").compareTo(stats.getCurrentMonthExpenses()));
-        assertEquals(4, stats.getCurrentMonthExpenseCount());
+        assertEquals(0, new BigDecimal("1556.01").compareTo(stats.getCurrentMonthExpenses()));
+        assertEquals(12, stats.getCurrentMonthExpenseCount());
         BigDecimal byCategoryTotal = stats.getExpensesByCategory().stream()
                 .map(c -> c.getAmount())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
