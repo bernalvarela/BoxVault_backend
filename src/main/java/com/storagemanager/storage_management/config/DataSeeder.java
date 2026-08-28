@@ -2,6 +2,8 @@ package com.storagemanager.storage_management.config;
 
 import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.model.Expense;
+import com.storagemanager.storage_management.model.Owner;
+import com.storagemanager.storage_management.model.Ownership;
 import com.storagemanager.storage_management.model.Payment;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.StorageGroup;
@@ -10,6 +12,8 @@ import com.storagemanager.storage_management.model.UnitPriceHistory;
 import com.storagemanager.storage_management.model.enums.*;
 import com.storagemanager.storage_management.repository.ClientRepository;
 import com.storagemanager.storage_management.repository.ExpenseRepository;
+import com.storagemanager.storage_management.repository.OwnerRepository;
+import com.storagemanager.storage_management.repository.OwnershipRepository;
 import com.storagemanager.storage_management.repository.PaymentRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 import com.storagemanager.storage_management.repository.StorageGroupRepository;
@@ -23,6 +27,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -66,7 +71,9 @@ import java.util.Set;
  * every group that has none yet, and any unit present in seed-data.json but
  * absent from the database is loaded together with its clients, rentals and
  * payments (this is how the apartments reach a database created before they
- * existed).
+ * existed). The owners ("owners") and their shares ("ownerships", given as
+ * fractions such as "1/6" or as percentages) are loaded when the owners table
+ * is still empty.
  */
 @Slf4j
 @Component
@@ -85,6 +92,8 @@ public class DataSeeder implements CommandLineRunner {
     private final PaymentRepository paymentRepository;
     private final UnitPriceHistoryRepository unitPriceHistoryRepository;
     private final ExpenseRepository expenseRepository;
+    private final OwnerRepository ownerRepository;
+    private final OwnershipRepository ownershipRepository;
 
     @Override
     public void run(String... args) throws Exception {
@@ -100,11 +109,14 @@ public class DataSeeder implements CommandLineRunner {
                 assignUngroupedToDefaultGroup();
                 seedMissingUnits(root);
                 seedMissingExpenses(root);
+                seedMissingOwners(root);
                 log.info("Database already seeded with {} units in {} group(s).",
                         storageUnitRepository.count(), storageGroupRepository.count());
                 return;
             }
             log.info("Legacy demo data detected (unit A-101). Replacing it with the real data...");
+            ownershipRepository.deleteAll();
+            ownerRepository.deleteAll();
             expenseRepository.deleteAll();
             unitPriceHistoryRepository.deleteAll();
             paymentRepository.deleteAll();
@@ -140,9 +152,13 @@ public class DataSeeder implements CommandLineRunner {
         // 6. Expenses (outgoing side of both bank statements)
         int expenseCount = seedExpenses(root, null);
 
-        log.info("Seeding complete: {} groups, {} clients, {} units, {} rentals, {} payments, {} price-history entries, {} expenses.",
+        // 7. Owners and their shares in the groups / units
+        Map<String, Owner> ownersByName = seedOwners(root);
+        int ownershipCount = seedOwnerships(root, ownersByName, groupsByName, unitsByNumber);
+
+        log.info("Seeding complete: {} groups, {} clients, {} units, {} rentals, {} payments, {} price-history entries, {} expenses, {} owners, {} shares.",
                 groupsByName.size(), clientsByName.size(), units.size(), rentalsByRef.size(), paymentCount,
-                unitPriceHistoryRepository.count(), expenseCount);
+                unitPriceHistoryRepository.count(), expenseCount, ownersByName.size(), ownershipCount);
     }
 
     private static Map<String, Object> parseSeedData() throws java.io.IOException {
@@ -463,6 +479,103 @@ public class DataSeeder implements CommandLineRunner {
         if (groupsWithoutExpenses.isEmpty()) return;
         int n = seedExpenses(root, groupsWithoutExpenses);
         if (n > 0) log.info("Backfilled {} expense(s) for group(s) without expenses: {}", n, groupsWithoutExpenses);
+    }
+
+    /** Owners from the "owners" array that do not exist yet; keyed by full name. */
+    @SuppressWarnings("unchecked")
+    private Map<String, Owner> seedOwners(Map<String, Object> root) {
+        Map<String, Owner> byName = new HashMap<>();
+        for (Owner o : ownerRepository.findAll()) {
+            byName.put(o.getFullName(), o);
+        }
+        List<Object> entries = (List<Object>) root.get("owners");
+        if (entries == null) return byName;
+        for (Object entry : entries) {
+            Map<String, Object> o = (Map<String, Object>) entry;
+            String name = str(o, "fullName");
+            if (name == null || byName.containsKey(name)) continue;
+            Owner owner = ownerRepository.findByFullNameIgnoreCase(name)
+                    .orElseGet(() -> ownerRepository.save(Owner.builder()
+                            .fullName(name)
+                            .documentId(str(o, "documentId"))
+                            .email(str(o, "email"))
+                            .phone(str(o, "phone"))
+                            .bankAccount(str(o, "bankAccount"))
+                            .notes(str(o, "notes"))
+                            .build()));
+            byName.put(owner.getFullName(), owner);
+        }
+        return byName;
+    }
+
+    /**
+     * Shares from the "ownerships" array: each entry names an "owner" and either a
+     * "group" or a "unit", plus a "share" given as a fraction ("1/6") or a percentage
+     * (16.6667). Entries whose owner already holds a share of that target are skipped.
+     */
+    @SuppressWarnings("unchecked")
+    private int seedOwnerships(Map<String, Object> root, Map<String, Owner> ownersByName,
+                               Map<String, StorageGroup> groupsByName, Map<String, StorageUnit> unitsByNumber) {
+        List<Object> entries = (List<Object>) root.get("ownerships");
+        if (entries == null) return 0;
+        int count = 0;
+        for (Object entry : entries) {
+            Map<String, Object> s = (Map<String, Object>) entry;
+            Owner owner = ownersByName.get(str(s, "owner"));
+            String groupName = str(s, "group");
+            String unitNumber = str(s, "unit");
+            StorageGroup group = groupName != null ? groupsByName.get(groupName) : null;
+            StorageUnit unit = unitNumber != null ? unitsByNumber.get(unitNumber) : null;
+            if (owner == null || (group == null) == (unit == null)) {
+                log.warn("Skipping share of '{}' in group '{}' / unit '{}': unknown owner or target.",
+                        str(s, "owner"), groupName, unitNumber);
+                continue;
+            }
+            boolean exists = unit != null
+                    ? ownershipRepository.findByOwnerIdAndStorageUnitId(owner.getId(), unit.getId()).isPresent()
+                    : ownershipRepository.findByOwnerIdAndStorageGroupId(owner.getId(), group.getId()).isPresent();
+            if (exists) continue;
+            ownershipRepository.save(Ownership.builder()
+                    .owner(owner)
+                    .storageGroup(group)
+                    .storageUnit(unit)
+                    .sharePercent(parseShare(s.get("share")))
+                    .notes(str(s, "notes"))
+                    .build());
+            count++;
+        }
+        return count;
+    }
+
+    /** "1/6" -> 16.6667; a plain number is taken as a percentage. */
+    public static BigDecimal parseShare(Object raw) {
+        String text = String.valueOf(raw).trim();
+        int slash = text.indexOf('/');
+        if (slash > 0) {
+            BigDecimal numerator = new BigDecimal(text.substring(0, slash).trim());
+            BigDecimal denominator = new BigDecimal(text.substring(slash + 1).trim());
+            return numerator.multiply(BigDecimal.valueOf(100)).divide(denominator, 4, RoundingMode.HALF_UP);
+        }
+        return new BigDecimal(text.replace("%", "").trim()).setScale(4, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Incremental load for an already-seeded database: when no owner exists yet,
+     * the owners and shares of seed-data.json are created.
+     */
+    private void seedMissingOwners(Map<String, Object> root) {
+        if (ownerRepository.count() > 0) return;
+        Map<String, StorageGroup> groupsByName = new HashMap<>();
+        for (StorageGroup g : storageGroupRepository.findAll()) {
+            groupsByName.put(g.getName(), g);
+        }
+        Map<String, StorageUnit> unitsByNumber = new HashMap<>();
+        for (StorageUnit u : storageUnitRepository.findAll()) {
+            unitsByNumber.put(u.getUnitNumber(), u);
+        }
+        Map<String, Owner> owners = seedOwners(root);
+        int shares = seedOwnerships(root, owners, groupsByName, unitsByNumber);
+        if (!owners.isEmpty()) log.info("Backfilled {} owner(s) and {} share(s) from seed-data.json.", owners.size(), shares);
     }
 
     /**

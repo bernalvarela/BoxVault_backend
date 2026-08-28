@@ -4886,5 +4886,27 @@
       "name": "Pasaxe 29 Baixo traseiro",
       "description": "Bajo trasero de la Avenida del Pasaje (A Pasaxe) 29. Sin unidades por ahora; solo soporta su parte de la cuota de comunidad."
     }
+  ],
+  "owners": [
+    { "fullName": "Marta Blanco Cuña" },
+    { "fullName": "Bernal Varela Gómez" },
+    { "fullName": "Xiao Varela Gómez" },
+    { "fullName": "Juan María Varela Brage" },
+    { "fullName": "María Luisa Gómez Gómez", "notes": "Marisé" }
+  ],
+  "ownerships": [
+    { "owner": "Bernal Varela Gómez", "group": "Pasaxe 29 Baixo dianteiro", "share": "1/6" },
+    { "owner": "Xiao Varela Gómez", "group": "Pasaxe 29 Baixo dianteiro", "share": "1/6" },
+    { "owner": "Juan María Varela Brage", "group": "Pasaxe 29 Baixo dianteiro", "share": "1/2", "notes": "1/3 + 1/6" },
+    { "owner": "María Luisa Gómez Gómez", "group": "Pasaxe 29 Baixo dianteiro", "share": "1/6" },
+    { "owner": "Bernal Varela Gómez", "group": "Pasaxe 29 Baixo traseiro", "share": "1/6" },
+    { "owner": "Xiao Varela Gómez", "group": "Pasaxe 29 Baixo traseiro", "share": "1/6" },
+    { "owner": "Juan María Varela Brage", "group": "Pasaxe 29 Baixo traseiro", "share": "1/2", "notes": "1/3 + 1/6" },
+    { "owner": "María Luisa Gómez Gómez", "group": "Pasaxe 29 Baixo traseiro", "share": "1/6" },
+    { "owner": "Bernal Varela Gómez", "unit": "3E", "share": "1/2" },
+    { "owner": "Xiao Varela Gómez", "unit": "3E", "share": "1/2" },
+    { "owner": "Bernal Varela Gómez", "unit": "3D", "share": "1/4" },
+    { "owner": "Xiao Varela Gómez", "unit": "3D", "share": "1/2" },
+    { "owner": "Marta Blanco Cuña", "unit": "3D", "share": "1/4" }
   ]
 }

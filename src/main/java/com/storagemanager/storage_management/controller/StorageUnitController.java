@@ -1,11 +1,13 @@
 package com.storagemanager.storage_management.controller;
 
+import com.storagemanager.storage_management.dto.OwnershipDTO;
 import com.storagemanager.storage_management.dto.StorageUnitRequest;
 import com.storagemanager.storage_management.dto.UnitHistoryDTO;
 import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.model.StorageUnit;
 import com.storagemanager.storage_management.model.enums.UnitKind;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
+import com.storagemanager.storage_management.service.OwnershipService;
 import com.storagemanager.storage_management.service.StorageUnitService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +24,7 @@ import java.util.List;
 public class StorageUnitController {
 
     private final StorageUnitService storageUnitService;
+    private final OwnershipService ownershipService;
 
     /** Lists units, optionally filtered by status and/or kind (STORAGE_UNIT / APARTMENT). */
     @GetMapping
@@ -46,6 +49,12 @@ public class StorageUnitController {
     @GetMapping("/{id}/history")
     public ResponseEntity<UnitHistoryDTO> getUnitHistory(@PathVariable Long id) {
         return ResponseEntity.ok(storageUnitService.getUnitHistory(id));
+    }
+
+    /** Effective owners of the unit: its own shares, or those of its group when it has none (flagged as inherited). */
+    @GetMapping("/{id}/owners")
+    public ResponseEntity<List<OwnershipDTO>> getUnitOwners(@PathVariable Long id) {
+        return ResponseEntity.ok(ownershipService.getEffectiveOwnersOfUnit(id));
     }
 
     @PostMapping

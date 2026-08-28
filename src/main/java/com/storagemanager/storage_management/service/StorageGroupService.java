@@ -7,6 +7,7 @@ import com.storagemanager.storage_management.exception.ResourceNotFoundException
 import com.storagemanager.storage_management.model.StorageGroup;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
 import com.storagemanager.storage_management.repository.ExpenseRepository;
+import com.storagemanager.storage_management.repository.OwnershipRepository;
 import com.storagemanager.storage_management.repository.StorageGroupRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ public class StorageGroupService {
     private final StorageGroupRepository storageGroupRepository;
     private final StorageUnitRepository storageUnitRepository;
     private final ExpenseRepository expenseRepository;
+    private final OwnershipRepository ownershipRepository;
 
     public List<StorageGroupDTO> getAllGroups() {
         return storageGroupRepository.findAllByOrderByNameAsc().stream()
@@ -77,6 +79,11 @@ public class StorageGroupService {
         if (expenses > 0) {
             throw new BadRequestException("Cannot delete storage group '" + group.getName()
                     + "' while " + expenses + " expense(s) are attributed to it.");
+        }
+        long shares = ownershipRepository.countByStorageGroupId(id);
+        if (shares > 0) {
+            throw new BadRequestException("Cannot delete storage group '" + group.getName()
+                    + "' while " + shares + " owner share(s) refer to it. Remove them first.");
         }
         storageGroupRepository.delete(group);
     }

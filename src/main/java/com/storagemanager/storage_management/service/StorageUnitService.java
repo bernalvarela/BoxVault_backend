@@ -11,6 +11,7 @@ import com.storagemanager.storage_management.model.UnitPriceHistory;
 import com.storagemanager.storage_management.model.enums.UnitKind;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
 import com.storagemanager.storage_management.repository.ExpenseRepository;
+import com.storagemanager.storage_management.repository.OwnershipRepository;
 import com.storagemanager.storage_management.repository.PaymentRepository;
 import com.storagemanager.storage_management.repository.StorageGroupRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
@@ -37,6 +38,7 @@ public class StorageUnitService {
     private final PaymentRepository paymentRepository;
     private final ExpenseRepository expenseRepository;
     private final StorageGroupRepository storageGroupRepository;
+    private final OwnershipRepository ownershipRepository;
 
     public List<StorageUnit> getAllUnits() {
         return storageUnitRepository.findAll();
@@ -152,6 +154,7 @@ public class StorageUnitService {
         }
         unitPriceHistoryRepository.deleteAll(
                 unitPriceHistoryRepository.findByStorageUnitIdOrderByEffectiveFromAscIdAsc(id));
+        ownershipRepository.deleteByStorageUnitId(id);
         storageUnitRepository.delete(unit);
     }
 
