@@ -117,6 +117,13 @@
 						<buildArg>-Duser.country=ES</buildArg>
 						<!-- Fail the build on any class that would only break at runtime -->
 						<buildArg>--no-fallback</buildArg>
+						<!--
+						  Portable CPU target. native-image defaults to x86-64-v3 (AVX2), which older
+						  servers / some VMs do not offer ("CPU ISA level is lower than required").
+						  "compatibility" runs on any x86-64 (and any AArch64) at a small speed cost;
+						  use x86-64-v2 if the server is known to support SSE4.2/POPCNT.
+						-->
+						<buildArg>-march=compatibility</buildArg>
 					</buildArgs>
 				</configuration>
 			</plugin>
