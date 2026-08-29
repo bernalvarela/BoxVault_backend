@@ -58,29 +58,27 @@ docker compose pull && docker compose up -d
 
 ## 4. Actualización automática (CD)
 
-Two ways to have the server pick up every image the pipeline publishes; use one.
-
-**a) Watchtower (already in `docker-compose.yml`).** The `watchtower` service polls
-Docker Hub every 5 minutes and recreates `boxvault` when `latest` changes, keeping
-ports, environment and the data volume. It uses the maintained fork
-`nickfedor/watchtower` (the original `containrrr/watchtower` is archived). Only
-containers with the `com.centurylinklabs.watchtower.enable=true` label are touched.
-Force a check: `docker compose exec watchtower /watchtower --run-once`.
-
-**b) Cron job, no extra container.** Remove the `watchtower` service from the compose
-file, copy `deploy/update.sh` next to it and schedule it:
+`deploy/update.sh` pulls the published image and recreates `boxvault` **only when the
+image id changed** (ports, environment and the data volume are kept); a run with
+nothing new is a no-op. Schedule it from cron every 5 minutes on the server:
 
 ```bash
-cp deploy/update.sh ~/boxvault/update.sh && chmod +x ~/boxvault/update.sh
+curl -o ~/boxvault/update.sh https://raw.githubusercontent.com/bernalvarela/BoxVault_backend/master/deploy/update.sh
+chmod +x ~/boxvault/update.sh
 ( crontab -l 2>/dev/null; echo "*/5 * * * * /home/$USER/boxvault/update.sh >> /home/$USER/boxvault/update.log 2>&1" ) | crontab -
 ```
 
-The script pulls the image and only restarts the container when the image id changed,
-so a run with nothing new is a no-op. Same result as Watchtower, nothing else to maintain.
+`update.log` records every version that landed and when. Run it by hand
+(`~/boxvault/update.sh`) to deploy immediately after a push.
 
-In both cases a broken commit never reaches the server: the workflow runs the tests
-before building the image. To freeze the server on a known version, set
-`DOCKER_IMAGE` to a `sha-…` or `1.2.3` tag instead of `latest`.
+Why not Watchtower: `containrrr/watchtower` is archived; its fork
+(`nickfedor/watchtower`) works as a drop-in, but the cron job does the same with
+nothing extra to trust or maintain.
+
+A broken commit never reaches the server: the workflow runs the tests before
+building the image. To freeze the server on a known version, set `DOCKER_IMAGE` in
+`.env` to a `sha-…` or `1.2.3` tag instead of `latest` — the script will then find
+nothing new until you change it.
 
 ## Local build without the pipeline
 

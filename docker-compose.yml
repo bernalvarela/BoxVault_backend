@@ -6,6 +6,8 @@
 # The H2 database is kept in the "boxvault-data" volume, so payments, expenses and
 # registered tax returns survive restarts and image updates. The seeder only fills an
 # empty database and backfills missing pieces afterwards.
+#
+# Keep this file and deploy/update.sh together in the deployment directory (~/boxvault).
 services:
   boxvault:
     image: ${DOCKER_IMAGE:-boxvault-backend:latest}
@@ -27,21 +29,9 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
-    labels:
-      - com.centurylinklabs.watchtower.enable=true
 
-  # Auto-update: polls Docker Hub every 5 minutes and recreates "boxvault" when a new
-  # image is published. containrrr/watchtower is archived; nickfedor/watchtower is the
-  # maintained fork (same flags and label). Alternative without any extra container:
-  # the cron job described in DEPLOY.md ("Actualización automática").
-  watchtower:
-    image: nickfedor/watchtower
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      # only if the Docker Hub repo is private (docker login on the server first):
-      # - ~/.docker/config.json:/config.json:ro
-    command: --label-enable --cleanup --interval 300
+# Auto-update: deploy/update.sh run from cron every 5 minutes pulls the image and
+# recreates "boxvault" only when a new version was published (see DEPLOY.md, step 4).
 
 volumes:
   boxvault-data:

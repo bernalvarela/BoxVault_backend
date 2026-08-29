@@ -166,7 +166,12 @@ class TaxControllerTest {
         assertEquals(LocalDate.of(2023, 9, 1), gabriela.getStartDate());
         IrpfReportDTO.Line flat3e = xiao.getRental().getLines().stream().filter(l -> "3E".equals(l.getUnitNumber())).findFirst().orElseThrow();
         assertEquals("9602605NJ4090S0008KY", flat3e.getCadastralReference());
-        assertTrue(flat3e.getRentals().stream().anyMatch(r -> "23.020.088-D".equals(r.getClientDocumentId())), "Carmen's DNI on the 3E contract");
+        // Carmen's contract on 3E starts in January 2026, so her DNI shows up on the 2026 return
+        IrpfReportDTO report2026 = restTemplate.getForEntity("/api/taxes/irpf?year=2026", IrpfReportDTO.class).getBody();
+        assertNotNull(report2026);
+        IrpfReportDTO.Line flat3e2026 = report2026.getOwners().stream().filter(o -> o.getOwnerName().startsWith("Xiao")).findFirst().orElseThrow()
+                .getRental().getLines().stream().filter(l -> "3E".equals(l.getUnitNumber())).findFirst().orElseThrow();
+        assertTrue(flat3e2026.getRentals().stream().anyMatch(r -> "23.020.088-D".equals(r.getClientDocumentId())), "Carmen's DNI on the 3E contract");
         assertTrue(report.getOwners().stream().noneMatch(o -> DataSeeder.ENTITY_NAME.equals(o.getOwnerName())));
     }
 
