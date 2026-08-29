@@ -1,8 +1,10 @@
 package com.storagemanager.storage_management.dto;
 
 import com.storagemanager.storage_management.model.enums.RentalStatus;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -14,6 +16,8 @@ import java.util.List;
  */
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class UnitHistoryDTO {
 
     private Long unitId;
@@ -35,6 +39,8 @@ public class UnitHistoryDTO {
 
     @Data
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class PriceEntry {
         private LocalDate effectiveFrom;
         private BigDecimal monthlyPrice;          // Total con IVA
@@ -45,6 +51,8 @@ public class UnitHistoryDTO {
 
     @Data
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class RentalEntry {
         private Long rentalId;
         private String agreementNumber;

@@ -109,14 +109,21 @@ class ApartmentUnitTest {
         // Community fee: 20 EUR per apartment each month
         assertTrue(Arrays.stream(expenses).anyMatch(e ->
                 e.getCategory() == ExpenseCategory.COMUNIDAD && e.getAmount().compareTo(new BigDecimal("20")) == 0));
-        // IBI of the two flats, July 2026 (182,03 split evenly between 3D and 3E)
+        // IBI of 3D, July 2026, booked on the flat itself
+        assertTrue(Arrays.stream(expenses).anyMatch(e ->
+                e.getExpenseDate().equals(java.time.LocalDate.of(2026, 7, 7))
+                        && e.getCategory() == ExpenseCategory.TRIBUTOS
+                        && e.getAmount().compareTo(new BigDecimal("182.03")) == 0));
+        // A flats-statement entry shared by both flats is split evenly: the same date and half amounts on 3D and 3E
         StorageUnit flat3e = unitNumbered("3E");
         Expense[] other = restTemplate.getForEntity("/api/expenses?rootId=" + flat3e.getId(), Expense[].class).getBody();
         assertNotNull(other);
-        BigDecimal ibi = BigDecimal.ZERO;
-        for (Expense e : expenses) if (e.getExpenseDate().equals(java.time.LocalDate.of(2026, 7, 7)) && e.getCategory() == ExpenseCategory.TRIBUTOS) ibi = ibi.add(e.getAmount());
-        for (Expense e : other) if (e.getExpenseDate().equals(java.time.LocalDate.of(2026, 7, 7)) && e.getCategory() == ExpenseCategory.TRIBUTOS) ibi = ibi.add(e.getAmount());
-        assertEquals(0, new BigDecimal("182.03").compareTo(ibi), "IBI 2026 of the flats adds up across 3D and 3E: " + ibi);
+        Expense shared = Arrays.stream(expenses).filter(e -> e.getDescription().contains("reparto 3D/3E")).findFirst().orElseThrow();
+        Expense twin = Arrays.stream(other)
+                .filter(e -> e.getDescription().equals(shared.getDescription()) && e.getExpenseDate().equals(shared.getExpenseDate()))
+                .findFirst().orElseThrow();
+        assertTrue(shared.getAmount().subtract(twin.getAmount()).abs().compareTo(new BigDecimal("0.01")) <= 0,
+                "Both halves of a shared expense are equal (up to the rounding cent): " + shared.getAmount() + " / " + twin.getAmount());
         // Reimbursed outflows (tenant electricity refunds, ABONO NOMINA) are not expenses
         assertTrue(Arrays.stream(expenses).noneMatch(e ->
                 e.getAmount().compareTo(new BigDecimal("2450")) == 0

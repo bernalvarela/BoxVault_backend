@@ -128,7 +128,10 @@ public class OwnerService {
                     .notes(trimToNull(m.getNotes()))
                     .build());
         }
+        // Flush the deletes before inserting: Hibernate orders inserts before deletes within a
+        // flush, which would trip the (entity, member) unique constraint when a member is kept
         ownerMembershipRepository.deleteByEntityId(entity.getId());
+        ownerMembershipRepository.flush();
         ownerMembershipRepository.saveAll(rows);
     }
 
