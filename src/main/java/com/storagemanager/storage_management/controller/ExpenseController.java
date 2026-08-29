@@ -27,7 +27,7 @@ public class ExpenseController {
             @RequestParam(required = false) Integer year,
             @RequestParam(required = false) Integer month,
             @RequestParam(required = false) Long storageUnitId,
-            @RequestParam(required = false) Long storageGroupId,
+            @RequestParam(required = false) Long rootId,
             @RequestParam(required = false) ExpenseCategory category,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
@@ -36,7 +36,7 @@ public class ExpenseController {
             @RequestParam(required = false) String sortBy,
             @RequestParam(required = false, defaultValue = "desc") String direction) {
         ExpenseService.Filter filter = new ExpenseService.Filter(
-                year, month, storageUnitId, storageGroupId, category, startDate, endDate, minAmount, maxAmount);
+                year, month, storageUnitId, rootId, category, startDate, endDate, minAmount, maxAmount);
         boolean ascending = "asc".equalsIgnoreCase(direction);
         return ResponseEntity.ok(expenseService.searchExpenses(filter, ExpenseService.SortBy.from(sortBy), ascending));
     }

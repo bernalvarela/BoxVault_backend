@@ -5,11 +5,9 @@ import com.storagemanager.storage_management.dto.ExpenseRequest;
 import com.storagemanager.storage_management.exception.BadRequestException;
 import com.storagemanager.storage_management.exception.ResourceNotFoundException;
 import com.storagemanager.storage_management.model.Expense;
-import com.storagemanager.storage_management.model.StorageGroup;
 import com.storagemanager.storage_management.model.StorageUnit;
 import com.storagemanager.storage_management.model.enums.ExpenseCategory;
 import com.storagemanager.storage_management.repository.ExpenseRepository;
-import com.storagemanager.storage_management.repository.StorageGroupRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -32,24 +30,21 @@ public class ExpenseService {
 
     private final ExpenseRepository expenseRepository;
     private final StorageUnitRepository storageUnitRepository;
-    private final StorageGroupRepository storageGroupRepository;
 
-    /** The group an expense counts towards: its unit's group, or its own group for general expenses. */
-    public static StorageGroup groupOf(Expense expense) {
-        if (expense.getStorageUnit() != null) {
-            return expense.getStorageUnit().getStorageGroup();
-        }
-        return expense.getStorageGroup();
+    /** The root unit (local / flat) an expense counts towards; null for a general expense. */
+    public static Long rootOf(Expense expense) {
+        return expense.getStorageUnit() == null ? null : expense.getStorageUnit().getRootId();
     }
 
     /**
-     * True when the expense belongs to one of the given groups. A null {@code groupIds}
-     * means "no filter" and matches every expense.
+     * True when the expense belongs to a unit under one of the given root units. A
+     * null {@code rootIds} means "no filter" and matches every expense, general ones
+     * included; with a filter, general expenses (no unit) never match.
      */
-    public static boolean belongsToGroups(Expense expense, Set<Long> groupIds) {
-        if (groupIds == null) return true;
-        StorageGroup group = groupOf(expense);
-        return group != null && groupIds.contains(group.getId());
+    public static boolean belongsToRoots(Expense expense, Set<Long> rootIds) {
+        if (rootIds == null) return true;
+        Long root = rootOf(expense);
+        return root != null && rootIds.contains(root);
     }
 
     public List<Expense> getAllExpenses() {
@@ -63,10 +58,10 @@ public class ExpenseService {
 
     /**
      * Optional listing filters; a year without a month means the whole year.
-     * {@code storageGroupId} matches expenses of units in that group as well as
-     * general expenses attributed to it.
+     * {@code storageUnitId} matches the expenses of exactly that unit; {@code rootId}
+     * those of every unit under that root (a local and the trasteros inside it).
      */
-    public record Filter(Integer year, Integer month, Long storageUnitId, Long storageGroupId,
+    public record Filter(Integer year, Integer month, Long storageUnitId, Long rootId,
                          ExpenseCategory category, LocalDate startDate, LocalDate endDate,
                          BigDecimal minAmount, BigDecimal maxAmount) {
     }
@@ -129,7 +124,7 @@ public class ExpenseService {
         return result.stream()
                 .filter(e -> filter.storageUnitId() == null
                         || (e.getStorageUnit() != null && filter.storageUnitId().equals(e.getStorageUnit().getId())))
-                .filter(e -> filter.storageGroupId() == null || belongsToGroups(e, Set.of(filter.storageGroupId())))
+                .filter(e -> filter.rootId() == null || belongsToRoots(e, Set.of(filter.rootId())))
                 .filter(e -> filter.category() == null || e.getCategory() == filter.category())
                 .filter(e -> filter.minAmount() == null || e.getAmount().compareTo(filter.minAmount()) >= 0)
                 .filter(e -> filter.maxAmount() == null || e.getAmount().compareTo(filter.maxAmount()) <= 0)
@@ -158,18 +153,12 @@ public class ExpenseService {
 
     private void applyRequest(Expense expense, ExpenseRequest request) {
         StorageUnit unit = null;
-        StorageGroup group = null;
         if (request.getStorageUnitId() != null) {
             unit = storageUnitRepository.findById(request.getStorageUnitId())
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Storage unit not found with id: " + request.getStorageUnitId()));
-        } else if (request.getStorageGroupId() != null) {
-            group = storageGroupRepository.findById(request.getStorageGroupId())
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "Storage group not found with id: " + request.getStorageGroupId()));
         }
         expense.setStorageUnit(unit);
-        expense.setStorageGroup(group);
         expense.setAmount(request.getAmount());
         expense.setDescription(request.getDescription().trim());
         expense.setCategory(request.getCategory());
@@ -177,75 +166,75 @@ public class ExpenseService {
     }
 
     // ---- Aggregations used by the statistics ----
-    // Every aggregation accepts an optional set of group ids: null means "all groups"
+    // Every aggregation accepts an optional set of root-unit ids: null means "everything"
     // (the SQL aggregate is used); otherwise the expenses are loaded and filtered by
-    // group in memory (see belongsToGroups), which is fine at this data volume.
+    // root in memory (see belongsToRoots), which is fine at this data volume.
 
     public BigDecimal sumTotalExpenses() {
         return sumTotalExpenses(null);
     }
 
-    public BigDecimal sumTotalExpenses(Set<Long> groupIds) {
-        if (groupIds == null) return nz(expenseRepository.sumTotalExpenses());
-        return total(expensesIn(null, null, groupIds));
+    public BigDecimal sumTotalExpenses(Set<Long> rootIds) {
+        if (rootIds == null) return nz(expenseRepository.sumTotalExpenses());
+        return total(expensesIn(null, null, rootIds));
     }
 
     public BigDecimal sumExpensesBetween(LocalDate start, LocalDate end) {
         return sumExpensesBetween(start, end, null);
     }
 
-    public BigDecimal sumExpensesBetween(LocalDate start, LocalDate end, Set<Long> groupIds) {
-        if (groupIds == null) return nz(expenseRepository.sumExpensesBetween(start, end));
-        return total(expensesIn(start, end, groupIds));
+    public BigDecimal sumExpensesBetween(LocalDate start, LocalDate end, Set<Long> rootIds) {
+        if (rootIds == null) return nz(expenseRepository.sumExpensesBetween(start, end));
+        return total(expensesIn(start, end, rootIds));
     }
 
     public long countExpensesBetween(LocalDate start, LocalDate end) {
         return countExpensesBetween(start, end, null);
     }
 
-    public long countExpensesBetween(LocalDate start, LocalDate end, Set<Long> groupIds) {
-        if (groupIds == null) return expenseRepository.countExpensesBetween(start, end);
-        return expensesIn(start, end, groupIds).size();
+    public long countExpensesBetween(LocalDate start, LocalDate end, Set<Long> rootIds) {
+        if (rootIds == null) return expenseRepository.countExpensesBetween(start, end);
+        return expensesIn(start, end, rootIds).size();
     }
 
     public BigDecimal sumExpensesForMonth(YearMonth ym) {
         return sumExpensesForMonth(ym, null);
     }
 
-    public BigDecimal sumExpensesForMonth(YearMonth ym, Set<Long> groupIds) {
-        return sumExpensesBetween(ym.atDay(1), ym.atEndOfMonth(), groupIds);
+    public BigDecimal sumExpensesForMonth(YearMonth ym, Set<Long> rootIds) {
+        return sumExpensesBetween(ym.atDay(1), ym.atEndOfMonth(), rootIds);
     }
 
     public long countExpensesForMonth(YearMonth ym) {
         return countExpensesForMonth(ym, null);
     }
 
-    public long countExpensesForMonth(YearMonth ym, Set<Long> groupIds) {
-        return countExpensesBetween(ym.atDay(1), ym.atEndOfMonth(), groupIds);
+    public long countExpensesForMonth(YearMonth ym, Set<Long> rootIds) {
+        return countExpensesBetween(ym.atDay(1), ym.atEndOfMonth(), rootIds);
     }
 
-    /** Earliest expense date of the given groups (null = all groups); null when there are none. */
-    public LocalDate firstExpenseDate(Set<Long> groupIds) {
-        return expensesIn(null, null, groupIds).stream()
+    /** Earliest expense date under the given roots (null = everything); null when there are none. */
+    public LocalDate firstExpenseDate(Set<Long> rootIds) {
+        return expensesIn(null, null, rootIds).stream()
                 .map(Expense::getExpenseDate)
                 .min(java.util.Comparator.naturalOrder())
                 .orElse(null);
     }
 
-    /** Latest expense date of the given groups (null = all groups); null when there are none. */
-    public LocalDate lastExpenseDate(Set<Long> groupIds) {
-        return expensesIn(null, null, groupIds).stream()
+    /** Latest expense date under the given roots (null = everything); null when there are none. */
+    public LocalDate lastExpenseDate(Set<Long> rootIds) {
+        return expensesIn(null, null, rootIds).stream()
                 .map(Expense::getExpenseDate)
                 .max(java.util.Comparator.naturalOrder())
                 .orElse(null);
     }
 
-    /** Expenses in [start, end] (both null = all time) that belong to the given groups. */
-    private List<Expense> expensesIn(LocalDate start, LocalDate end, Set<Long> groupIds) {
+    /** Expenses in [start, end] (both null = all time) that belong to the given roots. */
+    private List<Expense> expensesIn(LocalDate start, LocalDate end, Set<Long> rootIds) {
         List<Expense> list = (start == null || end == null)
                 ? expenseRepository.findAll()
                 : expenseRepository.findByExpenseDateBetween(start, end);
-        return list.stream().filter(e -> belongsToGroups(e, groupIds)).toList();
+        return list.stream().filter(e -> belongsToRoots(e, rootIds)).toList();
     }
 
     private static BigDecimal total(List<Expense> expenses) {
@@ -276,12 +265,12 @@ public class ExpenseService {
         return summarizeByCategory(start, end, null);
     }
 
-    /** Same as {@link #summarizeByCategory(LocalDate, LocalDate)} restricted to the given groups (null = all). */
-    public List<ExpenseCategorySummaryDTO> summarizeByCategory(LocalDate start, LocalDate end, Set<Long> groupIds) {
+    /** Same as {@link #summarizeByCategory(LocalDate, LocalDate)} restricted to the given roots (null = all). */
+    public List<ExpenseCategorySummaryDTO> summarizeByCategory(LocalDate start, LocalDate end, Set<Long> rootIds) {
         Map<ExpenseCategory, BigDecimal> amounts = new EnumMap<>(ExpenseCategory.class);
         Map<ExpenseCategory, Long> counts = new EnumMap<>(ExpenseCategory.class);
 
-        if (groupIds == null) {
+        if (rootIds == null) {
             List<Object[]> rows = (start == null || end == null)
                     ? expenseRepository.sumExpensesByCategory()
                     : expenseRepository.sumExpensesByCategoryBetween(start, end);
@@ -290,7 +279,7 @@ public class ExpenseService {
                 counts.put((ExpenseCategory) r[0], ((Number) r[2]).longValue());
             }
         } else {
-            for (Expense e : expensesIn(start, end, groupIds)) {
+            for (Expense e : expensesIn(start, end, rootIds)) {
                 amounts.merge(e.getCategory(), nz(e.getAmount()), BigDecimal::add);
                 counts.merge(e.getCategory(), 1L, Long::sum);
             }

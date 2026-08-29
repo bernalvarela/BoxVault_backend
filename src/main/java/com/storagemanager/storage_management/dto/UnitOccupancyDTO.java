@@ -22,8 +22,13 @@ public class UnitOccupancyDTO {
     private Double sizeSquareMeters;
     private UnitStatus status;
     private String location;
-    private Long storageGroupId;
-    private String storageGroupName;
+    /** The local (parent unit) this unit sits in, if any. */
+    private Long parentUnitId;
+    private String parentUnitNumber;
+    private String parentUnitName;
+    /** Root unit the statistics filter by (the unit itself when it has no parent). */
+    private Long rootUnitId;
+    private String rootUnitName;
     private String currentClientName;
     private String currentAgreementNumber;
 

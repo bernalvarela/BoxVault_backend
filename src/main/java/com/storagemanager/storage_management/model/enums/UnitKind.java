@@ -1,13 +1,16 @@
 package com.storagemanager.storage_management.model.enums;
 
 /**
- * What kind of rentable unit a {@code StorageUnit} row represents. Storage units
+ * What kind of unit a {@code StorageUnit} row represents. Storage units
  * (trasteros) are rented with 21% VAT included in the price; residential
- * apartments are VAT exempt. Apartments will gain their own attributes over time.
+ * apartments are VAT exempt; a local (business premises) carries VAT and is
+ * mostly used as a container of other units (the trasteros sit inside the
+ * "Bajo delantero" local), grouping them for filters, expenses and ownership.
  */
 public enum UnitKind {
     STORAGE_UNIT(true),
-    APARTMENT(false);
+    APARTMENT(false),
+    PREMISES(true);
 
     private final boolean vatApplicable;
 

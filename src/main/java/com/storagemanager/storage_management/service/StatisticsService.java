@@ -35,11 +35,12 @@ import java.util.function.Predicate;
 /**
  * Dashboard and trend statistics.
  * <p>
- * Every public method takes an optional collection of storage-group ids. A null or
- * empty collection means "all groups" (no filtering); otherwise only the units of
- * those groups - and their rentals, payments and expenses - are taken into account.
- * Group filtering is applied in memory on top of the period queries, which is more
- * than fast enough for the size of this data set and keeps a single code path.
+ * Every public method takes an optional collection of root-unit ids (a local such
+ * as "Bajo delantero" with the trasteros inside it, or a stand-alone flat). A null
+ * or empty collection means "everything" (no filtering); otherwise only the units
+ * under those roots - and their rentals, payments and expenses - are taken into
+ * account. The filter is applied in memory on top of the period queries, which is
+ * more than fast enough for the size of this data set and keeps a single code path.
  * <p>
  * VAT breakdowns are accumulated payment by payment (or unit by unit), because
  * storage units carry 21% VAT while apartments are exempt: the base of a mixed
@@ -63,33 +64,41 @@ public class StatisticsService {
     // Group filter helpers
     // ------------------------------------------------------------------
 
-    /** Normalises the API filter: null, empty, or only-null ids -> null ("every group"). */
-    static Set<Long> normalizeGroupIds(Collection<Long> groupIds) {
-        if (groupIds == null) return null;
+    /** Normalises the API filter: null, empty, or only-null ids -> null ("every root unit"). */
+    static Set<Long> normalizeRootIds(Collection<Long> rootIds) {
+        if (rootIds == null) return null;
         Set<Long> set = new LinkedHashSet<>();
-        for (Long id : groupIds) {
+        for (Long id : rootIds) {
             if (id != null) set.add(id);
         }
         return set.isEmpty() ? null : set;
     }
 
-    static boolean unitInGroups(StorageUnit unit, Set<Long> groupIds) {
-        if (groupIds == null) return true;
-        return unit != null && unit.getStorageGroup() != null && groupIds.contains(unit.getStorageGroup().getId());
+    /** True when the unit sits under one of the given root units (null = no filter). */
+    static boolean unitInRoots(StorageUnit unit, Set<Long> rootIds) {
+        if (rootIds == null) return true;
+        return unit != null && rootIds.contains(unit.getRootId());
     }
 
-    private List<StorageUnit> unitsIn(Set<Long> groupIds) {
-        return groupIds == null ? storageUnitRepository.findAll() : storageUnitRepository.findByStorageGroupIdIn(groupIds);
+    /**
+     * Rentable units (locales are containers, not rented units, so they are left out
+     * of the occupancy figures) under the given roots; null = every root.
+     */
+    private List<StorageUnit> unitsIn(Set<Long> rootIds) {
+        return storageUnitRepository.findAll().stream()
+                .filter(u -> !u.isContainer())
+                .filter(u -> unitInRoots(u, rootIds))
+                .toList();
     }
 
-    private static List<Payment> paymentsIn(List<Payment> payments, Set<Long> groupIds) {
-        if (groupIds == null) return payments;
-        return payments.stream().filter(p -> unitInGroups(p.getStorageUnit(), groupIds)).toList();
+    private static List<Payment> paymentsIn(List<Payment> payments, Set<Long> rootIds) {
+        if (rootIds == null) return payments;
+        return payments.stream().filter(p -> unitInRoots(p.getStorageUnit(), rootIds)).toList();
     }
 
-    private static List<RentalAgreement> rentalsIn(List<RentalAgreement> rentals, Set<Long> groupIds) {
-        if (groupIds == null) return rentals;
-        return rentals.stream().filter(r -> unitInGroups(r.getStorageUnit(), groupIds)).toList();
+    private static List<RentalAgreement> rentalsIn(List<RentalAgreement> rentals, Set<Long> rootIds) {
+        if (rootIds == null) return rentals;
+        return rentals.stream().filter(r -> unitInRoots(r.getStorageUnit(), rootIds)).toList();
     }
 
     // ------------------------------------------------------------------
@@ -146,21 +155,21 @@ public class StatisticsService {
         return getDashboardStats(null);
     }
 
-    public DashboardStatsDTO getDashboardStats(Collection<Long> groupIdsParam) {
+    public DashboardStatsDTO getDashboardStats(Collection<Long> rootIdsParam) {
         paymentService.checkAndUpdateOverduePayments();
-        Set<Long> groupIds = normalizeGroupIds(groupIdsParam);
+        Set<Long> rootIds = normalizeRootIds(rootIdsParam);
 
         YearMonth current = YearMonth.now();
         List<Payment> currentMonthPayments = paymentsIn(
                 paymentRepository.findByBillingPeriodYearAndBillingPeriodMonth(current.getYear(), current.getMonthValue()),
-                groupIds);
+                rootIds);
         PeriodTotals month = PeriodTotals.of(currentMonthPayments);
 
         Breakdown expected = month.expected();
         if (expected.total().compareTo(BigDecimal.ZERO) == 0) {
             // Si aún no se generaron facturas en el mes, calcular en base a contratos activos
             expected = Breakdown.ZERO;
-            for (RentalAgreement r : rentalsIn(rentalAgreementRepository.findAllActiveRentals(), groupIds)) {
+            for (RentalAgreement r : rentalsIn(rentalAgreementRepository.findAllActiveRentals(), rootIds)) {
                 if (r.getMonthlyRent() != null) {
                     expected = expected.plus(VatUtils.breakdown(r.getMonthlyRent(), vatOf(r.getStorageUnit())));
                 }
@@ -168,14 +177,14 @@ public class StatisticsService {
         }
 
         // Gastos del mes en curso y desglose histórico por categoría
-        BigDecimal currentMonthExpenses = expenseService.sumExpensesForMonth(current, groupIds);
-        long currentMonthExpenseCount = expenseService.countExpensesForMonth(current, groupIds);
-        List<ExpenseCategorySummaryDTO> expensesByCategory = expenseService.summarizeByCategory(null, null, groupIds);
+        BigDecimal currentMonthExpenses = expenseService.sumExpensesForMonth(current, rootIds);
+        long currentMonthExpenseCount = expenseService.countExpensesForMonth(current, rootIds);
+        List<ExpenseCategorySummaryDTO> expensesByCategory = expenseService.summarizeByCategory(null, null, rootIds);
 
         // 6 Meses de Histórico
-        List<MonthlyRevenueDTO> recentMonthlyRevenue = monthlyTrends(current.minusMonths(5), current, groupIds);
+        List<MonthlyRevenueDTO> recentMonthlyRevenue = monthlyTrends(current.minusMonths(5), current, rootIds);
 
-        return buildStats(groupIds, expected, month.collected(), month.pending(),
+        return buildStats(rootIds, expected, month.collected(), month.pending(),
                 currentMonthExpenses, currentMonthExpenseCount, recentMonthlyRevenue, expensesByCategory);
     }
 
@@ -188,25 +197,25 @@ public class StatisticsService {
         return getStatisticsByDateRange(startDate, endDate, null);
     }
 
-    public DashboardStatsDTO getStatisticsByDateRange(LocalDate startDate, LocalDate endDate, Collection<Long> groupIdsParam) {
+    public DashboardStatsDTO getStatisticsByDateRange(LocalDate startDate, LocalDate endDate, Collection<Long> rootIdsParam) {
         if (startDate == null || endDate == null || startDate.isAfter(endDate)) {
             throw new IllegalArgumentException("Invalid date range");
         }
-        Set<Long> groupIds = normalizeGroupIds(groupIdsParam);
+        Set<Long> rootIds = normalizeRootIds(rootIdsParam);
 
-        List<Payment> rangePayments = paymentsIn(paymentRepository.findByDueDateBetween(startDate, endDate), groupIds);
+        List<Payment> rangePayments = paymentsIn(paymentRepository.findByDueDateBetween(startDate, endDate), rootIds);
         PeriodTotals range = PeriodTotals.of(rangePayments);
 
         // Gastos dentro del rango
-        BigDecimal rangeExpenses = expenseService.sumExpensesBetween(startDate, endDate, groupIds);
-        long rangeExpenseCount = expenseService.countExpensesBetween(startDate, endDate, groupIds);
-        List<ExpenseCategorySummaryDTO> expensesByCategory = expenseService.summarizeByCategory(startDate, endDate, groupIds);
+        BigDecimal rangeExpenses = expenseService.sumExpensesBetween(startDate, endDate, rootIds);
+        long rangeExpenseCount = expenseService.countExpensesBetween(startDate, endDate, rootIds);
+        List<ExpenseCategorySummaryDTO> expensesByCategory = expenseService.summarizeByCategory(startDate, endDate, rootIds);
 
         // Month-by-month breakdown covering every month touched by the range
         List<MonthlyRevenueDTO> recentMonthlyRevenue =
-                monthlyTrends(YearMonth.from(startDate), YearMonth.from(endDate), groupIds);
+                monthlyTrends(YearMonth.from(startDate), YearMonth.from(endDate), rootIds);
 
-        return buildStats(groupIds, range.expected(), range.collected(), range.pending(),
+        return buildStats(rootIds, range.expected(), range.collected(), range.pending(),
                 rangeExpenses, rangeExpenseCount, recentMonthlyRevenue, expensesByCategory);
     }
 
@@ -215,18 +224,18 @@ public class StatisticsService {
      * (the same date the range statistics filter on) or an expense - so the UI can
      * offer a "whole history" range. Both dates are null when nothing is recorded.
      */
-    public HistoryRangeDTO getHistoryRange(Collection<Long> groupIdsParam) {
-        Set<Long> groupIds = normalizeGroupIds(groupIdsParam);
+    public HistoryRangeDTO getHistoryRange(Collection<Long> rootIdsParam) {
+        Set<Long> rootIds = normalizeRootIds(rootIdsParam);
         LocalDate first = null;
         LocalDate last = null;
-        for (Payment p : paymentsIn(paymentRepository.findAll(), groupIds)) {
+        for (Payment p : paymentsIn(paymentRepository.findAll(), rootIds)) {
             LocalDate due = p.getDueDate();
             if (due == null) continue;
             if (first == null || due.isBefore(first)) first = due;
             if (last == null || due.isAfter(last)) last = due;
         }
-        LocalDate firstExpense = expenseService.firstExpenseDate(groupIds);
-        LocalDate lastExpense = expenseService.lastExpenseDate(groupIds);
+        LocalDate firstExpense = expenseService.firstExpenseDate(rootIds);
+        LocalDate lastExpense = expenseService.lastExpenseDate(rootIds);
         if (firstExpense != null && (first == null || firstExpense.isBefore(first))) first = firstExpense;
         if (lastExpense != null && (last == null || lastExpense.isAfter(last))) last = lastExpense;
         return HistoryRangeDTO.builder().firstDate(first).lastDate(last).build();
@@ -237,7 +246,7 @@ public class StatisticsService {
      * caller (current month or custom range); the structural and all-time figures
      * (units, clients, overdue, historical totals) are computed here for the groups.
      */
-    private DashboardStatsDTO buildStats(Set<Long> groupIds,
+    private DashboardStatsDTO buildStats(Set<Long> rootIds,
                                          Breakdown periodExpected,
                                          Breakdown periodCollected,
                                          Breakdown periodPending,
@@ -245,7 +254,7 @@ public class StatisticsService {
                                          long periodExpenseCount,
                                          List<MonthlyRevenueDTO> recentMonthlyRevenue,
                                          List<ExpenseCategorySummaryDTO> expensesByCategory) {
-        List<StorageUnit> units = unitsIn(groupIds);
+        List<StorageUnit> units = unitsIn(rootIds);
         long totalUnits = units.size();
         long storageUnitCount = units.stream().filter(u -> u.getKind() == UnitKind.STORAGE_UNIT).count();
         long apartmentCount = units.stream().filter(u -> u.getKind() == UnitKind.APARTMENT).count();
@@ -257,12 +266,12 @@ public class StatisticsService {
         double occupancyRate = totalUnits > 0 ? ((double) occupiedUnits / totalUnits) * 100.0 : 0.0;
         occupancyRate = Math.round(occupancyRate * 10.0) / 10.0;
 
-        List<RentalAgreement> activeRentals = rentalsIn(rentalAgreementRepository.findByStatus(RentalStatus.ACTIVE), groupIds);
+        List<RentalAgreement> activeRentals = rentalsIn(rentalAgreementRepository.findByStatus(RentalStatus.ACTIVE), rootIds);
         long activeClients = activeRentals.stream().map(r -> r.getClient().getId()).distinct().count();
         // Sin filtro: todos los clientes; con filtro: clientes que han alquilado (alguna vez) en esos grupos
-        long totalClients = groupIds == null
+        long totalClients = rootIds == null
                 ? clientRepository.count()
-                : rentalsIn(rentalAgreementRepository.findAll(), groupIds).stream()
+                : rentalsIn(rentalAgreementRepository.findAll(), rootIds).stream()
                         .map(r -> r.getClient().getId()).distinct().count();
 
         Breakdown potential = Breakdown.ZERO;
@@ -272,12 +281,12 @@ public class StatisticsService {
             }
         }
 
-        List<Payment> overduePayments = paymentsIn(paymentRepository.findByStatus(PaymentStatus.OVERDUE), groupIds);
+        List<Payment> overduePayments = paymentsIn(paymentRepository.findByStatus(PaymentStatus.OVERDUE), rootIds);
         Breakdown overdue = sum(overduePayments, p -> true, Payment::getAmountDue);
 
-        Breakdown allTime = sum(paymentsIn(paymentRepository.findByStatus(PaymentStatus.PAID), groupIds),
+        Breakdown allTime = sum(paymentsIn(paymentRepository.findByStatus(PaymentStatus.PAID), rootIds),
                 p -> true, Payment::getAmountPaid);
-        BigDecimal totalExpensesAllTime = expenseService.sumTotalExpenses(groupIds);
+        BigDecimal totalExpensesAllTime = expenseService.sumTotalExpenses(rootIds);
 
         // Desglose de Trasteros
         List<UnitOccupancyDTO> unitsSummary = getUnitSummaryList(units, activeRentals);
@@ -339,11 +348,11 @@ public class StatisticsService {
         return getRecentMonthlyTrends(numberOfMonths, null);
     }
 
-    public List<MonthlyRevenueDTO> getRecentMonthlyTrends(int numberOfMonths, Collection<Long> groupIds) {
+    public List<MonthlyRevenueDTO> getRecentMonthlyTrends(int numberOfMonths, Collection<Long> rootIds) {
         // Valores menores que 1 se interpretan como "solo el periodo actual"
         numberOfMonths = Math.max(1, numberOfMonths);
         YearMonth current = YearMonth.now();
-        return monthlyTrends(current.minusMonths(numberOfMonths - 1L), current, normalizeGroupIds(groupIds));
+        return monthlyTrends(current.minusMonths(numberOfMonths - 1L), current, normalizeRootIds(rootIds));
     }
 
     /**
@@ -354,25 +363,25 @@ public class StatisticsService {
         return monthlyTrends(start, end, null);
     }
 
-    private List<MonthlyRevenueDTO> monthlyTrends(YearMonth start, YearMonth end, Set<Long> groupIds) {
+    private List<MonthlyRevenueDTO> monthlyTrends(YearMonth start, YearMonth end, Set<Long> rootIds) {
         List<MonthlyRevenueDTO> list = new ArrayList<>();
         for (YearMonth ym = start; !ym.isAfter(end); ym = ym.plusMonths(1)) {
-            list.add(buildMonthlyRevenue(ym, groupIds));
+            list.add(buildMonthlyRevenue(ym, rootIds));
         }
         return list;
     }
 
-    private MonthlyRevenueDTO buildMonthlyRevenue(YearMonth yearMonth, Set<Long> groupIds) {
+    private MonthlyRevenueDTO buildMonthlyRevenue(YearMonth yearMonth, Set<Long> rootIds) {
         int year = yearMonth.getYear();
         int month = yearMonth.getMonthValue();
         String label = yearMonth.format(MONTH_LABEL_FORMATTER);
 
         List<Payment> payments = paymentsIn(
-                paymentRepository.findByBillingPeriodYearAndBillingPeriodMonth(year, month), groupIds);
+                paymentRepository.findByBillingPeriodYearAndBillingPeriodMonth(year, month), rootIds);
         PeriodTotals t = PeriodTotals.of(payments);
 
-        BigDecimal expenses = expenseService.sumExpensesForMonth(yearMonth, groupIds);
-        long expenseCount = expenseService.countExpensesForMonth(yearMonth, groupIds);
+        BigDecimal expenses = expenseService.sumExpensesForMonth(yearMonth, rootIds);
+        long expenseCount = expenseService.countExpensesForMonth(yearMonth, rootIds);
 
         return MonthlyRevenueDTO.builder()
                 .monthLabel(label)
@@ -404,10 +413,10 @@ public class StatisticsService {
         return getQuarterlyTrends(numberOfQuarters, null);
     }
 
-    public List<QuarterlyRevenueDTO> getQuarterlyTrends(int numberOfQuarters, Collection<Long> groupIdsParam) {
+    public List<QuarterlyRevenueDTO> getQuarterlyTrends(int numberOfQuarters, Collection<Long> rootIdsParam) {
         // Valores menores que 1 se interpretan como "solo el periodo actual"
         numberOfQuarters = Math.max(1, numberOfQuarters);
-        Set<Long> groupIds = normalizeGroupIds(groupIdsParam);
+        Set<Long> rootIds = normalizeRootIds(rootIdsParam);
         LocalDate current = LocalDate.now();
         List<QuarterlyRevenueDTO> list = new ArrayList<>();
 
@@ -421,13 +430,13 @@ public class StatisticsService {
 
             List<Payment> quarterPayments = paymentsIn(
                     paymentRepository.findByBillingPeriodYearAndBillingPeriodMonthBetween(year, startMonth, endMonth),
-                    groupIds);
+                    rootIds);
             PeriodTotals t = PeriodTotals.of(quarterPayments);
 
             LocalDate quarterStart = LocalDate.of(year, startMonth, 1);
             LocalDate quarterEnd = YearMonth.of(year, endMonth).atEndOfMonth();
-            BigDecimal expenses = expenseService.sumExpensesBetween(quarterStart, quarterEnd, groupIds);
-            long expenseCount = expenseService.countExpensesBetween(quarterStart, quarterEnd, groupIds);
+            BigDecimal expenses = expenseService.sumExpensesBetween(quarterStart, quarterEnd, rootIds);
+            long expenseCount = expenseService.countExpensesBetween(quarterStart, quarterEnd, rootIds);
 
             list.add(QuarterlyRevenueDTO.builder()
                     .quarterLabel("Q" + quarter + " " + year)
@@ -462,23 +471,23 @@ public class StatisticsService {
         return getAnnualTrends(numberOfYears, null);
     }
 
-    public List<AnnualRevenueDTO> getAnnualTrends(int numberOfYears, Collection<Long> groupIdsParam) {
+    public List<AnnualRevenueDTO> getAnnualTrends(int numberOfYears, Collection<Long> rootIdsParam) {
         // Valores menores que 1 se interpretan como "solo el periodo actual"
         numberOfYears = Math.max(1, numberOfYears);
-        Set<Long> groupIds = normalizeGroupIds(groupIdsParam);
+        Set<Long> rootIds = normalizeRootIds(rootIdsParam);
         LocalDate current = LocalDate.now();
         List<AnnualRevenueDTO> list = new ArrayList<>();
 
         for (int i = numberOfYears - 1; i >= 0; i--) {
             int year = current.getYear() - i;
 
-            List<Payment> yearPayments = paymentsIn(paymentRepository.findByBillingPeriodYear(year), groupIds);
+            List<Payment> yearPayments = paymentsIn(paymentRepository.findByBillingPeriodYear(year), rootIds);
             PeriodTotals t = PeriodTotals.of(yearPayments);
 
             LocalDate yearStart = LocalDate.of(year, 1, 1);
             LocalDate yearEnd = LocalDate.of(year, 12, 31);
-            BigDecimal expenses = expenseService.sumExpensesBetween(yearStart, yearEnd, groupIds);
-            long expenseCount = expenseService.countExpensesBetween(yearStart, yearEnd, groupIds);
+            BigDecimal expenses = expenseService.sumExpensesBetween(yearStart, yearEnd, rootIds);
+            long expenseCount = expenseService.countExpensesBetween(yearStart, yearEnd, rootIds);
 
             list.add(AnnualRevenueDTO.builder()
                     .yearLabel(String.valueOf(year))
@@ -539,8 +548,11 @@ public class StatisticsService {
                     .sizeSquareMeters(unit.getSizeSquareMeters())
                     .status(unit.getStatus())
                     .location(unit.getLocation())
-                    .storageGroupId(unit.getStorageGroup() != null ? unit.getStorageGroup().getId() : null)
-                    .storageGroupName(unit.getStorageGroup() != null ? unit.getStorageGroup().getName() : null)
+                    .parentUnitId(unit.getParent() != null ? unit.getParent().getId() : null)
+                    .parentUnitNumber(unit.getParent() != null ? unit.getParent().getUnitNumber() : null)
+                    .parentUnitName(unit.getParent() != null ? unit.getParent().getName() : null)
+                    .rootUnitId(unit.getRootId())
+                    .rootUnitName(unit.rootUnit().getName())
                     .currentClientName(active != null ? active.getClient().getFullName() : null)
                     .currentAgreementNumber(active != null ? active.getAgreementNumber() : null)
                     // Tarifa Base (con IVA y desglose)
@@ -568,10 +580,10 @@ public class StatisticsService {
         return getUnitRevenues(null);
     }
 
-    public List<UnitRevenueDTO> getUnitRevenues(Collection<Long> groupIdsParam) {
-        Set<Long> groupIds = normalizeGroupIds(groupIdsParam);
-        Set<Long> unitIds = groupIds == null ? null
-                : unitsIn(groupIds).stream().map(StorageUnit::getId).collect(java.util.stream.Collectors.toSet());
+    public List<UnitRevenueDTO> getUnitRevenues(Collection<Long> rootIdsParam) {
+        Set<Long> rootIds = normalizeRootIds(rootIdsParam);
+        Set<Long> unitIds = rootIds == null ? null
+                : unitsIn(rootIds).stream().map(StorageUnit::getId).collect(java.util.stream.Collectors.toSet());
 
         List<UnitRevenueDTO> list = new ArrayList<>();
         for (Object[] r : paymentRepository.sumRevenueByStorageUnit()) {

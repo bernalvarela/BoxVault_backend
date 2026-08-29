@@ -106,9 +106,9 @@ class StatisticsControllerTest {
         assertNotNull(all.getBody());
         assertTrue(all.getBody().getCurrentMonthExpenseCount() >= 232);
 
-        // A group without activity has no range
+        // A root unit without activity has no range
         ResponseEntity<HistoryRangeDTO> none = restTemplate.getForEntity(
-                "/api/statistics/history-range?groupIds=999999", HistoryRangeDTO.class);
+                "/api/statistics/history-range?rootIds=999999", HistoryRangeDTO.class);
         assertEquals(200, none.getStatusCode().value());
         assertNotNull(none.getBody());
         assertNull(none.getBody().getFirstDate());

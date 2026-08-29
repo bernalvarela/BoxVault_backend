@@ -9,19 +9,15 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 
-/**
- * Creates or updates a share. Give either {@code storageUnitId} (unit-level
- * share) or {@code storageGroupId} (group-level share), never both.
- */
+/** Creates or updates the share of an owner in a unit (a trastero, a flat or a local). */
 @Data
 public class OwnershipRequest {
 
     @NotNull(message = "Owner is required")
     private Long ownerId;
 
+    @NotNull(message = "Unit is required")
     private Long storageUnitId;
-
-    private Long storageGroupId;
 
     @NotNull(message = "Share is required")
     @DecimalMin(value = "0.0001", message = "Share must be greater than zero")

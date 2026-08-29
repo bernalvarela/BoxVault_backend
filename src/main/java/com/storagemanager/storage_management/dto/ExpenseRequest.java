@@ -27,12 +27,6 @@ public class ExpenseRequest {
     @NotNull(message = "Expense date is required")
     private LocalDate expenseDate;
 
-    /** Optional: leave null for a general expense. */
+    /** Optional: the unit (trastero, flat or local) the cost belongs to; leave null for a general expense. */
     private Long storageUnitId;
-
-    /**
-     * Optional: for a general expense (no storageUnitId), the group it belongs to.
-     * Ignored when storageUnitId is given (the unit's group applies).
-     */
-    private Long storageGroupId;
 }

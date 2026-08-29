@@ -1,5 +1,6 @@
 package com.storagemanager.storage_management.model;
 
+import com.storagemanager.storage_management.model.enums.OwnerType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -8,10 +9,11 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * A person (or company) that owns a share of the rented property: one or more
- * storage groups or individual units. Owners are independent from
- * {@link Client}s (a tenant may also be an owner, but they are separate records).
- * The share each owner holds in a group or unit is an {@link Ownership}.
+ * Someone who owns a share of the property: a person or a comunidad de bienes
+ * (see {@link OwnerType}). Owners are independent from {@link Client}s (a tenant
+ * may also be an owner, but they are separate records). The share each owner
+ * holds in a unit is an {@link Ownership}; the members of a comunidad de bienes
+ * and their percentages are {@link OwnerMembership}s.
  */
 @Entity
 @Table(name = "owners")
@@ -28,6 +30,11 @@ public class Owner {
 
     @Column(nullable = false, unique = true, length = 150)
     private String fullName;
+
+    /** Nullable at the database level for rows created before the column existed; read through {@link #getType()}. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 30)
+    private OwnerType type;
 
     @Column(length = 50)
     private String documentId;
@@ -51,4 +58,13 @@ public class Owner {
 
     @UpdateTimestamp
     private LocalDateTime updatedAt;
+
+    /** Never null: legacy rows without a type are persons. */
+    public OwnerType getType() {
+        return type == null ? OwnerType.PERSON : type;
+    }
+
+    public boolean isEntity() {
+        return getType() == OwnerType.COMUNIDAD_DE_BIENES;
+    }
 }

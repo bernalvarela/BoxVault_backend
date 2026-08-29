@@ -12,9 +12,11 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * A rentable unit. Historically only storage units ("trasteros") existed, hence the
- * name; {@link #kind} now distinguishes storage units from apartments, which share
- * the same attributes for now but are VAT exempt.
+ * A unit: a storage unit ("trastero"), an apartment or a local (business
+ * premises). Units form a tree through {@link #parent}: the trasteros sit inside
+ * the "Bajo delantero" local. The topmost unit of the chain ({@link #getRoot()})
+ * is what the statistics filter by, and a unit without shares of its own inherits
+ * the owners of its parent.
  */
 @Entity
 @Table(name = "storage_units")
@@ -33,24 +35,19 @@ public class StorageUnit {
     private String unitNumber;
 
     /**
-     * Storage unit or apartment. Nullable at the database level so rows created
+     * Storage unit, apartment or local. Nullable at the database level so rows created
      * before the column existed survive the schema update; a null is read as
-     * {@link UnitKind#STORAGE_UNIT} and {@code DataSeeder} backfills it at start-up.
+     * {@link UnitKind#STORAGE_UNIT}.
      */
     @Enumerated(EnumType.STRING)
     @Column(length = 30)
     @Builder.Default
     private UnitKind kind = UnitKind.STORAGE_UNIT;
 
-    /**
-     * Group (building / premises) this unit belongs to. Nullable at the database
-     * level so existing rows survive the schema update; {@code DataSeeder} moves
-     * any ungrouped unit into the default group at start-up and the API always
-     * requires a group when creating or updating a unit.
-     */
+    /** The unit this one sits inside (a trastero inside a local); null for a top-level unit. */
     @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "storage_group_id")
-    private StorageGroup storageGroup;
+    @JoinColumn(name = "parent_unit_id")
+    private StorageUnit parent;
 
     @Column(nullable = false, length = 100)
     private String name;
@@ -87,9 +84,44 @@ public class StorageUnit {
         return kind == null ? UnitKind.STORAGE_UNIT : kind;
     }
 
-    /** Whether this unit's prices carry 21% VAT (storage units) or are exempt (apartments). Serialised as {@code vatApplicable}. */
+    /** Whether this unit's prices carry 21% VAT (storage units, locales) or are exempt (apartments). Serialised as {@code vatApplicable}. */
     @JsonProperty("vatApplicable")
     public boolean isVatApplicable() {
         return getKind().isVatApplicable();
+    }
+
+    /** A local that groups other units rather than being rented itself. Serialised as {@code container}. */
+    @JsonProperty("container")
+    public boolean isContainer() {
+        return getKind() == UnitKind.PREMISES;
+    }
+
+    /** Topmost unit of the parent chain (this unit when it has no parent). */
+    public StorageUnit rootUnit() {
+        StorageUnit u = this;
+        int guard = 0;
+        while (u.getParent() != null && guard++ < 32) {
+            u = u.getParent();
+        }
+        return u;
+    }
+
+    /** Id of the root unit; what statistics and listings filter by. */
+    @JsonProperty("rootId")
+    public Long getRootId() {
+        return rootUnit().getId();
+    }
+
+    /** Small reference to the root unit, serialised as {@code root}. */
+    @JsonProperty("root")
+    public UnitRef getRoot() {
+        return UnitRef.of(rootUnit());
+    }
+
+    /** Lightweight reference to a unit for JSON payloads. */
+    public record UnitRef(Long id, String unitNumber, String name, UnitKind kind) {
+        public static UnitRef of(StorageUnit u) {
+            return u == null ? null : new UnitRef(u.getId(), u.getUnitNumber(), u.getName(), u.getKind());
+        }
     }
 }

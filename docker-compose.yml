@@ -1,0 +1,32 @@
+# Server deployment of BoxVault from the image published by GitHub Actions.
+#
+#   export DOCKER_IMAGE=<docker-hub-user>/boxvault-backend:latest   # or put it in a .env file
+#   docker compose pull && docker compose up -d
+#
+# The H2 database is kept in the "boxvault-data" volume, so payments, expenses and
+# registered tax returns survive restarts and image updates. The seeder only fills an
+# empty database and backfills missing pieces afterwards.
+services:
+  boxvault:
+    image: ${DOCKER_IMAGE:-boxvault-backend:latest}
+    container_name: boxvault
+    ports:
+      - "8088:8088"
+    environment:
+      SPRING_DATASOURCE_URL: "jdbc:h2:file:/data/boxvault;DB_CLOSE_ON_EXIT=FALSE"
+      SPRING_H2_CONSOLE_ENABLED: "false"
+      JAVA_OPTS: "-Xmx512m"
+      TZ: Europe/Madrid
+    volumes:
+      - boxvault-data:/data
+    restart: unless-stopped
+    healthcheck:
+      # The JRE image has no curl/wget; a bash TCP probe is enough to know the server is listening
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8088"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  boxvault-data:

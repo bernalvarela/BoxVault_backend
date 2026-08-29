@@ -1,5 +1,6 @@
 package com.storagemanager.storage_management.dto;
 
+import com.storagemanager.storage_management.model.enums.OwnerType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -8,7 +9,10 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/** An owner together with every share they hold (in groups and in units). */
+/**
+ * An owner together with every share they hold in units, plus - for a comunidad
+ * de bienes - its members, and - for a person - the entities they belong to.
+ */
 @Data
 @Builder
 @NoArgsConstructor
@@ -16,6 +20,7 @@ import java.util.List;
 public class OwnerDTO {
     private Long id;
     private String fullName;
+    private OwnerType type;
     private String documentId;
     private String email;
     private String phone;
@@ -25,4 +30,8 @@ public class OwnerDTO {
     private LocalDateTime updatedAt;
 
     private List<OwnershipDTO> ownerships;
+    /** Members with their percentages (comunidad de bienes only). */
+    private List<OwnerMembershipDTO> members;
+    /** Entities this person is a member of (persons only). */
+    private List<OwnerMembershipDTO> memberOf;
 }

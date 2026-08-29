@@ -5,24 +5,21 @@ import com.storagemanager.storage_management.dto.StorageUnitRequest;
 import com.storagemanager.storage_management.dto.UnitHistoryDTO;
 import com.storagemanager.storage_management.exception.BadRequestException;
 import com.storagemanager.storage_management.exception.ResourceNotFoundException;
-import com.storagemanager.storage_management.model.StorageGroup;
+import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.model.StorageUnit;
 import com.storagemanager.storage_management.model.UnitPriceHistory;
+import com.storagemanager.storage_management.model.enums.RentalStatus;
 import com.storagemanager.storage_management.model.enums.UnitKind;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
 import com.storagemanager.storage_management.repository.ExpenseRepository;
 import com.storagemanager.storage_management.repository.OwnershipRepository;
 import com.storagemanager.storage_management.repository.PaymentRepository;
-import com.storagemanager.storage_management.repository.StorageGroupRepository;
+import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
 import com.storagemanager.storage_management.repository.UnitPriceHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import com.storagemanager.storage_management.model.Client;
-import com.storagemanager.storage_management.model.enums.RentalStatus;
-import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -37,23 +34,35 @@ public class StorageUnitService {
     private final UnitPriceHistoryRepository unitPriceHistoryRepository;
     private final PaymentRepository paymentRepository;
     private final ExpenseRepository expenseRepository;
-    private final StorageGroupRepository storageGroupRepository;
     private final OwnershipRepository ownershipRepository;
 
     public List<StorageUnit> getAllUnits() {
         return storageUnitRepository.findAll();
     }
 
-    public List<StorageUnit> getUnitsByGroup(Long groupId) {
-        return storageUnitRepository.findByStorageGroupIdIn(List.of(groupId));
+    /** Units directly inside a local. */
+    public List<StorageUnit> getChildren(Long parentId) {
+        getUnitById(parentId);
+        return storageUnitRepository.findByParentId(parentId);
     }
 
-    private StorageGroup resolveGroup(Long groupId) {
-        if (groupId == null) {
-            throw new BadRequestException("Storage group is required");
+    /**
+     * The parent of a unit being created / updated: must exist, must not be the unit
+     * itself and must not sit (directly or through its own parents) inside the unit.
+     */
+    private StorageUnit resolveParent(Long parentId, Long selfId) {
+        if (parentId == null) return null;
+        if (selfId != null && parentId.equals(selfId)) {
+            throw new BadRequestException("A unit cannot be placed inside itself");
         }
-        return storageGroupRepository.findById(groupId)
-                .orElseThrow(() -> new ResourceNotFoundException("Storage group not found with id: " + groupId));
+        StorageUnit parent = getUnitById(parentId);
+        int guard = 0;
+        for (StorageUnit p = parent; p != null && guard++ < 32; p = p.getParent()) {
+            if (selfId != null && selfId.equals(p.getId())) {
+                throw new BadRequestException("A unit cannot be placed inside one of the units it contains");
+            }
+        }
+        return parent;
     }
 
     public StorageUnit getUnitById(Long id) {
@@ -81,7 +90,6 @@ public class StorageUnitService {
         return storageUnitRepository.findAll();
     }
 
-
     @Transactional
     public StorageUnit createUnit(StorageUnitRequest request) {
         if (storageUnitRepository.findByUnitNumber(request.getUnitNumber()).isPresent()) {
@@ -92,7 +100,7 @@ public class StorageUnitService {
                 .unitNumber(request.getUnitNumber())
                 .name(request.getName())
                 .kind(request.getKind() != null ? request.getKind() : UnitKind.STORAGE_UNIT)
-                .storageGroup(resolveGroup(request.getStorageGroupId()))
+                .parent(resolveParent(request.getParentId(), null))
                 .sizeSquareMeters(request.getSizeSquareMeters())
                 .dimensions(request.getDimensions())
                 .location(request.getLocation())
@@ -123,7 +131,7 @@ public class StorageUnitService {
         if (request.getKind() != null) {
             unit.setKind(request.getKind());
         }
-        unit.setStorageGroup(resolveGroup(request.getStorageGroupId()));
+        unit.setParent(resolveParent(request.getParentId(), id));
         unit.setSizeSquareMeters(request.getSizeSquareMeters());
         unit.setDimensions(request.getDimensions());
         unit.setLocation(request.getLocation());
@@ -151,6 +159,16 @@ public class StorageUnitService {
         StorageUnit unit = getUnitById(id);
         if (unit.getStatus() == UnitStatus.OCCUPIED) {
             throw new BadRequestException("Cannot delete storage unit while it is occupied by an active rental");
+        }
+        long children = storageUnitRepository.countByParentId(id);
+        if (children > 0) {
+            throw new BadRequestException("Cannot delete '" + unit.getName() + "' while it still contains "
+                    + children + " unit(s). Move them elsewhere first.");
+        }
+        long expenses = expenseRepository.countByStorageUnitId(id);
+        if (expenses > 0) {
+            throw new BadRequestException("Cannot delete '" + unit.getName() + "' while " + expenses
+                    + " expense(s) are attributed to it.");
         }
         unitPriceHistoryRepository.deleteAll(
                 unitPriceHistoryRepository.findByStorageUnitIdOrderByEffectiveFromAscIdAsc(id));

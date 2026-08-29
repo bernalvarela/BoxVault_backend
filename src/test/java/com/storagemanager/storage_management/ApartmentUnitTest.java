@@ -1,9 +1,8 @@
 package com.storagemanager.storage_management;
 
+import com.storagemanager.storage_management.config.DataSeeder;
 import com.storagemanager.storage_management.config.VatUtils;
 import com.storagemanager.storage_management.dto.DashboardStatsDTO;
-import com.storagemanager.storage_management.dto.StorageGroupDTO;
-import com.storagemanager.storage_management.dto.StorageGroupRequest;
 import com.storagemanager.storage_management.dto.StorageUnitRequest;
 import com.storagemanager.storage_management.dto.UnitHistoryDTO;
 import com.storagemanager.storage_management.dto.UnitOccupancyDTO;
@@ -20,6 +19,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.ResponseEntity;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -29,6 +29,15 @@ class ApartmentUnitTest {
 
     @Autowired
     private TestRestTemplate restTemplate;
+
+    private StorageUnit unitNumbered(String number) {
+        ResponseEntity<StorageUnit[]> response = restTemplate.getForEntity("/api/storages", StorageUnit[].class);
+        assertNotNull(response.getBody());
+        return Arrays.stream(response.getBody())
+                .filter(u -> number.equals(u.getUnitNumber()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Unit should be seeded: " + number));
+    }
 
     @Test
     void vatBreakdownDependsOnVatApplicability() {
@@ -47,7 +56,7 @@ class ApartmentUnitTest {
     }
 
     @Test
-    void seededUnitsAreStorageUnitsWithVat() {
+    void seededTrasterosSitInsideTheStorageLocal() {
         ResponseEntity<StorageUnit[]> response = restTemplate.getForEntity("/api/storages?kind=STORAGE_UNIT", StorageUnit[].class);
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
@@ -55,62 +64,71 @@ class ApartmentUnitTest {
         for (StorageUnit unit : response.getBody()) {
             assertEquals(UnitKind.STORAGE_UNIT, unit.getKind());
             assertTrue(unit.isVatApplicable());
+            if (unit.getUnitNumber().matches("[1-9]")) {
+                assertNotNull(unit.getParent(), "Trastero " + unit.getUnitNumber() + " is inside the local");
+                assertEquals(DataSeeder.STORAGE_PREMISES_NUMBER, unit.getParent().getUnitNumber());
+                assertEquals(DataSeeder.STORAGE_PREMISES_NUMBER, unit.getRoot().unitNumber());
+            }
         }
+
+        // The two locales are containers and not part of the occupancy figures
+        ResponseEntity<StorageUnit[]> locales = restTemplate.getForEntity("/api/storages?kind=PREMISES", StorageUnit[].class);
+        assertNotNull(locales.getBody());
+        assertEquals(2, Arrays.stream(locales.getBody()).filter(u -> u.getUnitNumber().matches("B[DT]")).count());
+        assertTrue(Arrays.stream(locales.getBody()).allMatch(StorageUnit::isContainer));
+
+        ResponseEntity<DashboardStatsDTO> all = restTemplate.getForEntity("/api/statistics/dashboard", DashboardStatsDTO.class);
+        assertNotNull(all.getBody());
+        assertEquals(all.getBody().getTotalUnits(), all.getBody().getStorageUnitCount() + all.getBody().getApartmentCount());
+        assertTrue(all.getBody().getUnitsSummary().stream().noneMatch(u -> u.getKind() == UnitKind.PREMISES));
+
+        // Filtering by the local covers its 9 trasteros
+        StorageUnit local = unitNumbered(DataSeeder.STORAGE_PREMISES_NUMBER);
+        ResponseEntity<DashboardStatsDTO> storage = restTemplate.getForEntity(
+                "/api/statistics/dashboard?rootIds=" + local.getId(), DashboardStatsDTO.class);
+        assertNotNull(storage.getBody());
+        assertEquals(9, storage.getBody().getTotalUnits());
+        assertTrue(storage.getBody().getTotalExpensesAllTime().compareTo(BigDecimal.ZERO) > 0,
+                "The storage-account expenses are attributed to the local and count for its root");
     }
 
     @Test
-    void apartmentExpensesAreSeededIntoTheirGroup() {
-        ResponseEntity<StorageGroupDTO[]> groups = restTemplate.getForEntity("/api/storage-groups", StorageGroupDTO[].class);
-        assertNotNull(groups.getBody());
-        StorageGroupDTO pisos = java.util.Arrays.stream(groups.getBody())
-                .filter(g -> "Pisos Pasaxe 29".equals(g.getName()))
-                .findFirst().orElseThrow();
-
+    void apartmentExpensesAreSeededOnTheFlats() {
+        StorageUnit flat3d = unitNumbered("3D");
         ResponseEntity<Expense[]> response = restTemplate.getForEntity(
-                "/api/expenses?storageGroupId=" + pisos.getId(), Expense[].class);
+                "/api/expenses?rootId=" + flat3d.getId(), Expense[].class);
         assertEquals(200, response.getStatusCode().value());
         Expense[] expenses = response.getBody();
         assertNotNull(expenses);
-        assertTrue(expenses.length >= 130, "The 130 flats-statement expenses (jul 2024 - ago 2026) should be seeded");
+        // 27 own expenses plus half of the 75 shared flats-statement entries
+        assertTrue(expenses.length >= 100, "3D should carry its own expenses plus its half of the shared ones");
         for (Expense e : expenses) {
-            if (e.getStorageUnit() != null) {
-                assertNull(e.getStorageGroup());
-                assertEquals(pisos.getId(), e.getStorageUnit().getStorageGroup().getId());
-            } else {
-                assertNotNull(e.getStorageGroup());
-                assertEquals(pisos.getId(), e.getStorageGroup().getId());
-            }
+            assertNotNull(e.getStorageUnit());
+            assertEquals("3D", e.getStorageUnit().getUnitNumber());
         }
         // Community fee: 20 EUR per apartment each month
-        assertTrue(java.util.Arrays.stream(expenses).anyMatch(e ->
-                e.getCategory() == ExpenseCategory.COMUNIDAD
-                        && e.getStorageUnit() != null && "3D".equals(e.getStorageUnit().getUnitNumber())
-                        && e.getAmount().compareTo(new BigDecimal("20")) == 0));
-        // IBI of the two flats, July 2026
-        assertTrue(java.util.Arrays.stream(expenses).anyMatch(e ->
-                e.getExpenseDate().equals(java.time.LocalDate.of(2026, 7, 7))
-                        && e.getAmount().compareTo(new BigDecimal("182.03")) == 0));
+        assertTrue(Arrays.stream(expenses).anyMatch(e ->
+                e.getCategory() == ExpenseCategory.COMUNIDAD && e.getAmount().compareTo(new BigDecimal("20")) == 0));
+        // IBI of the two flats, July 2026 (182,03 split evenly between 3D and 3E)
+        StorageUnit flat3e = unitNumbered("3E");
+        Expense[] other = restTemplate.getForEntity("/api/expenses?rootId=" + flat3e.getId(), Expense[].class).getBody();
+        assertNotNull(other);
+        BigDecimal ibi = BigDecimal.ZERO;
+        for (Expense e : expenses) if (e.getExpenseDate().equals(java.time.LocalDate.of(2026, 7, 7)) && e.getCategory() == ExpenseCategory.TRIBUTOS) ibi = ibi.add(e.getAmount());
+        for (Expense e : other) if (e.getExpenseDate().equals(java.time.LocalDate.of(2026, 7, 7)) && e.getCategory() == ExpenseCategory.TRIBUTOS) ibi = ibi.add(e.getAmount());
+        assertEquals(0, new BigDecimal("182.03").compareTo(ibi), "IBI 2026 of the flats adds up across 3D and 3E: " + ibi);
         // Reimbursed outflows (tenant electricity refunds, ABONO NOMINA) are not expenses
-        assertTrue(java.util.Arrays.stream(expenses).noneMatch(e ->
+        assertTrue(Arrays.stream(expenses).noneMatch(e ->
                 e.getAmount().compareTo(new BigDecimal("2450")) == 0
                         || e.getAmount().compareTo(new BigDecimal("130.23")) == 0));
     }
 
     @Test
     void apartmentsAreVatExemptEverywhere() {
-        // Own group so the dashboard can be checked in isolation
-        StorageGroupRequest groupRequest = new StorageGroupRequest();
-        groupRequest.setName("Pisos de prueba");
-        ResponseEntity<StorageGroupDTO> group = restTemplate.postForEntity("/api/storage-groups", groupRequest, StorageGroupDTO.class);
-        assertEquals(201, group.getStatusCode().value());
-        assertNotNull(group.getBody());
-        Long groupId = group.getBody().getId();
-
         StorageUnitRequest request = new StorageUnitRequest();
         request.setUnitNumber("APT-1");
         request.setName("Apartamento 1");
         request.setKind(UnitKind.APARTMENT);
-        request.setStorageGroupId(groupId);
         request.setSizeSquareMeters(55.0);
         request.setBaseMonthlyRate(new BigDecimal("605.00"));
         request.setStatus(UnitStatus.AVAILABLE);
@@ -120,13 +138,15 @@ class ApartmentUnitTest {
         assertNotNull(created.getBody());
         assertEquals(UnitKind.APARTMENT, created.getBody().getKind());
         assertFalse(created.getBody().isVatApplicable());
+        assertNull(created.getBody().getParent());
         Long apartmentId = created.getBody().getId();
+        assertEquals(apartmentId, created.getBody().getRootId(), "A stand-alone unit is its own root");
 
         // Kind filter
         ResponseEntity<StorageUnit[]> apartments = restTemplate.getForEntity("/api/storages?kind=APARTMENT", StorageUnit[].class);
         assertNotNull(apartments.getBody());
-        assertTrue(java.util.Arrays.stream(apartments.getBody()).anyMatch(u -> u.getId().equals(apartmentId)));
-        assertTrue(java.util.Arrays.stream(apartments.getBody()).noneMatch(StorageUnit::isVatApplicable));
+        assertTrue(Arrays.stream(apartments.getBody()).anyMatch(u -> u.getId().equals(apartmentId)));
+        assertTrue(Arrays.stream(apartments.getBody()).noneMatch(StorageUnit::isVatApplicable));
 
         // Unit history: the price history entry carries no VAT
         ResponseEntity<UnitHistoryDTO> history = restTemplate.getForEntity("/api/storages/" + apartmentId + "/history", UnitHistoryDTO.class);
@@ -137,9 +157,9 @@ class ApartmentUnitTest {
         assertEquals(0, new BigDecimal("605.00").compareTo(price.getMonthlyPriceWithoutVat()));
         assertEquals(0, BigDecimal.ZERO.compareTo(price.getMonthlyPriceVatAmount()));
 
-        // Dashboard restricted to the apartment's group: potential revenue has no VAT quota
+        // Dashboard restricted to the apartment (its own root): potential revenue has no VAT quota
         ResponseEntity<DashboardStatsDTO> stats = restTemplate.getForEntity(
-                "/api/statistics/dashboard?groupIds=" + groupId, DashboardStatsDTO.class);
+                "/api/statistics/dashboard?rootIds=" + apartmentId, DashboardStatsDTO.class);
         assertEquals(200, stats.getStatusCode().value());
         DashboardStatsDTO body = stats.getBody();
         assertNotNull(body);
@@ -153,6 +173,8 @@ class ApartmentUnitTest {
         UnitOccupancyDTO summary = body.getUnitsSummary().get(0);
         assertEquals(UnitKind.APARTMENT, summary.getKind());
         assertFalse(summary.isVatApplicable());
+        assertEquals(apartmentId, summary.getRootUnitId());
+        assertNull(summary.getParentUnitId());
         assertEquals(0, new BigDecimal("605.00").compareTo(summary.getBaseMonthlyRateWithoutVat()));
         assertEquals(0, BigDecimal.ZERO.compareTo(summary.getBaseMonthlyRateVatAmount()));
 
@@ -162,5 +184,46 @@ class ApartmentUnitTest {
         assertTrue(all.getBody().getMonthlyPotentialVatAmount().compareTo(BigDecimal.ZERO) > 0);
         assertTrue(all.getBody().getApartmentCount() >= 1);
         assertEquals(all.getBody().getTotalUnits(), all.getBody().getStorageUnitCount() + all.getBody().getApartmentCount());
+    }
+
+    @Test
+    void unitsCanBePlacedInsideALocalButNotInACycle() {
+        StorageUnit local = unitNumbered(DataSeeder.STORAGE_PREMISES_NUMBER);
+
+        StorageUnitRequest inside = new StorageUnitRequest();
+        inside.setUnitNumber("T-NEW");
+        inside.setName("Trastero nuevo");
+        inside.setParentId(local.getId());
+        inside.setSizeSquareMeters(4.0);
+        inside.setBaseMonthlyRate(new BigDecimal("40.00"));
+        ResponseEntity<StorageUnit> created = restTemplate.postForEntity("/api/storages", inside, StorageUnit.class);
+        assertEquals(201, created.getStatusCode().value());
+        assertNotNull(created.getBody());
+        assertEquals(local.getId(), created.getBody().getParent().getId());
+        assertEquals(local.getId(), created.getBody().getRootId());
+
+        // The local cannot be moved inside the unit it contains, nor inside itself
+        StorageUnitRequest moveLocal = new StorageUnitRequest();
+        moveLocal.setUnitNumber(local.getUnitNumber());
+        moveLocal.setName(local.getName());
+        moveLocal.setKind(UnitKind.PREMISES);
+        moveLocal.setParentId(created.getBody().getId());
+        moveLocal.setSizeSquareMeters(local.getSizeSquareMeters());
+        moveLocal.setBaseMonthlyRate(local.getBaseMonthlyRate());
+        ResponseEntity<java.util.Map> cycle = restTemplate.exchange("/api/storages/" + local.getId(),
+                org.springframework.http.HttpMethod.PUT, new org.springframework.http.HttpEntity<>(moveLocal), java.util.Map.class);
+        assertEquals(400, cycle.getStatusCode().value());
+        moveLocal.setParentId(local.getId());
+        ResponseEntity<java.util.Map> self = restTemplate.exchange("/api/storages/" + local.getId(),
+                org.springframework.http.HttpMethod.PUT, new org.springframework.http.HttpEntity<>(moveLocal), java.util.Map.class);
+        assertEquals(400, self.getStatusCode().value());
+
+        // A local with units inside cannot be deleted; the new trastero can
+        ResponseEntity<java.util.Map> blocked = restTemplate.exchange("/api/storages/" + local.getId(),
+                org.springframework.http.HttpMethod.DELETE, null, java.util.Map.class);
+        assertEquals(400, blocked.getStatusCode().value());
+        ResponseEntity<Void> deleted = restTemplate.exchange("/api/storages/" + created.getBody().getId(),
+                org.springframework.http.HttpMethod.DELETE, null, Void.class);
+        assertEquals(204, deleted.getStatusCode().value());
     }
 }

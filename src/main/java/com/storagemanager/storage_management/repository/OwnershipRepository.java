@@ -12,12 +12,9 @@ import java.util.Optional;
 public interface OwnershipRepository extends JpaRepository<Ownership, Long> {
     List<Ownership> findByOwnerId(Long ownerId);
     List<Ownership> findByStorageUnitId(Long storageUnitId);
-    List<Ownership> findByStorageGroupId(Long storageGroupId);
     Optional<Ownership> findByOwnerIdAndStorageUnitId(Long ownerId, Long storageUnitId);
-    Optional<Ownership> findByOwnerIdAndStorageGroupId(Long ownerId, Long storageGroupId);
     long countByOwnerId(Long ownerId);
     long countByStorageUnitId(Long storageUnitId);
-    long countByStorageGroupId(Long storageGroupId);
 
     @Transactional
     void deleteByStorageUnitId(Long storageUnitId);

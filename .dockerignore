@@ -1,0 +1,9 @@
+target/
+.claude/
+.git/
+.github/
+.idea/
+.vscode/
+*.iml
+HELP.md
+docker-compose.yml

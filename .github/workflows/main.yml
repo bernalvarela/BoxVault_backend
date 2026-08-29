@@ -1,12 +1,28 @@
-name: Build and Push Docker Image
-on: [push]
+name: Build and push Docker image
+
+# Every push runs the tests. Pushes to the default branch (master) and version tags
+# v* also build the Docker image and push it to Docker Hub as <DOCKER_USERNAME>/boxvault-backend.
+#
+# Required repository secrets (Settings > Secrets and variables > Actions):
+#   DOCKER_USERNAME  Docker Hub user
+#   DOCKER_PASSWORD  Docker Hub access token (Account settings > Security), not the password
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: boxvault-backend
 
 jobs:
-  build:
+  test:
+    name: Maven tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up JDK 25
         uses: actions/setup-java@v5
         with:
@@ -14,15 +30,47 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Build and Push Image
-        run: |
-          mvn spring-boot:build-image -Dspring-boot.build-image.imageName=docker.io/${{ secrets.DOCKER_USERNAME }}/boxVault-backend:${{ github.sha }}
-          
+      - name: Run tests
+        run: ./mvnw -B test
+
+  docker:
+    name: Docker image
+    needs: test
+    # Only publish from the default branch (master) and from version tags; PRs and other branches just get the tests
+    if: github.event_name != 'pull_request' && (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Push Image
-        run: docker push docker.io/${{ secrets.DOCKER_USERNAME }}/boxVault-backend:${{ github.sha }}
+      # Tags: latest (default branch), the short commit sha, and the version for v* tags (v1.2.3 -> 1.2.3, 1.2)
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: docker.io/${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

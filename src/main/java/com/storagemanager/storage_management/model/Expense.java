@@ -11,14 +11,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * A cost incurred by the business. It can be tied to a specific storage unit
- * (e.g. a repair inside one trastero) or be general (null storageUnit): taxes,
- * electricity, insurance...
- * <p>
- * A general expense can still be attributed to a {@link StorageGroup} (the
- * electricity bill of one building, its IBI...), so that statistics filtered by
- * group include it. When a unit is set, the expense's group is the unit's group
- * and {@code storageGroup} stays null.
+ * A cost incurred by the business. It is tied to a unit - a trastero, a flat or
+ * a local (the IBI, electricity or insurance of the "Bajo delantero" go to the
+ * local itself, which groups its trasteros) - or is general (null storageUnit),
+ * in which case it counts for the business as a whole and cannot be attributed
+ * to any owner.
  */
 @Entity
 @Table(name = "expenses")
@@ -37,11 +34,6 @@ public class Expense {
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "storage_unit_id")
     private StorageUnit storageUnit;
-
-    /** Only meaningful for general expenses (storageUnit == null); null means "not attributable to any group". */
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "storage_group_id")
-    private StorageGroup storageGroup;
 
     @Column(nullable = false)
     private LocalDate expenseDate;

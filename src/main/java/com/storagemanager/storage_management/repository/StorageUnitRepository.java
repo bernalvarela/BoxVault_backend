@@ -6,7 +6,6 @@ import com.storagemanager.storage_management.model.enums.UnitStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,8 +18,9 @@ public interface StorageUnitRepository extends JpaRepository<StorageUnit, Long> 
     List<StorageUnit> findByKindAndStatus(UnitKind kind, UnitStatus status);
     List<StorageUnit> findByKindIsNull();
 
-    List<StorageUnit> findByStorageGroupIdIn(Collection<Long> groupIds);
-    List<StorageUnit> findByStorageGroupIsNull();
-    long countByStorageGroupId(Long groupId);
-    long countByStorageGroupIdAndStatus(Long groupId, UnitStatus status);
+    /** Units directly inside the given unit (a local). */
+    List<StorageUnit> findByParentId(Long parentId);
+    /** Top-level units (no parent): the roots the statistics filter by. */
+    List<StorageUnit> findByParentIsNull();
+    long countByParentId(Long parentId);
 }

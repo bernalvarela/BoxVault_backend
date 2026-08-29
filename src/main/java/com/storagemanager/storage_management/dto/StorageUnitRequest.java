@@ -17,10 +17,10 @@ public class StorageUnitRequest {
     @NotBlank(message = "Unit name is required")
     private String name;
 
-    @NotNull(message = "Storage group is required")
-    private Long storageGroupId;
+    /** Optional: the unit (normally a local) this one sits inside. */
+    private Long parentId;
 
-    /** STORAGE_UNIT (default) or APARTMENT (VAT exempt). */
+    /** STORAGE_UNIT (default), APARTMENT (VAT exempt) or PREMISES (a local). */
     private UnitKind kind;
 
     @NotNull(message = "Size is required")

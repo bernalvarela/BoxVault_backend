@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/** Shares of owners in storage groups and units. */
+/** Shares of owners in units (a unit without shares of its own inherits its parent's). */
 @RestController
 @RequestMapping("/api/ownerships")
 @RequiredArgsConstructor
@@ -22,9 +22,8 @@ public class OwnershipController {
     @GetMapping
     public ResponseEntity<List<OwnershipDTO>> getOwnerships(
             @RequestParam(required = false) Long ownerId,
-            @RequestParam(required = false) Long unitId,
-            @RequestParam(required = false) Long groupId) {
-        return ResponseEntity.ok(ownershipService.getOwnerships(ownerId, unitId, groupId));
+            @RequestParam(required = false) Long unitId) {
+        return ResponseEntity.ok(ownershipService.getOwnerships(ownerId, unitId));
     }
 
     @GetMapping("/{id}")

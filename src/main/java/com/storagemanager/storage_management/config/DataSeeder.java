@@ -1,30 +1,37 @@
 package com.storagemanager.storage_management.config;
 
+import com.storagemanager.storage_management.dto.IrpfReportDTO;
+import com.storagemanager.storage_management.dto.Modelo184DTO;
+import com.storagemanager.storage_management.dto.Modelo303DTO;
 import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.model.Expense;
 import com.storagemanager.storage_management.model.Owner;
+import com.storagemanager.storage_management.model.OwnerMembership;
 import com.storagemanager.storage_management.model.Ownership;
 import com.storagemanager.storage_management.model.Payment;
 import com.storagemanager.storage_management.model.RentalAgreement;
-import com.storagemanager.storage_management.model.StorageGroup;
 import com.storagemanager.storage_management.model.StorageUnit;
+import com.storagemanager.storage_management.model.TaxFiling;
 import com.storagemanager.storage_management.model.UnitPriceHistory;
 import com.storagemanager.storage_management.model.enums.*;
 import com.storagemanager.storage_management.repository.ClientRepository;
 import com.storagemanager.storage_management.repository.ExpenseRepository;
+import com.storagemanager.storage_management.repository.OwnerMembershipRepository;
 import com.storagemanager.storage_management.repository.OwnerRepository;
 import com.storagemanager.storage_management.repository.OwnershipRepository;
 import com.storagemanager.storage_management.repository.PaymentRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
-import com.storagemanager.storage_management.repository.StorageGroupRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
+import com.storagemanager.storage_management.repository.TaxFilingRepository;
 import com.storagemanager.storage_management.repository.UnitPriceHistoryRepository;
+import com.storagemanager.storage_management.service.TaxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.json.JsonParserFactory;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -41,10 +48,12 @@ import java.util.Set;
  * Seeds an empty database with the real historical data reconstructed from the
  * BBVA bank statements. The data lives in src/main/resources/seed-data.json:
  * <ul>
- *   <li>the 9 trasteros of group {@value #DEFAULT_GROUP_NAME} (statement of the
- *       storage account, March 2024 - August 2026);</li>
- *   <li>the 2 apartments of group "Pisos Pasaxe 29" (statement of the flats
- *       account, July 2021 - August 2026), which are VAT exempt.</li>
+ *   <li>the two locales of Pasaxe 29 - "Bajo delantero" (BD), the storage business
+ *       with the 9 trasteros inside it, and the empty "Bajo trasero" (BT) - both
+ *       owned by the Comunidad de bienes Pasaxe 29;</li>
+ *   <li>the 9 trasteros (statement of the storage account, March 2024 - August 2026);</li>
+ *   <li>the 2 apartments 3D / 3E (statement of the flats account, July 2021 -
+ *       August 2026), VAT exempt and held directly by the persons.</li>
  * </ul>
  * Notes on the reconstruction:
  * - Only incoming bank transfers appear in the statements; months without a
@@ -53,40 +62,35 @@ import java.util.Set;
  *   deposit refunds coming back from the IGVS are not seeded either.
  * - Client emails/phones are placeholders pending real contact data.
  * - Expenses come from the outgoing side of both statements. Storage account
- *   (Nov 2023 - Aug 2026): electricity, AEAT tax payments, IBI / municipal fees,
- *   repairs and insurance. Flats account (Jul 2024 - Aug 2026, attributed to the
- *   "Pisos Pasaxe 29" group): IBI, electricity, water, the monthly transfers to
- *   the owners and card payments (restaurants and shopping). The monthly 53,40 EUR community transfer
- *   ("XIAO BERNAL TERCEIROS E BAIXOS") is split into 20 EUR per apartment (unit
- *   expenses of 3D and 3E), 6,70 EUR for the trasteros group and 6,70 EUR for the
- *   "Pasaxe 29 Baixo traseiro" group (no units yet). Excluded from the flats
- *   statement: "ABONO NOMINA" transfers, the 2.000 / 2.100 EUR transfers from Bernal Varela
- *   Gomez, any outflow reimbursed by an inflow of the same amount (tenant supply
- *   refunds, card payments repaid by the owners) and the deposit forwarded to the IGVS;
- *   the January 2026 electricity bills, only partly refunded by the tenants, are
- *   seeded for the uncovered 2,10 EUR.
+ *   (Nov 2023 - Aug 2026, attributed to the BD local): electricity, AEAT tax
+ *   payments, IBI / municipal fees, repairs and insurance. Flats account (Jul 2024 -
+ *   Aug 2026): IBI, electricity, water, the monthly transfers to the owners and
+ *   card payments; the entries that belong to both flats ("units": ["3D", "3E"])
+ *   are split evenly between them. The monthly 53,40 EUR community transfer
+ *   ("XIAO BERNAL TERCEIROS E BAIXOS") is split into 20 EUR per apartment, 6,70 EUR
+ *   for BD and 6,70 EUR for BT. Excluded from the flats statement: "ABONO NOMINA"
+ *   transfers, the 2.000 / 2.100 EUR transfers from Bernal Varela Gomez, any
+ *   outflow reimbursed by an inflow of the same amount and the deposit forwarded to
+ *   the IGVS; the January 2026 electricity bills, only partly refunded by the
+ *   tenants, are seeded for the uncovered 2,10 EUR.
  * <p>
  * On an already-seeded database the seeder is incremental and idempotent: it
- * backfills price history / groups / kinds when missing, loads the expenses of
- * every group that has none yet, and any unit present in seed-data.json but
- * absent from the database is loaded together with its clients, rentals and
- * payments (this is how the apartments reach a database created before they
- * existed). The owners ("owners") and their shares ("ownerships", given as
- * fractions such as "1/6" or as percentages) are loaded when the owners table
- * is still empty.
+ * backfills price history / kinds when missing, any unit present in seed-data.json
+ * but absent from the database is loaded together with its clients, rentals and
+ * payments, expenses / owners are loaded when their tables are still empty, and the
+ * filed tax returns are registered when missing.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class DataSeeder implements CommandLineRunner {
 
-    /** Group holding the original 9 trasteros; created on demand. */
-    public static final String DEFAULT_GROUP_NAME = "Pasaxe 29 Baixo dianteiro";
-    private static final String DEFAULT_GROUP_DESCRIPTION =
-            "Trasteros de la Avenida del Pasaje (A Pasaxe) 29, bajo delantero";
+    /** Unit number of the local holding the trasteros. */
+    public static final String STORAGE_PREMISES_NUMBER = "BD";
+    /** Name of the seeded comunidad de bienes. */
+    public static final String ENTITY_NAME = "Comunidad de bienes Pasaxe 29";
 
     private final StorageUnitRepository storageUnitRepository;
-    private final StorageGroupRepository storageGroupRepository;
     private final ClientRepository clientRepository;
     private final RentalAgreementRepository rentalAgreementRepository;
     private final PaymentRepository paymentRepository;
@@ -94,6 +98,10 @@ public class DataSeeder implements CommandLineRunner {
     private final ExpenseRepository expenseRepository;
     private final OwnerRepository ownerRepository;
     private final OwnershipRepository ownershipRepository;
+    private final OwnerMembershipRepository ownerMembershipRepository;
+    private final TaxFilingRepository taxFilingRepository;
+    private final TaxService taxService;
+    private final ObjectMapper objectMapper;
 
     @Override
     public void run(String... args) throws Exception {
@@ -106,16 +114,22 @@ public class DataSeeder implements CommandLineRunner {
                     log.info("Backfilling unit price history from existing rental agreements...");
                     seedPriceHistoryFromRentals(storageUnitRepository.findAll());
                 }
-                assignUngroupedToDefaultGroup();
+                markUnkindUnits();
                 seedMissingUnits(root);
-                seedMissingExpenses(root);
+                if (expenseRepository.count() == 0) {
+                    int n = seedExpenses(root);
+                    if (n > 0) log.info("Backfilled {} expense(s) from seed-data.json.", n);
+                }
                 seedMissingOwners(root);
-                log.info("Database already seeded with {} units in {} group(s).",
-                        storageUnitRepository.count(), storageGroupRepository.count());
+                seedTaxFilings(root);
+                log.info("Database already seeded with {} units ({} top-level).",
+                        storageUnitRepository.count(), storageUnitRepository.findByParentIsNull().size());
                 return;
             }
             log.info("Legacy demo data detected (unit A-101). Replacing it with the real data...");
+            taxFilingRepository.deleteAll();
             ownershipRepository.deleteAll();
+            ownerMembershipRepository.deleteAll();
             ownerRepository.deleteAll();
             expenseRepository.deleteAll();
             unitPriceHistoryRepository.deleteAll();
@@ -123,22 +137,18 @@ public class DataSeeder implements CommandLineRunner {
             rentalAgreementRepository.deleteAll();
             clientRepository.deleteAll();
             storageUnitRepository.deleteAll();
-            storageGroupRepository.deleteAll();
         }
 
         log.info("Seeding database from seed-data.json (real data from the BBVA statements)...");
 
         Map<String, Object> root = parseSeedData();
 
-        // 0. Storage groups
-        Map<String, StorageGroup> groupsByName = seedGroups(root);
-
         // 1. Clients
         Map<String, Client> clientsByName = seedClients(root, new HashMap<>());
 
-        // 2. Units (trasteros and apartments)
+        // 2. Units (locales first, then the trasteros inside them and the apartments)
         Map<String, StorageUnit> unitsByNumber = new HashMap<>();
-        List<StorageUnit> units = seedUnits(root, groupsByName, unitsByNumber);
+        List<StorageUnit> units = seedUnits(root, unitsByNumber);
 
         // 3. Rental agreements
         Map<Integer, RentalAgreement> rentalsByRef = seedRentals(root, unitsByNumber, clientsByName, null);
@@ -150,15 +160,18 @@ public class DataSeeder implements CommandLineRunner {
         seedPriceHistoryFromRentals(units);
 
         // 6. Expenses (outgoing side of both bank statements)
-        int expenseCount = seedExpenses(root, null);
+        int expenseCount = seedExpenses(root);
 
-        // 7. Owners and their shares in the groups / units
+        // 7. Owners (persons and the comunidad de bienes with its members) and their shares in the units
         Map<String, Owner> ownersByName = seedOwners(root);
-        int ownershipCount = seedOwnerships(root, ownersByName, groupsByName, unitsByNumber);
+        int ownershipCount = seedOwnerships(root, ownersByName, unitsByNumber);
 
-        log.info("Seeding complete: {} groups, {} clients, {} units, {} rentals, {} payments, {} price-history entries, {} expenses, {} owners, {} shares.",
-                groupsByName.size(), clientsByName.size(), units.size(), rentalsByRef.size(), paymentCount,
-                unitPriceHistoryRepository.count(), expenseCount, ownersByName.size(), ownershipCount);
+        // 8. Tax returns already filed (registered with a snapshot of the figures)
+        int filingCount = seedTaxFilings(root);
+
+        log.info("Seeding complete: {} clients, {} units, {} rentals, {} payments, {} price-history entries, {} expenses, {} owners, {} shares, {} tax filings.",
+                clientsByName.size(), units.size(), rentalsByRef.size(), paymentCount,
+                unitPriceHistoryRepository.count(), expenseCount, ownersByName.size(), ownershipCount, filingCount);
     }
 
     private static Map<String, Object> parseSeedData() throws java.io.IOException {
@@ -170,35 +183,6 @@ public class DataSeeder implements CommandLineRunner {
     // ------------------------------------------------------------------
     // Building blocks (each one only creates what does not exist yet)
     // ------------------------------------------------------------------
-
-    /** Groups from the "groups" array plus the default one; keyed by name. */
-    @SuppressWarnings("unchecked")
-    private Map<String, StorageGroup> seedGroups(Map<String, Object> root) {
-        Map<String, StorageGroup> byName = new HashMap<>();
-        for (StorageGroup g : storageGroupRepository.findAll()) {
-            byName.put(g.getName(), g);
-        }
-        StorageGroup defaultGroup = ensureDefaultGroup();
-        byName.put(defaultGroup.getName(), defaultGroup);
-
-        List<Object> entries = (List<Object>) root.get("groups");
-        if (entries == null) return byName;
-        for (Object o : entries) {
-            Map<String, Object> g = (Map<String, Object>) o;
-            String name = str(g, "name");
-            if (name == null || byName.containsKey(name)) continue;
-            StorageGroup group = storageGroupRepository.findByNameIgnoreCase(name)
-                    .orElseGet(() -> {
-                        log.info("Creating storage group '{}'...", name);
-                        return storageGroupRepository.save(StorageGroup.builder()
-                                .name(name)
-                                .description(str(g, "description"))
-                                .build());
-                    });
-            byName.put(group.getName(), group);
-        }
-        return byName;
-    }
 
     /** Clients from the "clients" array that are not in {@code existing} (keyed by full name). */
     @SuppressWarnings("unchecked")
@@ -221,38 +205,47 @@ public class DataSeeder implements CommandLineRunner {
 
     /**
      * Units from the "units" array that are not yet in {@code unitsByNumber}; the map
-     * is completed with the created ones. Returns only the units created by this call.
+     * is completed with the created ones. Entries may name a "parent" unit number (the
+     * local they sit in); top-level units are created first so parents always exist.
+     * Returns only the units created by this call.
      */
     @SuppressWarnings("unchecked")
-    private List<StorageUnit> seedUnits(Map<String, Object> root, Map<String, StorageGroup> groupsByName,
-                                        Map<String, StorageUnit> unitsByNumber) {
+    private List<StorageUnit> seedUnits(Map<String, Object> root, Map<String, StorageUnit> unitsByNumber) {
         List<StorageUnit> created = new ArrayList<>();
+        List<Map<String, Object>> entries = new ArrayList<>();
         for (Object o : (List<Object>) root.get("units")) {
-            Map<String, Object> u = (Map<String, Object>) o;
-            String number = str(u, "unitNumber");
-            if (unitsByNumber.containsKey(number)) continue;
+            entries.add((Map<String, Object>) o);
+        }
+        // Two passes: units without parent, then the ones inside them
+        for (int pass = 0; pass < 2; pass++) {
+            for (Map<String, Object> u : entries) {
+                boolean hasParent = str(u, "parent") != null;
+                if (hasParent != (pass == 1)) continue;
+                String number = str(u, "unitNumber");
+                if (unitsByNumber.containsKey(number)) continue;
 
-            String groupName = str(u, "group");
-            StorageGroup group = groupName != null ? groupsByName.get(groupName) : null;
-            if (group == null) {
-                if (groupName != null) log.warn("Unknown group '{}' for unit {}; using the default group.", groupName, number);
-                group = groupsByName.get(DEFAULT_GROUP_NAME);
+                StorageUnit parent = null;
+                if (hasParent) {
+                    parent = unitsByNumber.get(str(u, "parent"));
+                    if (parent == null) {
+                        log.warn("Unknown parent '{}' for unit {}; created as a top-level unit.", str(u, "parent"), number);
+                    }
+                }
+                String kind = str(u, "kind");
+                StorageUnit unit = storageUnitRepository.save(StorageUnit.builder()
+                        .unitNumber(number)
+                        .name(str(u, "name"))
+                        .kind(kind == null ? UnitKind.STORAGE_UNIT : UnitKind.valueOf(kind))
+                        .parent(parent)
+                        .sizeSquareMeters(Double.valueOf(str(u, "sizeSquareMeters")))
+                        .location(str(u, "location"))
+                        .baseMonthlyRate(dec(u, "baseMonthlyRate"))
+                        .status(UnitStatus.valueOf(str(u, "status")))
+                        .description(str(u, "description"))
+                        .build());
+                unitsByNumber.put(unit.getUnitNumber(), unit);
+                created.add(unit);
             }
-            String kind = str(u, "kind");
-
-            StorageUnit unit = storageUnitRepository.save(StorageUnit.builder()
-                    .unitNumber(number)
-                    .name(str(u, "name"))
-                    .kind(kind == null ? UnitKind.STORAGE_UNIT : UnitKind.valueOf(kind))
-                    .storageGroup(group)
-                    .sizeSquareMeters(Double.valueOf(str(u, "sizeSquareMeters")))
-                    .location(str(u, "location"))
-                    .baseMonthlyRate(dec(u, "baseMonthlyRate"))
-                    .status(UnitStatus.valueOf(str(u, "status")))
-                    .description(str(u, "description"))
-                    .build());
-            unitsByNumber.put(unit.getUnitNumber(), unit);
-            created.add(unit);
         }
         return created;
     }
@@ -347,8 +340,7 @@ public class DataSeeder implements CommandLineRunner {
         for (StorageUnit u : storageUnitRepository.findAll()) {
             unitsByNumber.put(u.getUnitNumber(), u);
         }
-        Map<String, StorageGroup> groupsByName = seedGroups(root);
-        List<StorageUnit> created = seedUnits(root, groupsByName, unitsByNumber);
+        List<StorageUnit> created = seedUnits(root, unitsByNumber);
         if (created.isEmpty()) return;
 
         Set<String> createdNumbers = new HashSet<>();
@@ -369,61 +361,25 @@ public class DataSeeder implements CommandLineRunner {
         log.info("Loaded {} rental(s) and {} payment(s) for the new unit(s).", rentalsByRef.size(), payments);
     }
 
-    /** Returns the default storage group, creating it if it does not exist yet. */
-    private StorageGroup ensureDefaultGroup() {
-        return storageGroupRepository.findByNameIgnoreCase(DEFAULT_GROUP_NAME)
-                .orElseGet(() -> {
-                    log.info("Creating storage group '{}'...", DEFAULT_GROUP_NAME);
-                    return storageGroupRepository.save(StorageGroup.builder()
-                            .name(DEFAULT_GROUP_NAME)
-                            .description(DEFAULT_GROUP_DESCRIPTION)
-                            .build());
-                });
-    }
-
-    /**
-     * One-off migration for databases created before storage groups / unit kinds
-     * existed: units without a kind become storage units; every unit without a
-     * group, and every general expense without a group, is placed in the default
-     * group. Idempotent - does nothing once everything is grouped.
-     */
-    private void assignUngroupedToDefaultGroup() {
-        // Rows created before unit kinds existed are storage units
+    /** Rows created before unit kinds existed are storage units. Idempotent. */
+    private void markUnkindUnits() {
         List<StorageUnit> unkindUnits = storageUnitRepository.findByKindIsNull();
-        if (!unkindUnits.isEmpty()) {
-            for (StorageUnit unit : unkindUnits) {
-                unit.setKind(UnitKind.STORAGE_UNIT);
-            }
-            storageUnitRepository.saveAll(unkindUnits);
-            log.info("Marked {} unit(s) without a kind as STORAGE_UNIT.", unkindUnits.size());
+        if (unkindUnits.isEmpty()) return;
+        for (StorageUnit unit : unkindUnits) {
+            unit.setKind(UnitKind.STORAGE_UNIT);
         }
-
-        List<StorageUnit> ungroupedUnits = storageUnitRepository.findByStorageGroupIsNull();
-        List<Expense> ungroupedExpenses = expenseRepository.findByStorageUnitIsNullAndStorageGroupIsNull();
-        if (ungroupedUnits.isEmpty() && ungroupedExpenses.isEmpty()) return;
-
-        StorageGroup group = ensureDefaultGroup();
-        for (StorageUnit unit : ungroupedUnits) {
-            unit.setStorageGroup(group);
-        }
-        storageUnitRepository.saveAll(ungroupedUnits);
-        for (Expense expense : ungroupedExpenses) {
-            expense.setStorageGroup(group);
-        }
-        expenseRepository.saveAll(ungroupedExpenses);
-        log.info("Moved {} storage unit(s) and {} general expense(s) into group '{}'.",
-                ungroupedUnits.size(), ungroupedExpenses.size(), group.getName());
+        storageUnitRepository.saveAll(unkindUnits);
+        log.info("Marked {} unit(s) without a kind as STORAGE_UNIT.", unkindUnits.size());
     }
 
     /**
-     * Seeds the "expenses" array. An entry may name a unit ("unit": "3") to attribute
-     * the cost to that unit, or a group ("group": "Pisos Pasaxe 29") for a general
-     * expense of that group; otherwise it is a general expense of the default group.
-     * When {@code onlyGroups} is given, only the entries attributed to those group
-     * names are created.
+     * Seeds the "expenses" array. An entry names the unit the cost belongs to
+     * ("unit": "3", or "unit": "BD" for the costs of the storage local) or several
+     * units ("units": ["3D", "3E"]) among which the amount is split evenly; an entry
+     * without any is a general expense.
      */
     @SuppressWarnings("unchecked")
-    private int seedExpenses(Map<String, Object> root, Set<String> onlyGroups) {
+    private int seedExpenses(Map<String, Object> root) {
         List<Object> entries = (List<Object>) root.get("expenses");
         if (entries == null) return 0;
 
@@ -431,57 +387,62 @@ public class DataSeeder implements CommandLineRunner {
         for (StorageUnit u : storageUnitRepository.findAll()) {
             unitsByNumber.put(u.getUnitNumber(), u);
         }
-        Map<String, StorageGroup> groupsByName = seedGroups(root);
-        StorageGroup defaultGroup = groupsByName.get(DEFAULT_GROUP_NAME);
 
         int count = 0;
         for (Object o : entries) {
             Map<String, Object> e = (Map<String, Object>) o;
-            String unitNumber = str(e, "unit");
-            StorageUnit unit = unitNumber == null ? null : unitsByNumber.get(unitNumber);
-            StorageGroup group = null;
-            if (unit == null) {
-                String groupName = str(e, "group");
-                group = groupName == null ? null : groupsByName.get(groupName);
-                if (group == null) {
-                    if (groupName != null) log.warn("Unknown group '{}' for expense '{}'; using the default group.", groupName, str(e, "description"));
-                    group = defaultGroup;
-                }
-            }
-            String targetGroup = unit != null ? unit.getStorageGroup().getName() : group.getName();
-            if (onlyGroups != null && !onlyGroups.contains(targetGroup)) continue;
+            LocalDate date = LocalDate.parse(str(e, "date"));
+            BigDecimal amount = dec(e, "amount");
+            String description = str(e, "description");
+            ExpenseCategory category = ExpenseCategory.valueOf(str(e, "category"));
 
-            expenseRepository.save(Expense.builder()
-                    .storageUnit(unit)
-                    .storageGroup(group)
-                    .expenseDate(LocalDate.parse(str(e, "date")))
-                    .amount(dec(e, "amount"))
-                    .description(str(e, "description"))
-                    .category(ExpenseCategory.valueOf(str(e, "category")))
-                    .build());
-            count++;
+            List<String> targets = new ArrayList<>();
+            if (e.get("units") instanceof List<?> list) {
+                for (Object n : list) targets.add(String.valueOf(n));
+            } else if (str(e, "unit") != null) {
+                targets.add(str(e, "unit"));
+            }
+
+            if (targets.isEmpty()) {
+                expenseRepository.save(Expense.builder()
+                        .expenseDate(date).amount(amount).description(description).category(category).build());
+                count++;
+                continue;
+            }
+
+            // Split evenly, giving the rounding remainder to the last unit
+            BigDecimal each = amount.divide(BigDecimal.valueOf(targets.size()), 2, RoundingMode.HALF_UP);
+            BigDecimal assigned = BigDecimal.ZERO;
+            for (int i = 0; i < targets.size(); i++) {
+                String number = targets.get(i);
+                StorageUnit unit = unitsByNumber.get(number);
+                if (unit == null) {
+                    log.warn("Unknown unit '{}' for expense '{}'; seeded as a general expense.", number, description);
+                }
+                boolean last = i == targets.size() - 1;
+                BigDecimal share = targets.size() == 1 ? amount : last ? amount.subtract(assigned) : each;
+                assigned = assigned.add(share);
+                String text = targets.size() == 1 ? description
+                        : description + " (1/" + targets.size() + ", reparto " + String.join("/", targets) + ")";
+                if (text.length() > 255) text = text.substring(0, 255);
+                expenseRepository.save(Expense.builder()
+                        .storageUnit(unit)
+                        .expenseDate(date)
+                        .amount(share)
+                        .description(text)
+                        .category(category)
+                        .build());
+                count++;
+            }
         }
         return count;
     }
 
     /**
-     * Incremental load for an already-seeded database: the expenses of every group
-     * that has no expense yet (neither general nor tied to one of its units) are
-     * created from seed-data.json. Groups that already have expenses are left untouched.
+     * Owners from the "owners" array that do not exist yet, keyed by full name. An
+     * entry has a "type" (PERSON by default) and, for a COMUNIDAD_DE_BIENES, its
+     * "members" ({"owner", "share"}); members are linked once every owner exists.
      */
-    private void seedMissingExpenses(Map<String, Object> root) {
-        Set<String> groupsWithoutExpenses = new HashSet<>();
-        for (StorageGroup g : storageGroupRepository.findAll()) {
-            if (expenseRepository.countByStorageGroupIdOrStorageUnitStorageGroupId(g.getId(), g.getId()) == 0) {
-                groupsWithoutExpenses.add(g.getName());
-            }
-        }
-        if (groupsWithoutExpenses.isEmpty()) return;
-        int n = seedExpenses(root, groupsWithoutExpenses);
-        if (n > 0) log.info("Backfilled {} expense(s) for group(s) without expenses: {}", n, groupsWithoutExpenses);
-    }
-
-    /** Owners from the "owners" array that do not exist yet; keyed by full name. */
     @SuppressWarnings("unchecked")
     private Map<String, Owner> seedOwners(Map<String, Object> root) {
         Map<String, Owner> byName = new HashMap<>();
@@ -494,9 +455,11 @@ public class DataSeeder implements CommandLineRunner {
             Map<String, Object> o = (Map<String, Object>) entry;
             String name = str(o, "fullName");
             if (name == null || byName.containsKey(name)) continue;
+            String type = str(o, "type");
             Owner owner = ownerRepository.findByFullNameIgnoreCase(name)
                     .orElseGet(() -> ownerRepository.save(Owner.builder()
                             .fullName(name)
+                            .type(type == null ? OwnerType.PERSON : OwnerType.valueOf(type))
                             .documentId(str(o, "documentId"))
                             .email(str(o, "email"))
                             .phone(str(o, "phone"))
@@ -505,39 +468,52 @@ public class DataSeeder implements CommandLineRunner {
                             .build()));
             byName.put(owner.getFullName(), owner);
         }
+        // Members of the entities (skipped when the entity already has members)
+        for (Object entry : entries) {
+            Map<String, Object> o = (Map<String, Object>) entry;
+            Owner entity = byName.get(str(o, "fullName"));
+            if (entity == null || !entity.isEntity() || !(o.get("members") instanceof List<?> members)) continue;
+            if (!ownerMembershipRepository.findByEntityId(entity.getId()).isEmpty()) continue;
+            for (Object mo : members) {
+                Map<String, Object> m = (Map<String, Object>) mo;
+                Owner member = byName.get(str(m, "owner"));
+                if (member == null || member.isEntity()) {
+                    log.warn("Skipping member '{}' of '{}': unknown owner or not a person.", str(m, "owner"), entity.getFullName());
+                    continue;
+                }
+                ownerMembershipRepository.save(OwnerMembership.builder()
+                        .entity(entity)
+                        .member(member)
+                        .sharePercent(parseShare(m.get("share")))
+                        .notes(str(m, "notes"))
+                        .build());
+            }
+        }
         return byName;
     }
 
     /**
-     * Shares from the "ownerships" array: each entry names an "owner" and either a
-     * "group" or a "unit", plus a "share" given as a fraction ("1/6") or a percentage
-     * (16.6667). Entries whose owner already holds a share of that target are skipped.
+     * Shares from the "ownerships" array: each entry names an "owner", a "unit" and a
+     * "share" given as a fraction ("1/6") or a percentage (16.6667). Entries whose
+     * owner already holds a share of that unit are skipped.
      */
     @SuppressWarnings("unchecked")
     private int seedOwnerships(Map<String, Object> root, Map<String, Owner> ownersByName,
-                               Map<String, StorageGroup> groupsByName, Map<String, StorageUnit> unitsByNumber) {
+                               Map<String, StorageUnit> unitsByNumber) {
         List<Object> entries = (List<Object>) root.get("ownerships");
         if (entries == null) return 0;
         int count = 0;
         for (Object entry : entries) {
             Map<String, Object> s = (Map<String, Object>) entry;
             Owner owner = ownersByName.get(str(s, "owner"));
-            String groupName = str(s, "group");
-            String unitNumber = str(s, "unit");
-            StorageGroup group = groupName != null ? groupsByName.get(groupName) : null;
-            StorageUnit unit = unitNumber != null ? unitsByNumber.get(unitNumber) : null;
-            if (owner == null || (group == null) == (unit == null)) {
-                log.warn("Skipping share of '{}' in group '{}' / unit '{}': unknown owner or target.",
-                        str(s, "owner"), groupName, unitNumber);
+            StorageUnit unit = unitsByNumber.get(str(s, "unit"));
+            if (owner == null || unit == null) {
+                log.warn("Skipping share of '{}' in unit '{}': unknown owner or unit.", str(s, "owner"), str(s, "unit"));
                 continue;
             }
-            boolean exists = unit != null
-                    ? ownershipRepository.findByOwnerIdAndStorageUnitId(owner.getId(), unit.getId()).isPresent()
-                    : ownershipRepository.findByOwnerIdAndStorageGroupId(owner.getId(), group.getId()).isPresent();
-            if (exists) continue;
+            if (ownershipRepository.findByOwnerIdAndStorageUnitId(owner.getId(), unit.getId()).isPresent()) continue;
             ownershipRepository.save(Ownership.builder()
                     .owner(owner)
-                    .storageGroup(group)
                     .storageUnit(unit)
                     .sharePercent(parseShare(s.get("share")))
                     .notes(str(s, "notes"))
@@ -561,21 +537,182 @@ public class DataSeeder implements CommandLineRunner {
 
     /**
      * Incremental load for an already-seeded database: when no owner exists yet,
-     * the owners and shares of seed-data.json are created.
+     * the owners, members and shares of seed-data.json are created.
      */
     private void seedMissingOwners(Map<String, Object> root) {
         if (ownerRepository.count() > 0) return;
-        Map<String, StorageGroup> groupsByName = new HashMap<>();
-        for (StorageGroup g : storageGroupRepository.findAll()) {
-            groupsByName.put(g.getName(), g);
-        }
         Map<String, StorageUnit> unitsByNumber = new HashMap<>();
         for (StorageUnit u : storageUnitRepository.findAll()) {
             unitsByNumber.put(u.getUnitNumber(), u);
         }
         Map<String, Owner> owners = seedOwners(root);
-        int shares = seedOwnerships(root, owners, groupsByName, unitsByNumber);
+        int shares = seedOwnerships(root, owners, unitsByNumber);
         if (!owners.isEmpty()) log.info("Backfilled {} owner(s) and {} share(s) from seed-data.json.", owners.size(), shares);
+    }
+
+    /**
+     * Tax returns already filed, from the "taxFilings" array. Each entry describes a
+     * range of returns that were presented:
+     * <ul>
+     *   <li>MODELO_303: quarters "fromYear"/"fromQuarter" to "toYear"/"toQuarter",
+     *       optionally scoped to an "owner" (the comunidad de bienes);</li>
+     *   <li>MODELO_184: years "fromYear" to "toYear", one return per year for the
+     *       "owner" (comunidad de bienes) or, when omitted, for every comunidad;</li>
+     *   <li>IRPF: years "fromYear" to "toYear", one return per person with income
+     *       that year.</li>
+     * </ul>
+     * Every return of a range not registered yet is created with a snapshot of the
+     * report computed from the seeded data, its main figure as amount and the
+     * statutory deadline as filing date. Idempotent: returns already registered are
+     * left untouched, and auto-registered returns that fall outside the seeded
+     * ranges (a range was shortened) are removed; hand-registered ones are never touched.
+     */
+    @SuppressWarnings("unchecked")
+    private int seedTaxFilings(Map<String, Object> root) {
+        List<Object> entries = (List<Object>) root.get("taxFilings");
+        if (entries == null) return 0;
+        Set<String> registered = new HashSet<>();
+        for (TaxFiling f : taxFilingRepository.findAll()) {
+            registered.add(filingKey(f.getModel(), f.getYear(), f.getQuarter(), f.getOwnerId()));
+        }
+        Set<String> inSeedRanges = new HashSet<>();
+        int count = 0;
+        for (Object entry : entries) {
+            Map<String, Object> spec = (Map<String, Object>) entry;
+            TaxModel model = TaxModel.valueOf(str(spec, "model"));
+            int fromYear = ((Number) spec.get("fromYear")).intValue();
+            int toYear = ((Number) spec.get("toYear")).intValue();
+            String notes = str(spec, "notes");
+            if (notes == null || !notes.contains(SEED_FILING_MARKER)) {
+                notes = (notes == null ? "" : notes + " ") + "Registrado automáticamente desde " + SEED_FILING_MARKER + ".";
+            }
+            Owner specOwner = str(spec, "owner") == null ? null
+                    : ownerRepository.findByFullNameIgnoreCase(str(spec, "owner")).orElse(null);
+
+            switch (model) {
+                case MODELO_303 -> {
+                    int fromQuarter = ((Number) spec.get("fromQuarter")).intValue();
+                    int toQuarter = ((Number) spec.get("toQuarter")).intValue();
+                    Long ownerId = specOwner != null ? specOwner.getId() : null;
+                    Map<Integer, Modelo303DTO> reportsByYear = new HashMap<>();
+                    for (int index = fromYear * 4 + (fromQuarter - 1); index <= toYear * 4 + (toQuarter - 1); index++) {
+                        int year = index / 4;
+                        int quarter = index % 4 + 1;
+                        String key = filingKey(model, year, quarter, null);
+                        inSeedRanges.add(key);
+                        if (!registered.add(key)) continue;
+                        Modelo303DTO report = reportsByYear.computeIfAbsent(year, y -> taxService.modelo303(y, ownerId));
+                        Modelo303DTO.Quarter q = report.getQuarters().get(quarter - 1);
+                        taxFilingRepository.save(TaxFiling.builder()
+                                .model(model)
+                                .year(year)
+                                .quarter(quarter)
+                                .filedDate(modelo303Deadline(year, quarter))
+                                .amount(q.getCollectedVat())
+                                .description("IVA " + q.getLabel() + ": base " + q.getCollectedBase() + " EUR · cuota " + q.getCollectedVat() + " EUR")
+                                .snapshot(toJson(report))
+                                .notes(notes)
+                                .build());
+                        count++;
+                    }
+                }
+                case MODELO_184 -> {
+                    List<Owner> entities = specOwner != null ? List.of(specOwner)
+                            : ownerRepository.findByTypeOrderByFullNameAsc(OwnerType.COMUNIDAD_DE_BIENES);
+                    for (Owner entity : entities) {
+                        for (int year = fromYear; year <= toYear; year++) {
+                            String key = filingKey(model, year, null, entity.getId());
+                            inSeedRanges.add(key);
+                            if (!registered.add(key)) continue;
+                            Modelo184DTO report = taxService.modelo184(year, entity.getId());
+                            taxFilingRepository.save(TaxFiling.builder()
+                                    .model(model)
+                                    .year(year)
+                                    .ownerId(entity.getId())
+                                    .ownerName(entity.getFullName())
+                                    .filedDate(modelo184Deadline(year))
+                                    .amount(report.getAttributedBase())
+                                    .description("Base atribuida " + year + ": " + report.getAttributedBase() + " EUR (" + entity.getFullName() + ")")
+                                    .snapshot(toJson(report))
+                                    .notes(notes)
+                                    .build());
+                            count++;
+                        }
+                    }
+                }
+                case IRPF -> {
+                    for (int year = fromYear; year <= toYear; year++) {
+                        IrpfReportDTO report = taxService.irpf(year);
+                        String snapshot = toJson(report);
+                        for (IrpfReportDTO.OwnerReport owner : report.getOwners()) {
+                            String key = filingKey(model, year, null, owner.getOwnerId());
+                            inSeedRanges.add(key);
+                            if (!registered.add(key)) continue;
+                            taxFilingRepository.save(TaxFiling.builder()
+                                    .model(model)
+                                    .year(year)
+                                    .ownerId(owner.getOwnerId())
+                                    .ownerName(owner.getOwnerName())
+                                    .filedDate(irpfDeadline(year))
+                                    .amount(owner.getTotalNet())
+                                    .description("Alquileres neto " + owner.getRental().getNet() + " EUR + atribución de rentas "
+                                            + owner.getAttribution().getIncomeBase() + " EUR")
+                                    .snapshot(snapshot)
+                                    .notes(notes)
+                                    .build());
+                            count++;
+                        }
+                    }
+                }
+            }
+        }
+        if (count > 0) log.info("Registered {} filed tax return(s) from seed-data.json.", count);
+
+        for (TaxFiling f : taxFilingRepository.findAll()) {
+            boolean seeded = f.getNotes() != null && f.getNotes().contains(SEED_FILING_MARKER);
+            if (seeded && !inSeedRanges.contains(filingKey(f.getModel(), f.getYear(), f.getQuarter(), f.getOwnerId()))) {
+                log.info("Removing auto-registered {} {} (no longer in the seeded ranges).", f.getModel(),
+                        (f.getQuarter() != null ? f.getQuarter() + "T " : "") + f.getYear() + (f.getOwnerName() != null ? " · " + f.getOwnerName() : ""));
+                taxFilingRepository.delete(f);
+            }
+        }
+        return count;
+    }
+
+    private static String filingKey(TaxModel model, Integer year, Integer quarter, Long ownerId) {
+        return model + ":" + year + ":" + quarter + ":" + ownerId;
+    }
+
+    private String toJson(Object report) {
+        try {
+            return objectMapper.writeValueAsString(report);
+        } catch (tools.jackson.core.JacksonException e) {
+            log.warn("Could not serialise a tax report: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /** Text every seeded filing carries in its notes, so they can be told apart from hand-registered ones. */
+    public static final String SEED_FILING_MARKER = "seed-data.json";
+
+    /** Statutory deadline of the Modelo 303 of a quarter: 20 Apr / 20 Jul / 20 Oct / 30 Jan of the next year. */
+    public static LocalDate modelo303Deadline(int year, int quarter) {
+        return switch (quarter) {
+            case 1 -> LocalDate.of(year, 4, 20);
+            case 2 -> LocalDate.of(year, 7, 20);
+            case 3 -> LocalDate.of(year, 10, 20);
+            default -> LocalDate.of(year + 1, 1, 30);
+        };
+    }
+
+    /** Statutory deadline of the Modelo 184 of a year: last day of February of the next year. */
+    public static LocalDate modelo184Deadline(int year) {
+        return java.time.YearMonth.of(year + 1, 2).atEndOfMonth();
+    }
+
+    /** End of the IRPF campaign of a year: 30 June of the next year. */
+    public static LocalDate irpfDeadline(int year) {
+        return LocalDate.of(year + 1, 6, 30);
     }
 
     /**
