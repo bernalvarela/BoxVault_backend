@@ -94,6 +94,34 @@
 </dependency>
 </dependencies>
 
+	<profiles>
+		<!--
+		  Fully static native binary linked against musl (used by the Dockerfile together
+		  with the "native" profile): no glibc at runtime, so the image runs on any x86-64
+		  CPU. Binaries linked with the glibc of the build container (Oracle Linux 9) are
+		  stamped as needing x86-64-v2 and fail to start on older CPUs / generic VM CPU
+		  models with "CPU ISA level is lower than required".
+		  Requires the GraalVM musl toolchain (ghcr.io/graalvm/native-image-community:25-muslib).
+		-->
+		<profile>
+			<id>native-static</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.graalvm.buildtools</groupId>
+						<artifactId>native-maven-plugin</artifactId>
+						<configuration>
+							<buildArgs combine.children="append">
+								<buildArg>--static</buildArg>
+								<buildArg>--libc=musl</buildArg>
+							</buildArgs>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
+
 	<build>
 		<plugins>
 			<plugin>

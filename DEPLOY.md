@@ -19,6 +19,10 @@ changing the code):
 - resources read by hand and classes serialised outside controllers need hints:
   see `config/NativeHints.java` (seed-data.json, tax report DTOs);
 - the image's default locale is es-ES (`pom.xml`, native plugin `buildArgs`);
+- the Docker build is a **static musl binary** (`-Pnative,native-static`) compiled for
+  the baseline x86-64 ISA (`-march=compatibility`), so it starts on any server CPU or
+  VM CPU model; a glibc-linked build from the Oracle Linux 9 GraalVM image needs
+  x86-64-v2 and fails with "CPU ISA level is lower than required" on older CPUs;
 - the H2 web console is off by default (`application.yml`); use the `dev` profile
   locally.
 
