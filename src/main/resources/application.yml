@@ -5,15 +5,18 @@ spring:
   application:
     name: storage-management
 
-  # Embedded H2 database (default) — zero-config local development
+  # Embedded H2 database (default) — zero-config local development.
+  # The Docker deployment overrides the URL with a file database on a volume.
   datasource:
     url: jdbc:h2:mem:storage_db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driverClassName: org.h2.Driver
     username: sa
     password: ""
+  # The H2 web console is a development tool and is not part of the native image:
+  # it is off by default and switched on by the "dev" profile below.
   h2:
     console:
-      enabled: true
+      enabled: false
       path: /h2-console
 
   jpa:
@@ -22,3 +25,14 @@ spring:
       ddl-auto: update
     show-sql: false
     database-platform: org.hibernate.dialect.H2Dialect
+
+---
+# Local development: ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+# (or SPRING_PROFILES_ACTIVE=dev) enables the H2 console at /h2-console.
+spring:
+  config:
+    activate:
+      on-profile: dev
+  h2:
+    console:
+      enabled: true

@@ -16,8 +16,8 @@ services:
       - "8088:8088"
     environment:
       SPRING_DATASOURCE_URL: "jdbc:h2:file:/data/boxvault;DB_CLOSE_ON_EXIT=FALSE"
-      SPRING_H2_CONSOLE_ENABLED: "false"
-      JAVA_OPTS: "-Xmx512m"
+      # Native image: the heap flag is honoured but far less memory is needed than on the JVM
+      JAVA_OPTS: "-Xmx256m"
       TZ: Europe/Madrid
     volumes:
       - boxvault-data:/data

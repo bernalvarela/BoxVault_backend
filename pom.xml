@@ -100,6 +100,26 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+			<!--
+			  GraalVM native image. The Spring Boot parent's "native" profile wires the AOT
+			  processing and binds native:compile to the package phase:
+			      ./mvnw -Pnative -DskipTests native:compile   -> target/boxvault-backend
+			  Needs a GraalVM JDK 25 (see Dockerfile / the GitHub Actions workflow).
+			-->
+			<plugin>
+				<groupId>org.graalvm.buildtools</groupId>
+				<artifactId>native-maven-plugin</artifactId>
+				<configuration>
+					<imageName>boxvault-backend</imageName>
+					<buildArgs>
+						<!-- Spanish month labels (StatisticsService) and dates: make es-ES the image's default locale -->
+						<buildArg>-Duser.language=es</buildArg>
+						<buildArg>-Duser.country=ES</buildArg>
+						<!-- Fail the build on any class that would only break at runtime -->
+						<buildArg>--no-fallback</buildArg>
+					</buildArgs>
+				</configuration>
+			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>

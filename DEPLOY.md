@@ -1,7 +1,26 @@
 # Deploying BoxVault
 
 The backend image contains the whole application: the Spring Boot API plus the
-frontend bundle committed in `src/main/resources/static/`.
+frontend bundle committed in `src/main/resources/static/`. It is a **GraalVM native
+image**: the `Dockerfile` compiles the app ahead of time into a single binary (no JVM
+at runtime, ~50 MB image, starts in well under a second, ~100 MB of RAM).
+`Dockerfile.jvm` keeps the classic JVM image as a fallback
+(`docker build -f Dockerfile.jvm .`).
+
+Native build on your machine (needs a GraalVM JDK 25, e.g. `sdk install java 25-graalce`):
+
+```bash
+./mvnw -Pnative -DskipTests native:compile      # -> target/boxvault-backend (5-10 min)
+./target/boxvault-backend
+```
+
+Things that matter for the native build (already handled, keep them in mind when
+changing the code):
+- resources read by hand and classes serialised outside controllers need hints:
+  see `config/NativeHints.java` (seed-data.json, tax report DTOs);
+- the image's default locale is es-ES (`pom.xml`, native plugin `buildArgs`);
+- the H2 web console is off by default (`application.yml`); use the `dev` profile
+  locally.
 
 ## 1. Publish the image (GitHub Actions → Docker Hub)
 
