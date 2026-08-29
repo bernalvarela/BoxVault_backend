@@ -440,6 +440,9 @@ public class TaxService {
                     .rentalId(r.getId())
                     .agreementNumber(r.getAgreementNumber())
                     .clientName(r.getClient() != null ? r.getClient().getFullName() : null)
+                    .clientDocumentId(r.getClient() != null ? r.getClient().getDocumentId() : null)
+                    .coClientName(r.getCoClient() != null ? r.getCoClient().getFullName() : null)
+                    .coClientDocumentId(r.getCoClient() != null ? r.getCoClient().getDocumentId() : null)
                     .startDate(r.getStartDate())
                     .endDate(r.getEndDate())
                     .status(r.getStatus() != null ? r.getStatus().name() : null)
@@ -527,6 +530,7 @@ public class TaxService {
                         .parentUnitId(unit.getParent() != null ? unit.getParent().getId() : null)
                         .parentUnitNumber(parentNumber(unit))
                         .parentUnitName(unit.getParent() != null ? unit.getParent().getName() : null)
+                        .cadastralReference(unit.getCadastralReference())
                         .sharePercent(percent)
                         .inherited(inherited)
                         .unitIncomeBase(income.base())
@@ -548,6 +552,9 @@ public class TaxService {
         Breakdown totalAttribution = Breakdown.ZERO;
         for (Owner entity : entities) {
             EntityIncome ei = entityIncome(entity, year, byUnit, paymentsByUnit);
+            // Nothing to attribute (e.g. years before the trasteros existed): no lines, so members
+            // without direct rentals do not show up with zeros
+            if (ei.income().total().signum() == 0) continue;
             for (OwnerMembership m : membersOf(entity)) {
                 Breakdown memberPart = part(ei.income(), m.getSharePercent());
                 totalAttribution = totalAttribution.plus(memberPart);

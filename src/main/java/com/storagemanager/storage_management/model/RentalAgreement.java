@@ -34,6 +34,11 @@ public class RentalAgreement {
     @JoinColumn(name = "client_id", nullable = false)
     private Client client;
 
+    /** Second tenant of the same contract (co-titular), if any. */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "co_client_id")
+    private Client coClient;
+
     @Column(nullable = false)
     private LocalDate startDate;
 

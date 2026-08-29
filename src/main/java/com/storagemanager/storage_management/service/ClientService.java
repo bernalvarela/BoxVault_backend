@@ -39,8 +39,12 @@ public class ClientService {
     }
 
     public List<ClientDTO> searchClientSummaries(String query) {
-        Map<Long, Long> activeRentalsByClient = rentalAgreementRepository.findAllActiveRentals().stream()
-                .collect(Collectors.groupingBy(r -> r.getClient().getId(), Collectors.counting()));
+        // A client is active when they are the main or the second tenant of an ACTIVE contract
+        Map<Long, Long> activeRentalsByClient = new java.util.HashMap<>();
+        for (var r : rentalAgreementRepository.findAllActiveRentals()) {
+            activeRentalsByClient.merge(r.getClient().getId(), 1L, Long::sum);
+            if (r.getCoClient() != null) activeRentalsByClient.merge(r.getCoClient().getId(), 1L, Long::sum);
+        }
 
         return searchClients(query).stream()
                 .map(c -> ClientDTO.builder()

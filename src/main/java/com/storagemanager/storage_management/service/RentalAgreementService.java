@@ -40,8 +40,9 @@ public class RentalAgreementService {
                 .orElseThrow(() -> new ResourceNotFoundException("Rental agreement not found with id: " + id));
     }
 
+    /** Contracts of a client as main or second tenant. */
     public List<RentalAgreement> getAgreementsByClient(Long clientId) {
-        return rentalAgreementRepository.findByClientId(clientId);
+        return rentalAgreementRepository.findByClientIdOrCoClientId(clientId, clientId);
     }
 
     public List<RentalAgreement> getAgreementsByStorageUnit(Long storageUnitId) {
@@ -62,6 +63,7 @@ public class RentalAgreementService {
 
         Client client = clientRepository.findById(request.getClientId())
                 .orElseThrow(() -> new ResourceNotFoundException("Client not found with id: " + request.getClientId()));
+        Client coClient = resolveCoClient(request.getCoClientId(), client);
 
         String agreementNumber = "RNT-" + LocalDate.now().getYear() + "-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
 
@@ -69,6 +71,7 @@ public class RentalAgreementService {
                 .agreementNumber(agreementNumber)
                 .storageUnit(unit)
                 .client(client)
+                .coClient(coClient)
                 .startDate(request.getStartDate())
                 .endDate(request.getEndDate())
                 .billingDayOfMonth(request.getBillingDayOfMonth() != null ? request.getBillingDayOfMonth() : 1)
@@ -91,6 +94,11 @@ public class RentalAgreementService {
     public RentalAgreement updateAgreement(Long id, RentalAgreementRequest request) {
         RentalAgreement agreement = getAgreementById(id);
 
+        if (request.getClientId() != null && !request.getClientId().equals(agreement.getClient().getId())) {
+            agreement.setClient(clientRepository.findById(request.getClientId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Client not found with id: " + request.getClientId())));
+        }
+        agreement.setCoClient(resolveCoClient(request.getCoClientId(), agreement.getClient()));
         agreement.setStartDate(request.getStartDate());
         agreement.setEndDate(request.getEndDate());
         agreement.setBillingDayOfMonth(request.getBillingDayOfMonth() != null ? request.getBillingDayOfMonth() : 1);
@@ -105,6 +113,16 @@ public class RentalAgreementService {
         agreement.setNotes(request.getNotes());
 
         return rentalAgreementRepository.save(agreement);
+    }
+
+    /** The optional second tenant: must exist and differ from the main tenant. */
+    private Client resolveCoClient(Long coClientId, Client client) {
+        if (coClientId == null) return null;
+        if (coClientId.equals(client.getId())) {
+            throw new BadRequestException("The second tenant must be a different client");
+        }
+        return clientRepository.findById(coClientId)
+                .orElseThrow(() -> new ResourceNotFoundException("Client not found with id: " + coClientId));
     }
 
     @Transactional

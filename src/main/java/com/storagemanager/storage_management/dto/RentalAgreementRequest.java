@@ -15,6 +15,9 @@ public class RentalAgreementRequest {
     @NotNull(message = "Client ID is required")
     private Long clientId;
 
+    /** Optional second tenant (co-titular) of the contract. */
+    private Long coClientId;
+
     @NotNull(message = "Start date is required")
     private LocalDate startDate;
 

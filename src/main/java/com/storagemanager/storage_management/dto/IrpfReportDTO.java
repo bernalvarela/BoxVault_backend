@@ -100,6 +100,8 @@ public class IrpfReportDTO {
         private Long parentUnitId;
         private String parentUnitNumber;
         private String parentUnitName;
+        /** Referencia catastral of the unit (for the return). */
+        private String cadastralReference;
         private Long entityId;
         private String entityName;
 
@@ -133,6 +135,11 @@ public class IrpfReportDTO {
         private Long rentalId;
         private String agreementNumber;
         private String clientName;
+        /** DNI / NIE of the tenant. */
+        private String clientDocumentId;
+        /** Second tenant of the contract, if any. */
+        private String coClientName;
+        private String coClientDocumentId;
         private LocalDate startDate;
         private LocalDate endDate;
         private String status;

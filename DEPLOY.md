@@ -56,6 +56,32 @@ docker compose pull && docker compose up -d
 - Upgrade: `docker compose pull && docker compose up -d`.
 - Logs: `docker compose logs -f boxvault`.
 
+## 4. Actualización automática (CD)
+
+Two ways to have the server pick up every image the pipeline publishes; use one.
+
+**a) Watchtower (already in `docker-compose.yml`).** The `watchtower` service polls
+Docker Hub every 5 minutes and recreates `boxvault` when `latest` changes, keeping
+ports, environment and the data volume. It uses the maintained fork
+`nickfedor/watchtower` (the original `containrrr/watchtower` is archived). Only
+containers with the `com.centurylinklabs.watchtower.enable=true` label are touched.
+Force a check: `docker compose exec watchtower /watchtower --run-once`.
+
+**b) Cron job, no extra container.** Remove the `watchtower` service from the compose
+file, copy `deploy/update.sh` next to it and schedule it:
+
+```bash
+cp deploy/update.sh ~/boxvault/update.sh && chmod +x ~/boxvault/update.sh
+( crontab -l 2>/dev/null; echo "*/5 * * * * /home/$USER/boxvault/update.sh >> /home/$USER/boxvault/update.log 2>&1" ) | crontab -
+```
+
+The script pulls the image and only restarts the container when the image id changed,
+so a run with nothing new is a no-op. Same result as Watchtower, nothing else to maintain.
+
+In both cases a broken commit never reaches the server: the workflow runs the tests
+before building the image. To freeze the server on a known version, set
+`DOCKER_IMAGE` to a `sha-…` or `1.2.3` tag instead of `latest`.
+
 ## Local build without the pipeline
 
 ```bash

@@ -14,6 +14,8 @@ public interface RentalAgreementRepository extends JpaRepository<RentalAgreement
     Optional<RentalAgreement> findByAgreementNumber(String agreementNumber);
     List<RentalAgreement> findByStatus(RentalStatus status);
     List<RentalAgreement> findByClientId(Long clientId);
+    /** Contracts where the client is the main or the second tenant (pass the same id twice). */
+    List<RentalAgreement> findByClientIdOrCoClientId(Long clientId, Long coClientId);
     List<RentalAgreement> findByStorageUnitId(Long storageUnitId);
     Optional<RentalAgreement> findByStorageUnitIdAndStatus(Long storageUnitId, RentalStatus status);
     long countByStatus(RentalStatus status);

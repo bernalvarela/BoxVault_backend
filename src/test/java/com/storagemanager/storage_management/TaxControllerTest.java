@@ -154,6 +154,19 @@ class TaxControllerTest {
         IrpfReportDTO.OwnerReport marta = report.getOwners().stream().filter(o -> o.getOwnerName().startsWith("Marta")).findFirst().orElseThrow();
         assertEquals(1, marta.getRental().getLines().size());
         assertTrue(marta.getAttribution().getLines().isEmpty());
+
+        // The contract detail carries what the return needs: referencia catastral, tenants with DNI / NIE and the start date
+        IrpfReportDTO.Line flat3d = marta.getRental().getLines().get(0);
+        assertEquals("3D", flat3d.getUnitNumber());
+        assertEquals("9602605NJ4090S0007JT", flat3d.getCadastralReference());
+        IrpfReportDTO.Rental gabriela = flat3d.getRentals().stream().filter(r -> r.getClientName().startsWith("Gabriela")).findFirst().orElseThrow();
+        assertEquals("Y-8033348-Z", gabriela.getClientDocumentId());
+        assertEquals("Jofer Fernando Ramírez Jáuregui", gabriela.getCoClientName());
+        assertEquals("Y-9905319-S", gabriela.getCoClientDocumentId());
+        assertEquals(LocalDate.of(2023, 9, 1), gabriela.getStartDate());
+        IrpfReportDTO.Line flat3e = xiao.getRental().getLines().stream().filter(l -> "3E".equals(l.getUnitNumber())).findFirst().orElseThrow();
+        assertEquals("9602605NJ4090S0008KY", flat3e.getCadastralReference());
+        assertTrue(flat3e.getRentals().stream().anyMatch(r -> "23.020.088-D".equals(r.getClientDocumentId())), "Carmen's DNI on the 3E contract");
         assertTrue(report.getOwners().stream().noneMatch(o -> DataSeeder.ENTITY_NAME.equals(o.getOwnerName())));
     }
 
@@ -184,7 +197,7 @@ class TaxControllerTest {
     }
 
     @Test
-    void seededYearlyFilingsCover2024And2025() {
+    void seededYearlyFilingsCoverTheFiledYears() {
         OwnerDTO entity = ownerNamed(DataSeeder.ENTITY_NAME);
         assertEquals(OwnerType.COMUNIDAD_DE_BIENES, entity.getType());
 
@@ -201,9 +214,14 @@ class TaxControllerTest {
             assertEquals(0, live.getAttributedBase().compareTo(f.getAmount()));
         }
 
-        // IRPF: one per person with income that year
+        // IRPF: one per person with income that year, from the first rental (2021; flats only until the trasteros started in 2024)
         List<TaxFilingDTO> irpf = seededFilings(TaxModel.IRPF);
-        for (int year : new int[]{2024, 2025}) {
+        IrpfReportDTO irpf2023 = restTemplate.getForEntity("/api/taxes/irpf?year=2023", IrpfReportDTO.class).getBody();
+        assertNotNull(irpf2023);
+        assertTrue(irpf2023.getOwners().stream().noneMatch(o -> o.getOwnerName().startsWith("Juan")),
+                "Members without direct rentals are not listed in years the comunidad had no income");
+        assertTrue(irpf2023.getOwners().stream().anyMatch(o -> o.getOwnerName().startsWith("Xiao")));
+        for (int year : new int[]{2021, 2022, 2023, 2024, 2025}) {
             IrpfReportDTO live = restTemplate.getForEntity("/api/taxes/irpf?year=" + year, IrpfReportDTO.class).getBody();
             assertNotNull(live);
             final int y = year;

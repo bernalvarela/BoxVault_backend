@@ -61,6 +61,10 @@ public class StorageUnit {
     @Column(length = 100)
     private String location;
 
+    /** Referencia catastral of the property (needed on the tax returns). */
+    @Column(length = 30)
+    private String cadastralReference;
+
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal baseMonthlyRate;
 

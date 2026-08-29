@@ -27,6 +27,21 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  # Auto-update: polls Docker Hub every 5 minutes and recreates "boxvault" when a new
+  # image is published. containrrr/watchtower is archived; nickfedor/watchtower is the
+  # maintained fork (same flags and label). Alternative without any extra container:
+  # the cron job described in DEPLOY.md ("Actualización automática").
+  watchtower:
+    image: nickfedor/watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # only if the Docker Hub repo is private (docker login on the server first):
+      # - ~/.docker/config.json:/config.json:ro
+    command: --label-enable --cleanup --interval 300
 
 volumes:
   boxvault-data:

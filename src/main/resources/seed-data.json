@@ -154,13 +154,22 @@
       "fullName": "Carmen Palomo Valero",
       "email": "carmen.palomo.valero@clientes.example.com",
       "phone": "N/D",
-      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario de los pisos."
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario de los pisos.",
+      "documentId": "23.020.088-D"
     },
     {
       "fullName": "Gabriela Mariana Azócar Zurita",
       "email": "gabriela.mariana.azocar.zurita@clientes.example.com",
       "phone": "N/D",
-      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario de los pisos."
+      "notes": "Datos de contacto pendientes de completar. Cliente importado del extracto bancario de los pisos.",
+      "documentId": "Y-8033348-Z"
+    },
+    {
+      "fullName": "Jofer Fernando Ramírez Jáuregui",
+      "email": "jofer.fernando.ramirez.jauregui@clientes.example.com",
+      "phone": "N/D",
+      "documentId": "Y-9905319-S",
+      "notes": "Segundo inquilino del 3D junto a Gabriela Mariana Azócar Zurita; pagó las mensualidades de enero a noviembre de 2024 desde su cuenta."
     }
   ],
   "units": [
@@ -300,7 +309,8 @@
       "location": "Avenida del Pasaje (A Pasaxe) 29, 3º",
       "baseMonthlyRate": 650,
       "status": "OCCUPIED",
-      "description": "Apartamento 3º derecha. Superficie aproximada; ajustar con la medida real."
+      "description": "Apartamento 3º derecha. Superficie aproximada; ajustar con la medida real.",
+      "cadastralReference": "9602605NJ4090S0007JT"
     },
     {
       "unitNumber": "3E",
@@ -310,7 +320,8 @@
       "location": "Avenida del Pasaje (A Pasaxe) 29, 3º",
       "baseMonthlyRate": 590,
       "status": "OCCUPIED",
-      "description": "Apartamento 3º izquierda. Superficie aproximada; ajustar con la medida real."
+      "description": "Apartamento 3º izquierda. Superficie aproximada; ajustar con la medida real.",
+      "cadastralReference": "9602605NJ4090S0008KY"
     }
   ],
   "rentals": [
@@ -660,7 +671,8 @@
       "securityDeposit": 650,
       "depositPaid": false,
       "status": "ACTIVE",
-      "notes": "Importado del extracto bancario BBVA de los pisos (jul 2021 - ago 2026). De enero a noviembre de 2024 las mensualidades llegaron desde la cuenta de Jofer Fernando Ramírez Jáuregui (de agosto a noviembre de 2024 por 690,41 €, es decir 40,41 € por encima del alquiler). Fianza no localizada en el extracto (pendiente de confirmar)."
+      "notes": "Importado del extracto bancario BBVA de los pisos (jul 2021 - ago 2026). De enero a noviembre de 2024 las mensualidades llegaron desde la cuenta de Jofer Fernando Ramírez Jáuregui (de agosto a noviembre de 2024 por 690,41 €, es decir 40,41 € por encima del alquiler). Fianza no localizada en el extracto (pendiente de confirmar).",
+      "coClient": "Jofer Fernando Ramírez Jáuregui"
     }
   ],
   "payments": [
@@ -5295,7 +5307,7 @@
     },
     {
       "model": "IRPF",
-      "fromYear": 2024,
+      "fromYear": 2021,
       "toYear": 2025,
       "notes": "Presentado. Fecha aproximada (fin de campaña); registrado automáticamente desde seed-data.json."
     }

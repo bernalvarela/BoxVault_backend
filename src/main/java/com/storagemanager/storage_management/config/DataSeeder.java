@@ -116,6 +116,7 @@ public class DataSeeder implements CommandLineRunner {
                 }
                 markUnkindUnits();
                 seedMissingUnits(root);
+                backfillDetails(root);
                 if (expenseRepository.count() == 0) {
                     int n = seedExpenses(root);
                     if (n > 0) log.info("Backfilled {} expense(s) from seed-data.json.", n);
@@ -196,6 +197,7 @@ public class DataSeeder implements CommandLineRunner {
                     .fullName(name)
                     .email(str(c, "email"))
                     .phone(str(c, "phone"))
+                    .documentId(str(c, "documentId"))
                     .notes(str(c, "notes"))
                     .build());
             byName.put(client.getFullName(), client);
@@ -239,6 +241,7 @@ public class DataSeeder implements CommandLineRunner {
                         .parent(parent)
                         .sizeSquareMeters(Double.valueOf(str(u, "sizeSquareMeters")))
                         .location(str(u, "location"))
+                        .cadastralReference(str(u, "cadastralReference"))
                         .baseMonthlyRate(dec(u, "baseMonthlyRate"))
                         .status(UnitStatus.valueOf(str(u, "status")))
                         .description(str(u, "description"))
@@ -270,6 +273,10 @@ public class DataSeeder implements CommandLineRunner {
                 log.warn("Skipping rental ref {}: unknown unit '{}' or client '{}'.", r.get("ref"), unitNumber, str(r, "client"));
                 continue;
             }
+            Client coClient = str(r, "coClient") != null ? clientsByName.get(str(r, "coClient")) : null;
+            if (str(r, "coClient") != null && coClient == null) {
+                log.warn("Rental ref {}: unknown second tenant '{}'.", r.get("ref"), str(r, "coClient"));
+            }
             LocalDate start = LocalDate.parse(str(r, "startDate"));
             boolean active = r.get("endDate") == null;
 
@@ -283,6 +290,7 @@ public class DataSeeder implements CommandLineRunner {
                     .agreementNumber(agreementNumber)
                     .storageUnit(unit)
                     .client(client)
+                    .coClient(coClient)
                     .startDate(start)
                     .endDate(active ? null : LocalDate.parse(str(r, "endDate")))
                     .billingDayOfMonth(1)
@@ -359,6 +367,66 @@ public class DataSeeder implements CommandLineRunner {
         seedPriceHistoryFromRentals(created);
 
         log.info("Loaded {} rental(s) and {} payment(s) for the new unit(s).", rentalsByRef.size(), payments);
+    }
+
+    /**
+     * Incremental load of details added to seed-data.json after a database was created:
+     * clients' DNI / NIE, units' referencia catastral and the second tenant of a rental
+     * (matched by unit and start date). Only fills what is still empty. Idempotent.
+     */
+    @SuppressWarnings("unchecked")
+    private void backfillDetails(Map<String, Object> root) {
+        int changes = 0;
+        Map<String, Client> clientsByName = new HashMap<>();
+        for (Client c : clientRepository.findAll()) {
+            clientsByName.put(c.getFullName(), c);
+        }
+        for (Object o : (List<Object>) root.get("clients")) {
+            Map<String, Object> c = (Map<String, Object>) o;
+            String name = str(c, "fullName");
+            Client client = clientsByName.get(name);
+            if (client == null) {
+                clientsByName = seedClients(root, clientsByName);
+                changes++;
+                continue;
+            }
+            if (client.getDocumentId() == null && str(c, "documentId") != null) {
+                client.setDocumentId(str(c, "documentId"));
+                clientRepository.save(client);
+                changes++;
+            }
+        }
+
+        Map<String, StorageUnit> unitsByNumber = new HashMap<>();
+        for (StorageUnit u : storageUnitRepository.findAll()) {
+            unitsByNumber.put(u.getUnitNumber(), u);
+        }
+        for (Object o : (List<Object>) root.get("units")) {
+            Map<String, Object> u = (Map<String, Object>) o;
+            StorageUnit unit = unitsByNumber.get(str(u, "unitNumber"));
+            if (unit != null && unit.getCadastralReference() == null && str(u, "cadastralReference") != null) {
+                unit.setCadastralReference(str(u, "cadastralReference"));
+                storageUnitRepository.save(unit);
+                changes++;
+            }
+        }
+
+        for (Object o : (List<Object>) root.get("rentals")) {
+            Map<String, Object> r = (Map<String, Object>) o;
+            if (str(r, "coClient") == null) continue;
+            StorageUnit unit = unitsByNumber.get(str(r, "unit"));
+            Client coClient = clientsByName.get(str(r, "coClient"));
+            if (unit == null || coClient == null) continue;
+            LocalDate start = LocalDate.parse(str(r, "startDate"));
+            for (RentalAgreement agreement : rentalAgreementRepository.findByStorageUnitId(unit.getId())) {
+                if (agreement.getCoClient() == null && start.equals(agreement.getStartDate())) {
+                    agreement.setCoClient(coClient);
+                    rentalAgreementRepository.save(agreement);
+                    changes++;
+                }
+            }
+        }
+        if (changes > 0) log.info("Backfilled {} client / unit / rental detail(s) from seed-data.json.", changes);
     }
 
     /** Rows created before unit kinds existed are storage units. Idempotent. */

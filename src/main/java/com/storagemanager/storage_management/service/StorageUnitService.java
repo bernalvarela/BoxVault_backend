@@ -104,6 +104,7 @@ public class StorageUnitService {
                 .sizeSquareMeters(request.getSizeSquareMeters())
                 .dimensions(request.getDimensions())
                 .location(request.getLocation())
+                .cadastralReference(trimToNull(request.getCadastralReference()))
                 .baseMonthlyRate(request.getBaseMonthlyRate())
                 .status(request.getStatus() != null ? request.getStatus() : UnitStatus.AVAILABLE)
                 .description(request.getDescription())
@@ -135,6 +136,7 @@ public class StorageUnitService {
         unit.setSizeSquareMeters(request.getSizeSquareMeters());
         unit.setDimensions(request.getDimensions());
         unit.setLocation(request.getLocation());
+        unit.setCadastralReference(trimToNull(request.getCadastralReference()));
         unit.setBaseMonthlyRate(request.getBaseMonthlyRate());
         if (priceChanged) {
             recordPrice(unit, request.getBaseMonthlyRate(), "Cambio de precio");
@@ -202,6 +204,9 @@ public class StorageUnitService {
                         .rentalId(r.getId())
                         .agreementNumber(r.getAgreementNumber())
                         .clientName(r.getClient().getFullName())
+                        .clientDocumentId(r.getClient().getDocumentId())
+                        .coClientName(r.getCoClient() != null ? r.getCoClient().getFullName() : null)
+                        .coClientDocumentId(r.getCoClient() != null ? r.getCoClient().getDocumentId() : null)
                         .startDate(r.getStartDate())
                         .endDate(r.getEndDate())
                         .monthlyRent(r.getMonthlyRent())
@@ -228,6 +233,12 @@ public class StorageUnitService {
                 .priceHistory(prices)
                 .rentalHistory(rentals)
                 .build();
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private void recordPrice(StorageUnit unit, java.math.BigDecimal price, String note) {

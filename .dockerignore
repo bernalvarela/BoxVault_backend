@@ -7,3 +7,5 @@ target/
 *.iml
 HELP.md
 docker-compose.yml
+deploy/
+DEPLOY.md
