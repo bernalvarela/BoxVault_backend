@@ -131,7 +131,7 @@ class TaxControllerTest {
             assertEquals(0, rental.getNet().add(attribution.getIncomeBase()).compareTo(owner.getTotalNet()));
             for (IrpfReportDTO.Line line : rental.getLines()) {
                 assertEquals("UNIT", line.getScope());
-                assertTrue(line.getUnitNumber().matches("3[DE]"), "Only the flats are held directly by persons: " + line.getUnitNumber());
+                assertTrue(line.getUnitNumber().matches("[13][DE]"), "Only the flats are held directly by persons: " + line.getUnitNumber());
                 assertEquals(0, line.getIncomeBase().subtract(line.getExpenses()).compareTo(line.getNet()));
             }
             for (IrpfReportDTO.Line line : attribution.getLines()) {

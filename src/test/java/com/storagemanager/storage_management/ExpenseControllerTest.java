@@ -48,8 +48,8 @@ class ExpenseControllerTest {
         ResponseEntity<Expense[]> july2026 = restTemplate.getForEntity(
                 "/api/expenses?year=2026&month=7", Expense[].class);
         assertNotNull(july2026.getBody());
-        assertEquals(14, july2026.getBody().length,
-                "July 2026: 5 on the storage local + 2 on 3D + 2 on 3E + 2 shared flats entries split into 4 rows + 1 on the empty local");
+        assertEquals(17, july2026.getBody().length,
+                "July 2026: 5 on the storage local + 2 on 3D + 2 on 3E + 2 shared flats entries split into 4 rows + 3 on the first-floor account + 1 on the empty local");
         for (Expense e : july2026.getBody()) {
             assertEquals(2026, e.getExpenseDate().getYear());
             assertEquals(7, e.getExpenseDate().getMonthValue());
