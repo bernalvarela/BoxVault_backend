@@ -26,7 +26,10 @@ public class UnitPriceHistory {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    // EAGER on purpose: the GraalVM native image cannot generate HibernateProxy
+    // classes at runtime, so a lazy to-one association fails with "Generation of
+    // HibernateProxy instances at runtime is not allowed" as soon as a row loads.
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
     @JoinColumn(name = "storage_unit_id", nullable = false)
     private StorageUnit storageUnit;
 
