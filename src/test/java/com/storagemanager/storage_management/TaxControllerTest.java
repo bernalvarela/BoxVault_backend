@@ -223,8 +223,13 @@ class TaxControllerTest {
         List<TaxFilingDTO> irpf = seededFilings(TaxModel.IRPF);
         IrpfReportDTO irpf2023 = restTemplate.getForEntity("/api/taxes/irpf?year=2023", IrpfReportDTO.class).getBody();
         assertNotNull(irpf2023);
-        assertTrue(irpf2023.getOwners().stream().noneMatch(o -> o.getOwnerName().startsWith("Juan")),
-                "Members without direct rentals are not listed in years the comunidad had no income");
+        // Juan owns the first-floor flats directly, so he is listed in 2023 with rental lines only:
+        // the comunidad had no income that year, hence nothing is attributed to its members.
+        IrpfReportDTO.OwnerReport juan2023 = irpf2023.getOwners().stream()
+                .filter(o -> o.getOwnerName().startsWith("Juan")).findFirst().orElseThrow();
+        assertEquals(2, juan2023.getRental().getLines().size(), "1E and 1D");
+        assertTrue(juan2023.getAttribution().getLines().isEmpty(),
+                "Members get no attribution in years the comunidad had no income");
         assertTrue(irpf2023.getOwners().stream().anyMatch(o -> o.getOwnerName().startsWith("Xiao")));
         for (int year : new int[]{2021, 2022, 2023, 2024, 2025}) {
             IrpfReportDTO live = restTemplate.getForEntity("/api/taxes/irpf?year=" + year, IrpfReportDTO.class).getBody();

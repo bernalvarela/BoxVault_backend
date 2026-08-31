@@ -193,13 +193,14 @@ class ExpenseControllerTest {
         // July 2026, storage account: 227.89 + 125.78 + 203.55 + 14.71 = 571.93 (4 expenses)
         // July 2026, flats account: 300 + 300 owner transfers, 20 + 20 + 6.70 + 6.70 community,
         //                           182.03 + 148.65 IBI = 984.08 (8 expenses)
+        // July 2026, first-floor account: 203.26 + 160.79 IBI, 172.63 Caser (net of the 54 EUR refund) = 536.68 (3 expenses)
         ResponseEntity<DashboardStatsDTO> response = restTemplate.getForEntity(
                 "/api/statistics/range?startDate=2026-07-01&endDate=2026-07-31", DashboardStatsDTO.class);
         assertEquals(200, response.getStatusCode().value());
         DashboardStatsDTO stats = response.getBody();
         assertNotNull(stats);
-        assertEquals(0, new BigDecimal("1556.01").compareTo(stats.getCurrentMonthExpenses()));
-        assertEquals(14, stats.getCurrentMonthExpenseCount());
+        assertEquals(0, new BigDecimal("2092.69").compareTo(stats.getCurrentMonthExpenses()));
+        assertEquals(17, stats.getCurrentMonthExpenseCount());
         BigDecimal byCategoryTotal = stats.getExpensesByCategory().stream()
                 .map(c -> c.getAmount())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);

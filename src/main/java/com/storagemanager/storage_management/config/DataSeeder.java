@@ -53,7 +53,10 @@ import java.util.Set;
  *       owned by the Comunidad de bienes Pasaxe 29;</li>
  *   <li>the 9 trasteros (statement of the storage account, March 2024 - August 2026);</li>
  *   <li>the 2 apartments 3D / 3E (statement of the flats account, July 2021 -
- *       August 2026), VAT exempt and held directly by the persons.</li>
+ *       August 2026), VAT exempt and held directly by the persons;</li>
+ *   <li>the 2 apartments 1D / 1E (ING statements of the first-floor account of Juan
+ *       María Varela Brage and María Luisa Gómez Gómez, May 2021 - August 2026), VAT
+ *       exempt: 1E owned by Juan María, 1D held 50/50 by Juan María and María Luisa.</li>
  * </ul>
  * Notes on the reconstruction:
  * - Only incoming bank transfers appear in the statements; months without a
@@ -73,12 +76,24 @@ import java.util.Set;
  *   outflow reimbursed by an inflow of the same amount and the deposit forwarded to
  *   the IGVS; the January 2026 electricity bills, only partly refunded by the
  *   tenants, are seeded for the uncovered 2,10 EUR.
+ * - First-floor account (1D / 1E): the payer names are only visible from August 2023
+ *   (earlier tenants and dates were supplied by the owners); rent rises inside a
+ *   tenancy keep a single agreement (its monthlyRent is the last rent, each payment
+ *   carries its own amount). Seeded expenses: IBI of each flat (the 130,65 / 134,57 /
+ *   203,26 EUR receipt is 1E, the 103,35 / 106,45 / 160,79 EUR one is 1D), the
+ *   Multiseguros Galicia policy of 1E ("Seguro 1 Pasaxe esqda", every July), the
+ *   Caser policy of 1D, the DAS rent-default covers (net of the 175 EUR the tenant
+ *   paid back) and the electricity of 1D between tenancies. Excluded: the IBI of
+ *   the bajos reimbursed by the comunidad, the Modelo 100 (IRPF) payments, the May
+ *   Multiseguros policy, internal transfers, personal card payments and works whose
+ *   flat is not identified in the statement.
  * <p>
  * On an already-seeded database the seeder is incremental and idempotent: it
  * backfills price history / kinds when missing, any unit present in seed-data.json
- * but absent from the database is loaded together with its clients, rentals and
- * payments, expenses / owners are loaded when their tables are still empty, and the
- * filed tax returns are registered when missing.
+ * but absent from the database is loaded together with its clients, rentals,
+ * payments and the expenses booked on it, expenses are loaded when their table is
+ * still empty, owners / shares that do not exist yet are created, and the filed tax
+ * returns are registered when missing.
  */
 @Slf4j
 @Component
@@ -365,8 +380,10 @@ public class DataSeeder implements CommandLineRunner {
         Map<Integer, RentalAgreement> rentalsByRef = seedRentals(root, unitsByNumber, clientsByName, createdNumbers);
         int payments = seedPayments(root, rentalsByRef);
         seedPriceHistoryFromRentals(created);
+        int expenses = expenseRepository.count() == 0 ? 0 : seedExpenses(root, createdNumbers);
 
-        log.info("Loaded {} rental(s) and {} payment(s) for the new unit(s).", rentalsByRef.size(), payments);
+        log.info("Loaded {} rental(s), {} payment(s) and {} expense(s) for the new unit(s).",
+                rentalsByRef.size(), payments, expenses);
     }
 
     /**
@@ -446,8 +463,17 @@ public class DataSeeder implements CommandLineRunner {
      * units ("units": ["3D", "3E"]) among which the amount is split evenly; an entry
      * without any is a general expense.
      */
-    @SuppressWarnings("unchecked")
     private int seedExpenses(Map<String, Object> root) {
+        return seedExpenses(root, null);
+    }
+
+    /**
+     * Same as {@link #seedExpenses(Map)} but, when {@code onlyUnits} is given, only
+     * the shares booked on those unit numbers are created (general expenses and the
+     * shares of other units are skipped): the incremental load of new units.
+     */
+    @SuppressWarnings("unchecked")
+    private int seedExpenses(Map<String, Object> root, Set<String> onlyUnits) {
         List<Object> entries = (List<Object>) root.get("expenses");
         if (entries == null) return 0;
 
@@ -472,6 +498,7 @@ public class DataSeeder implements CommandLineRunner {
             }
 
             if (targets.isEmpty()) {
+                if (onlyUnits != null) continue;
                 expenseRepository.save(Expense.builder()
                         .expenseDate(date).amount(amount).description(description).category(category).build());
                 count++;
@@ -490,6 +517,7 @@ public class DataSeeder implements CommandLineRunner {
                 boolean last = i == targets.size() - 1;
                 BigDecimal share = targets.size() == 1 ? amount : last ? amount.subtract(assigned) : each;
                 assigned = assigned.add(share);
+                if (onlyUnits != null && !onlyUnits.contains(number)) continue;
                 String text = targets.size() == 1 ? description
                         : description + " (1/" + targets.size() + ", reparto " + String.join("/", targets) + ")";
                 if (text.length() > 255) text = text.substring(0, 255);
@@ -604,18 +632,22 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     /**
-     * Incremental load for an already-seeded database: when no owner exists yet,
-     * the owners, members and shares of seed-data.json are created.
+     * Incremental load for an already-seeded database: the owners, members and
+     * shares of seed-data.json that do not exist yet are created (an owner is matched
+     * by full name, a share by owner and unit, members only when the entity has none).
      */
     private void seedMissingOwners(Map<String, Object> root) {
-        if (ownerRepository.count() > 0) return;
         Map<String, StorageUnit> unitsByNumber = new HashMap<>();
         for (StorageUnit u : storageUnitRepository.findAll()) {
             unitsByNumber.put(u.getUnitNumber(), u);
         }
+        long before = ownerRepository.count();
         Map<String, Owner> owners = seedOwners(root);
         int shares = seedOwnerships(root, owners, unitsByNumber);
-        if (!owners.isEmpty()) log.info("Backfilled {} owner(s) and {} share(s) from seed-data.json.", owners.size(), shares);
+        long created = ownerRepository.count() - before;
+        if (created > 0 || shares > 0) {
+            log.info("Backfilled {} owner(s) and {} share(s) from seed-data.json.", created, shares);
+        }
     }
 
     /**

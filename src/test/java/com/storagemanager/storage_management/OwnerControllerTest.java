@@ -143,9 +143,10 @@ class OwnerControllerTest {
         assertEquals(0, new BigDecimal("100").compareTo(inherited[0].getSharePercent()));
 
         // The flats have their own shares that add up to 100 %
-        for (String number : new String[]{"3E", "3D"}) {
+        Map<String, Integer> ownersPerFlat = Map.of("3E", 2, "3D", 3, "1E", 1, "1D", 2);
+        for (String number : ownersPerFlat.keySet()) {
             OwnershipDTO[] own = effectiveOwners(unitNumbered(number).getId());
-            assertEquals("3E".equals(number) ? 2 : 3, own.length);
+            assertEquals(ownersPerFlat.get(number).intValue(), own.length, "Owners of " + number);
             BigDecimal total = BigDecimal.ZERO;
             for (OwnershipDTO share : own) {
                 assertFalse(share.isInherited());
