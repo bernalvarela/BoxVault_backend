@@ -1,4 +1,6 @@
 target/
+# except the native binary Dockerfile.runtime copies into the runtime image
+!target/boxvault-backend
 .claude/
 .git/
 .github/

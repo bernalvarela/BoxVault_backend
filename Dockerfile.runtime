@@ -1,0 +1,29 @@
+# Runtime-only image for a boxvault-backend native binary compiled OUTSIDE Docker
+# (CI compiles it on the runner with the GraalVM musl toolchain; see
+# .github/workflows/main.yml). Expects the static binary at target/boxvault-backend:
+#
+#   ./mvnw -Pnative,native-static -DskipTests native:compile
+#   docker build -f Dockerfile.runtime -t boxvault-backend .
+#
+# Dockerfile keeps the self-contained variant that compiles inside the build stage.
+
+# The binary is static, so the base only provides a user, a shell for the compose
+# healthcheck and CA certificates / timezone data.
+FROM debian:bookworm-slim
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tzdata \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system boxvault && useradd --system --gid boxvault --home /app boxvault \
+    && mkdir -p /data && chown boxvault:boxvault /data
+USER boxvault
+
+COPY target/boxvault-backend /app/boxvault-backend
+
+# H2 database file lives here when SPRING_DATASOURCE_URL points at /data (see docker-compose.yml)
+VOLUME /data
+EXPOSE 8088
+
+# Native images accept the usual heap flags (e.g. -Xmx256m); much less is needed than on the JVM
+ENV JAVA_OPTS=""
+ENTRYPOINT ["sh", "-c", "exec /app/boxvault-backend $JAVA_OPTS"]
