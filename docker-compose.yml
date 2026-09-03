@@ -11,8 +11,13 @@
 # database is left exactly as it is, so payments, expenses and registered tax
 # returns survive restarts and image updates.
 #
-# Keep this file, ./deploy/postgres/*.sql and deploy/update.sh together in the
-# deployment directory (~/boxvault); see DEPLOY.md, step 3.
+# Traefik runs in its own stack and reaches the app through the external
+# "traefik-net" network; the database is only on the internal "boxvault-net", so
+# nothing but the app can talk to it. Watchtower redeploys the app by itself
+# whenever a new image is published (see the bottom of this file).
+#
+# Keep this file and ./deploy/postgres/*.sql together in the deployment
+# directory (/share/Container/boxVault); see DEPLOY.md, step 3.
 services:
   postgres:
     image: postgres:18.6-alpine
@@ -30,9 +35,13 @@ services:
       # Schema + initial data. Only read when the volume above is empty; the
       # entrypoint runs the .sql files in name order and ignores everything else.
       - ./deploy/postgres:/docker-entrypoint-initdb.d:ro
-    # No published port on purpose: only the app, on the compose network, talks
-    # to it. Add "127.0.0.1:5432:5432" here to reach it with psql from the host.
+    # No published port and no traefik-net on purpose: only the app, on the
+    # internal network, reaches the database. Add "127.0.0.1:5432:5432" under a
+    # "ports:" key to connect with psql from the NAS itself.
+    # No watchtower label either: the database must never be upgraded to a new
+    # major version unattended (it would refuse to start on the old data files).
     restart: unless-stopped
+    networks: [boxvault-net]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
@@ -46,36 +55,73 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # Direct LAN access, bypassing the Traefik router and therefore its basic
+    # auth. Remove this block to make boxvault.duckdns.org the only way in.
     ports:
       - "8088:8088"
     environment:
-      # Switches the datasource to PostgreSQL (see the "pro" profile in application.yml).
-      # Without it the app falls back to "dev": the in-memory H2 database.
+      # Switches the datasource to PostgreSQL (see the "pro" profile in
+      # application.yml). Without it the app falls back to "dev": in-memory H2.
+      # The H2 console only exists under "dev", so nothing has to disable it here.
       SPRING_PROFILES_ACTIVE: pro
       POSTGRES_HOST: postgres
       POSTGRES_DB: ${POSTGRES_DB:-boxvault}
       POSTGRES_USER: ${POSTGRES_USER:-boxvault}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
-      # Native image: the heap flag is honoured but far less memory is needed than on the JVM
-      JAVA_OPTS: "-Xmx256m"
+      # Native images accept the usual heap flags; far less is needed than on the JVM
+      JAVA_OPTS: "-Xmx512m"
       TZ: Europe/Madrid
     volumes:
       # Kept from the H2 deployment: the old /data/boxvault.mv.db file is still in
       # there. Nothing writes to it any more; drop the volume once you no longer
       # need it as a backup of the pre-PostgreSQL data.
       - boxvault-data:/data
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+      traefik.enable: "true"
+      traefik.http.routers.boxvault-https.entrypoints: "websecure"
+      traefik.http.routers.boxvault-https.rule: "Host(`boxvault.duckdns.org`)"
+      traefik.http.routers.boxvault-https.tls: "true"
+      traefik.http.routers.boxvault-https.tls.certresolver: "letsencrypt"
+      traefik.http.services.boxvault.loadbalancer.server.port: "8088"
+      traefik.http.middlewares.boxvault-auth.basicauth.users: "oscastros29:$$2y$$05$$oV1nD3O0uUebT3zz.U3p0eOyeRw9rE23HJLn5VnerIMxcztn4MFji"
+      traefik.http.routers.boxvault-https.middlewares: "boxvault-auth"
     restart: unless-stopped
+    # traefik-net to be reachable by the Traefik stack, boxvault-net to reach the database.
+    networks: [traefik-net, boxvault-net]
     healthcheck:
-      # The JRE image has no curl/wget; a bash TCP probe is enough to know the server is listening
+      # The runtime image has no curl/wget; a bash TCP probe is enough to know the server is listening
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8088"]
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 60s
 
-# Auto-update: deploy/update.sh run from cron every 5 minutes pulls the image and
-# recreates "boxvault" only when a new version was published (see DEPLOY.md, step 4).
+  # Auto-update (CD). --label-enable means only the containers carrying
+  # com.centurylinklabs.watchtower.enable=true are touched: the app, never the
+  # database. Every 5 minutes it pulls ${DOCKER_IMAGE} and recreates "boxvault"
+  # only when the image id changed; this replaces the deploy/update.sh cron job.
+  watchtower:
+    image: nickfedor/watchtower
+    container_name: boxvault-watchtower
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Madrid
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # only if the Docker Hub repo is private (docker login on the server first):
+      # - ~/.docker/config.json:/config.json:ro
+    command: --label-enable --cleanup --interval 300
+    networks: [boxvault-net]
 
 volumes:
   boxvault-db:
   boxvault-data:
+
+networks:
+  # Created by the Traefik stack; this project only joins it.
+  traefik-net:
+    external: true
+  # Private to this project: app <-> database.
+  boxvault-net:
+    driver: bridge
