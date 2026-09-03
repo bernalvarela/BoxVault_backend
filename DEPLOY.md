@@ -23,8 +23,10 @@ changing the code):
   the baseline x86-64 ISA (`-march=compatibility`), so it starts on any server CPU or
   VM CPU model; a glibc-linked build from the Oracle Linux 9 GraalVM image needs
   x86-64-v2 and fails with "CPU ISA level is lower than required" on older CPUs;
-- the H2 web console is off by default (`application.yml`); use the `dev` profile
-  locally.
+- the app has one profile per database (`application.yml`): **`dev`** is the H2
+  one and is what you get when no profile is set, **`pro`** is PostgreSQL and is
+  what `docker-compose.yml` activates. The H2 web console is served under `dev`
+  only, so it is never reachable on the server.
 
 ## 1. Publish the image (GitHub Actions → Docker Hub)
 
@@ -64,20 +66,69 @@ The push to `master` triggers the image build.
 Docker + the compose plugin are the only requirements.
 
 ```bash
-mkdir -p ~/boxvault && cd ~/boxvault
-curl -O https://raw.githubusercontent.com/bernalvarela/BoxVault_backend/master/docker-compose.yml
-echo "DOCKER_IMAGE=<docker-hub-user>/boxvault-backend:latest" > .env
+mkdir -p ~/boxvault/deploy/postgres && cd ~/boxvault
+BASE=https://raw.githubusercontent.com/bernalvarela/BoxVault_backend/master
+curl -O $BASE/docker-compose.yml
+curl -o deploy/postgres/01-schema.sql    $BASE/deploy/postgres/01-schema.sql
+curl -o deploy/postgres/02-seed-data.sql $BASE/deploy/postgres/02-seed-data.sql
+
+cat > .env <<EOF
+DOCKER_IMAGE=<docker-hub-user>/boxvault-backend:latest
+POSTGRES_PASSWORD=$(openssl rand -base64 24)
+EOF
+
 docker compose pull && docker compose up -d
 ```
 
 - The app listens on port **8088**; put a reverse proxy (Caddy / nginx) in front
   for HTTPS if it is exposed to the internet.
-- The H2 database is stored in the `boxvault-data` volume
-  (`SPRING_DATASOURCE_URL=jdbc:h2:file:/data/boxvault`), so data survives
-  restarts and upgrades. Back it up with
-  `docker run --rm -v boxvault-data:/data -v "$PWD":/backup alpine tar czf /backup/boxvault-data.tgz -C /data .`
+- The data lives in **PostgreSQL 18.6** (`postgres` service), in the `boxvault-db`
+  volume. The database is not published outside the compose network; the app
+  reaches it as `postgres:5432` with the `pro` Spring profile
+  (`SPRING_PROFILES_ACTIVE=pro`).
+- The **first** start — and only that one — runs `deploy/postgres/01-schema.sql`
+  (tables and indexes) and `02-seed-data.sql` (the historical data reconstructed
+  from the bank statements). Once the volume exists the scripts are ignored, so
+  payments, expenses and registered tax returns survive restarts and upgrades.
+  The filed tax returns are the exception: the app registers them itself on the
+  first start, because their snapshot is a report computed from the seeded data.
+- Backup / restore:
+  ```bash
+  docker compose exec -T postgres pg_dump -U boxvault -Fc boxvault > boxvault-$(date +%F).dump
+  docker compose exec -T postgres pg_restore -U boxvault -d boxvault --clean < boxvault-2026-09-03.dump
+  ```
 - Upgrade: `docker compose pull && docker compose up -d`.
-- Logs: `docker compose logs -f boxvault`.
+- Logs: `docker compose logs -f boxvault` (add `postgres` for the database).
+- `psql` on the server: `docker compose exec postgres psql -U boxvault -d boxvault`.
+
+### Schema and initial data
+
+`deploy/postgres/01-schema.sql` is the hand-written schema: the ten tables with
+their foreign keys and the indexes each repository query needs (they are
+documented next to the index that serves them). `deploy/postgres/02-seed-data.sql`
+is **generated** from `src/main/resources/seed-data.json`, which stays the single
+source of truth; regenerate it after editing the JSON:
+
+```bash
+node deploy/postgres/generate-seed-sql.mjs
+```
+
+`spring.jpa.hibernate.ddl-auto` stays at `update` under `pro` too, so adding a
+field to an entity still creates its column by itself. `update` never drops
+anything, so the indexes above are safe. Under `dev` — no profile set, or
+`SPRING_PROFILES_ACTIVE=dev` — nothing changes: the app runs on the in-memory H2
+database and `DataSeeder` loads the JSON on every start, as before.
+
+### Coming from the H2 deployment
+
+The old `boxvault-data` volume (`/data/boxvault.mv.db`) is still mounted in the
+`boxvault` service, purely so the previous database remains available as a
+backup; nothing writes to it any more. If the H2 database holds payments,
+expenses or tax returns entered by hand after the last change to
+`seed-data.json`, export them from the H2 file before switching, because the
+PostgreSQL database starts from the seed scripts. Once you are satisfied with
+the new deployment, `docker volume rm boxvault-data` and drop the volume from
+`docker-compose.yml`.
 
 ## 4. Actualización automática (CD)
 
@@ -107,6 +158,11 @@ nothing new until you change it.
 
 ```bash
 docker build -t boxvault-backend .
-docker run --rm -p 8088:8088 -v boxvault-data:/data \
-  -e SPRING_DATASOURCE_URL="jdbc:h2:file:/data/boxvault;DB_CLOSE_ON_EXIT=FALSE" boxvault-backend
+DOCKER_IMAGE=boxvault-backend POSTGRES_PASSWORD=local docker compose up
+```
+
+Or, with the in-memory H2 database and no PostgreSQL at all (the default profile):
+
+```bash
+docker run --rm -p 8088:8088 boxvault-backend
 ```

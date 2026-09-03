@@ -5,34 +5,68 @@ spring:
   application:
     name: storage-management
 
-  # Embedded H2 database (default) — zero-config local development.
-  # The Docker deployment overrides the URL with a file database on a volume.
-  datasource:
-    url: jdbc:h2:mem:storage_db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-    driverClassName: org.h2.Driver
-    username: sa
-    password: ""
-  # The H2 web console is a development tool and is not part of the native image:
-  # it is off by default and switched on by the "dev" profile below.
-  h2:
-    console:
-      enabled: false
-      path: /h2-console
+  # Two profiles, one per database:
+  #   dev — embedded H2, zero configuration; what you get when no profile is set
+  #         (./mvnw spring-boot:run) and what the tests use (they activate "h2").
+  #   pro — PostgreSQL, the server deployment: SPRING_PROFILES_ACTIVE=pro,
+  #         set by docker-compose.yml.
+  profiles:
+    default: dev
 
   jpa:
     open-in-view: false
     hibernate:
       ddl-auto: update
     show-sql: false
-    database-platform: org.hibernate.dialect.H2Dialect
 
 ---
-# Local development: ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
-# (or SPRING_PROFILES_ACTIVE=dev) enables the H2 console at /h2-console.
+# ---------------------------------------------------------------------
+# dev — embedded H2 database, kept in memory, seeded by DataSeeder from
+# seed-data.json on every start. The H2 web console is served at /h2-console
+# (jdbc:h2:mem:storage_db, user "sa", empty password); it is a development tool
+# and is not reachable under "pro", where the console stays disabled.
+#
+# "h2" activates the same document: it is the profile the tests declare.
+# ---------------------------------------------------------------------
 spring:
   config:
     activate:
-      on-profile: dev
+      on-profile: "dev | h2"
+  datasource:
+    url: jdbc:h2:mem:storage_db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driverClassName: org.h2.Driver
+    username: sa
+    password: ""
   h2:
     console:
       enabled: true
+      path: /h2-console
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+
+---
+# ---------------------------------------------------------------------
+# pro — PostgreSQL, the server deployment (docker-compose.yml).
+#
+# The schema, its indexes and the historical data come from deploy/postgres/*.sql,
+# which the database container loads once, when its volume is created. ddl-auto is
+# left at "update" so a new entity field still adds its column by itself; it never
+# drops anything, so the indexes defined in 01-schema.sql stay as they are.
+#
+# The tax filings are the one thing the SQL cannot carry (their snapshot is a
+# report computed from the data), so DataSeeder registers them on the first start.
+# ---------------------------------------------------------------------
+spring:
+  config:
+    activate:
+      on-profile: pro
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:boxvault}
+    driverClassName: org.postgresql.Driver
+    username: ${POSTGRES_USER:boxvault}
+    password: ${POSTGRES_PASSWORD:boxvault}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect

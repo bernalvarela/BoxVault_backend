@@ -1,25 +1,68 @@
 # Server deployment of BoxVault from the image published by GitHub Actions.
 #
 #   export DOCKER_IMAGE=<docker-hub-user>/boxvault-backend:latest   # or put it in a .env file
+#   export POSTGRES_PASSWORD=<a long random password>               # required, same file
 #   docker compose pull && docker compose up -d
 #
-# The H2 database is kept in the "boxvault-data" volume, so payments, expenses and
-# registered tax returns survive restarts and image updates. The seeder only fills an
-# empty database and backfills missing pieces afterwards.
+# The data lives in PostgreSQL, in the "boxvault-db" volume. The first time that
+# volume is created - and only then - the database container runs the scripts in
+# ./deploy/postgres: they create the tables with their indexes (01-schema.sql)
+# and load the historical data (02-seed-data.sql). On every later start the
+# database is left exactly as it is, so payments, expenses and registered tax
+# returns survive restarts and image updates.
 #
-# Keep this file and deploy/update.sh together in the deployment directory (~/boxvault).
+# Keep this file, ./deploy/postgres/*.sql and deploy/update.sh together in the
+# deployment directory (~/boxvault); see DEPLOY.md, step 3.
 services:
+  postgres:
+    image: postgres:18.6-alpine
+    container_name: boxvault-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-boxvault}
+      POSTGRES_USER: ${POSTGRES_USER:-boxvault}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      TZ: Europe/Madrid
+    volumes:
+      # PostgreSQL 18 moved PGDATA to /var/lib/postgresql/<major>/docker and
+      # declares the volume one level up: mount /var/lib/postgresql, not
+      # /var/lib/postgresql/data as the images up to 17 wanted.
+      - boxvault-db:/var/lib/postgresql
+      # Schema + initial data. Only read when the volume above is empty; the
+      # entrypoint runs the .sql files in name order and ignores everything else.
+      - ./deploy/postgres:/docker-entrypoint-initdb.d:ro
+    # No published port on purpose: only the app, on the compose network, talks
+    # to it. Add "127.0.0.1:5432:5432" here to reach it with psql from the host.
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   boxvault:
     image: ${DOCKER_IMAGE:-boxvault-backend:latest}
     container_name: boxvault
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "8088:8088"
     environment:
-      SPRING_DATASOURCE_URL: "jdbc:h2:file:/data/boxvault;DB_CLOSE_ON_EXIT=FALSE"
+      # Switches the datasource to PostgreSQL (see the "pro" profile in application.yml).
+      # Without it the app falls back to "dev": the in-memory H2 database.
+      SPRING_PROFILES_ACTIVE: pro
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-boxvault}
+      POSTGRES_USER: ${POSTGRES_USER:-boxvault}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       # Native image: the heap flag is honoured but far less memory is needed than on the JVM
       JAVA_OPTS: "-Xmx256m"
       TZ: Europe/Madrid
     volumes:
+      # Kept from the H2 deployment: the old /data/boxvault.mv.db file is still in
+      # there. Nothing writes to it any more; drop the volume once you no longer
+      # need it as a backup of the pre-PostgreSQL data.
       - boxvault-data:/data
     restart: unless-stopped
     healthcheck:
@@ -34,4 +77,5 @@ services:
 # recreates "boxvault" only when a new version was published (see DEPLOY.md, step 4).
 
 volumes:
+  boxvault-db:
   boxvault-data:
