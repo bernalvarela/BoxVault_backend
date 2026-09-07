@@ -186,8 +186,11 @@ public class TaxService {
                 .toList();
         Set<Long> unitIds = idsOf(vatUnits);
 
+        // Un cobro anulado marca un mes que no se cobra a nadie: no es un hecho
+        // fiscal, así que no entra ni como ingreso ni como pendiente del trimestre.
         List<Payment> payments = paymentRepository.findByBillingPeriodYear(year).stream()
                 .filter(p -> p.getStorageUnit() != null && unitIds.contains(p.getStorageUnit().getId()))
+                .filter(p -> p.getStatus() != PaymentStatus.CANCELLED)
                 .toList();
 
         List<Modelo303DTO.Quarter> quarters = new ArrayList<>();

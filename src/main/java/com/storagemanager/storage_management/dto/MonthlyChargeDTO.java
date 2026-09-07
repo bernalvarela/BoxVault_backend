@@ -45,7 +45,10 @@ public class MonthlyChargeDTO {
     /** Lo que falta por cobrar del periodo (nunca negativo). */
     private BigDecimal outstanding;
 
-    /** COLLECTED (cobrado), PENDING (mes en curso sin cobrar), OVERDUE (mes ya cerrado sin cobrar). */
+    /**
+     * COLLECTED (cobrado), PENDING (mes en curso sin cobrar), OVERDUE (mes ya
+     * cerrado sin cobrar) o WAIVED (marcado a mano como no cobrable).
+     */
     private String status;
 
     /** El cobro recibido, cuando lo hay; null mientras el mes esté sin cobrar. */

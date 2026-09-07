@@ -1,5 +1,6 @@
 package com.storagemanager.storage_management.service;
 
+import com.storagemanager.storage_management.dto.ChargeAdjustmentRequest;
 import com.storagemanager.storage_management.dto.PaymentRequest;
 import com.storagemanager.storage_management.dto.RecordPaymentRequest;
 import com.storagemanager.storage_management.exception.BadRequestException;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Optional;
 
@@ -125,6 +127,75 @@ public class PaymentService {
             payment.setTransactionReference(reference);
         }
         return paymentRepository.save(payment);
+    }
+
+    /**
+     * Corrige a mano la mensualidad de un contrato: fija lo que se debe y lo que
+     * se ha cobrado de ese mes, o lo marca como no cobrable. Si el mes todavía no
+     * tenía fila de cobro (el caso normal de un vencido, que sólo existe deducido
+     * del contrato) se le crea una; si ya la tenía, se corrige.
+     * <p>
+     * Un mes no cobrable se guarda como cobro anulado a cero, que es lo que
+     * {@link BillingService} lee para dejarlo fuera de vencidos y de lo esperado.
+     */
+    @Transactional
+    public Payment adjustCharge(Long rentalAgreementId, Integer year, Integer month, ChargeAdjustmentRequest request) {
+        if (year == null || month == null || month < 1 || month > 12) {
+            throw new BadRequestException("Invalid billing period: " + month + "/" + year);
+        }
+        RentalAgreement agreement = rentalAgreementRepository.findById(rentalAgreementId)
+                .orElseThrow(() -> new ResourceNotFoundException("Rental agreement not found with id: " + rentalAgreementId));
+
+        BigDecimal due = request.isWaived() ? BigDecimal.ZERO : request.getAmountDue();
+        BigDecimal paid = request.isWaived() || request.getAmountPaid() == null
+                ? BigDecimal.ZERO : request.getAmountPaid();
+        // Cobrar de más se admite (a veces la transferencia llega redondeada); el
+        // cargo del mes ya deja el saldo en cero en vez de en negativo.
+
+        Payment payment = paymentRepository
+                .findByRentalAgreementIdAndBillingPeriodYearAndBillingPeriodMonth(agreement.getId(), year, month)
+                .orElseGet(() -> Payment.builder()
+                        .rentalAgreement(agreement)
+                        .storageUnit(agreement.getStorageUnit())
+                        .client(agreement.getClient())
+                        .billingPeriodYear(year)
+                        .billingPeriodMonth(month)
+                        .build());
+
+        payment.setAmountDue(due);
+        payment.setAmountPaid(paid);
+        payment.setStatus(request.isWaived() ? PaymentStatus.CANCELLED : PaymentStatus.PAID);
+        // Sin dinero recibido no hay fecha ni método de cobro que guardar
+        payment.setPaymentDate(paid.signum() > 0 ? request.getPaymentDate() : null);
+        payment.setPaymentMethod(paid.signum() > 0 ? request.getPaymentMethod() : null);
+        payment.setTransactionReference(request.getTransactionReference());
+        payment.setNotes(request.getNotes());
+        if (request.getDueDate() != null) {
+            payment.setDueDate(request.getDueDate());
+        } else if (payment.getDueDate() == null) {
+            payment.setDueDate(billingDate(agreement, year, month));
+        }
+
+        return paymentRepository.save(payment);
+    }
+
+    /**
+     * Deshace la corrección de un mes: borrada su fila, el cargo vuelve a ser el
+     * que dice el contrato. No encontrar nada que borrar no es un error, porque
+     * el mes ya está como debía.
+     */
+    @Transactional
+    public void clearChargeAdjustment(Long rentalAgreementId, Integer year, Integer month) {
+        paymentRepository
+                .findByRentalAgreementIdAndBillingPeriodYearAndBillingPeriodMonth(rentalAgreementId, year, month)
+                .ifPresent(paymentRepository::delete);
+    }
+
+    /** El día de cobro pactado de ese mes, recortado al último día (febrero, día 31...). */
+    private static LocalDate billingDate(RentalAgreement agreement, int year, int month) {
+        YearMonth ym = YearMonth.of(year, month);
+        int day = agreement.getBillingDayOfMonth() != null ? agreement.getBillingDayOfMonth() : 1;
+        return ym.atDay(Math.min(Math.max(day, 1), ym.lengthOfMonth()));
     }
 
     @Transactional

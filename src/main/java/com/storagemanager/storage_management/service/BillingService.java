@@ -3,6 +3,7 @@ package com.storagemanager.storage_management.service;
 import com.storagemanager.storage_management.dto.MonthlyChargeDTO;
 import com.storagemanager.storage_management.model.Payment;
 import com.storagemanager.storage_management.model.RentalAgreement;
+import com.storagemanager.storage_management.model.enums.PaymentStatus;
 import com.storagemanager.storage_management.model.enums.RentalStatus;
 import com.storagemanager.storage_management.repository.PaymentRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
@@ -31,7 +32,9 @@ import java.util.Set;
  * mensualidades leen de aquí.
  * <p>
  * Un mes cuenta como <em>vencido</em> en cuanto el mes termina sin cobro; el mes
- * en curso sólo está <em>pendiente</em>.
+ * en curso sólo está <em>pendiente</em>. Un mes que se decide a mano que no se
+ * cobra (su cobro queda anulado) pasa a <em>no cobrable</em> y sale de todas las
+ * cuentas: ni se espera, ni se debe, ni vence.
  */
 @Service
 @RequiredArgsConstructor
@@ -40,6 +43,8 @@ public class BillingService {
     public static final String COLLECTED = "COLLECTED";
     public static final String PENDING = "PENDING";
     public static final String OVERDUE = "OVERDUE";
+    /** Mes que se ha decidido a mano que no se cobra: ni se espera ni se debe. */
+    public static final String WAIVED = "WAIVED";
 
     private final RentalAgreementRepository rentalAgreementRepository;
     private final PaymentRepository paymentRepository;
@@ -129,11 +134,18 @@ public class BillingService {
                 : rental.getMonthlyRent();
         if (due == null) due = BigDecimal.ZERO;
         BigDecimal paid = payment != null && payment.getAmountPaid() != null ? payment.getAmountPaid() : BigDecimal.ZERO;
-        BigDecimal outstanding = due.subtract(paid).max(BigDecimal.ZERO);
 
-        String status = outstanding.signum() <= 0
-                ? COLLECTED
-                : ym.isBefore(currentMonth) ? OVERDUE : PENDING;
+        // Un cobro anulado marca el mes como no cobrable: se deja a cero para que no
+        // salga en vencidos, ni en lo esperado, ni en lo que falta por cobrar.
+        boolean waived = payment != null && payment.getStatus() == PaymentStatus.CANCELLED;
+        if (waived) due = BigDecimal.ZERO;
+        BigDecimal outstanding = waived ? BigDecimal.ZERO : due.subtract(paid).max(BigDecimal.ZERO);
+
+        String status = waived
+                ? WAIVED
+                : outstanding.signum() <= 0
+                        ? COLLECTED
+                        : ym.isBefore(currentMonth) ? OVERDUE : PENDING;
 
         return MonthlyChargeDTO.builder()
                 .id(key(rental.getId(), ym.getYear(), ym.getMonthValue()))

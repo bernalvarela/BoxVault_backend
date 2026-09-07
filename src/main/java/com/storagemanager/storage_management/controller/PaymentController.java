@@ -1,5 +1,6 @@
 package com.storagemanager.storage_management.controller;
 
+import com.storagemanager.storage_management.dto.ChargeAdjustmentRequest;
 import com.storagemanager.storage_management.dto.MonthlyChargeDTO;
 import com.storagemanager.storage_management.dto.PaymentRequest;
 import com.storagemanager.storage_management.dto.RecordPaymentRequest;
@@ -85,6 +86,30 @@ public class PaymentController {
             @RequestParam(required = false, defaultValue = "BANK_TRANSFER") PaymentMethod method,
             @RequestParam(required = false) String reference) {
         return ResponseEntity.ok(paymentService.markAsPaid(id, method, reference));
+    }
+
+    /**
+     * Corrige a mano la mensualidad de un contrato: el importe que se debe, lo
+     * cobrado, o marcarla como no cobrable. Se direcciona por contrato y periodo,
+     * no por id de cobro, porque un mes sin cobrar todavía no tiene fila propia.
+     */
+    @PutMapping("/charges/{rentalAgreementId}/{year}/{month}")
+    public ResponseEntity<Payment> adjustCharge(
+            @PathVariable Long rentalAgreementId,
+            @PathVariable Integer year,
+            @PathVariable Integer month,
+            @Valid @RequestBody ChargeAdjustmentRequest request) {
+        return ResponseEntity.ok(paymentService.adjustCharge(rentalAgreementId, year, month, request));
+    }
+
+    /** Deshace la corrección: el mes vuelve a ser el que dicen los contratos. */
+    @DeleteMapping("/charges/{rentalAgreementId}/{year}/{month}")
+    public ResponseEntity<Void> clearChargeAdjustment(
+            @PathVariable Long rentalAgreementId,
+            @PathVariable Integer year,
+            @PathVariable Integer month) {
+        paymentService.clearChargeAdjustment(rentalAgreementId, year, month);
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/{id}")
