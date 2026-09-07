@@ -8,7 +8,6 @@ import com.storagemanager.storage_management.model.Payment;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.enums.PaymentMethod;
 import com.storagemanager.storage_management.model.enums.PaymentStatus;
-import com.storagemanager.storage_management.model.enums.RentalStatus;
 import com.storagemanager.storage_management.repository.PaymentRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,10 +16,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Los cobros recibidos. Cada fila de {@link Payment} es dinero que ha entrado:
+ * no se emiten recibos por adelantado, así que lo que queda por cobrar no vive
+ * aquí sino que se deduce de los contratos en {@link BillingService}.
+ */
 @Service
 @RequiredArgsConstructor
 public class PaymentService {
@@ -29,7 +32,6 @@ public class PaymentService {
     private final RentalAgreementRepository rentalAgreementRepository;
 
     public List<Payment> getAllPayments() {
-        checkAndUpdateOverduePayments();
         return paymentRepository.findAll();
     }
 
@@ -39,12 +41,10 @@ public class PaymentService {
     }
 
     public List<Payment> getPaymentsByStatus(PaymentStatus status) {
-        checkAndUpdateOverduePayments();
         return paymentRepository.findByStatus(status);
     }
 
     public List<Payment> getPaymentsByMonthYear(Integer year, Integer month) {
-        checkAndUpdateOverduePayments();
         return paymentRepository.findByBillingPeriodYearAndBillingPeriodMonth(year, month);
     }
 
@@ -82,7 +82,7 @@ public class PaymentService {
                 .amountPaid(request.getAmountPaid() != null ? request.getAmountPaid() : BigDecimal.ZERO)
                 .dueDate(request.getDueDate())
                 .paymentDate(request.getPaymentDate())
-                .status(request.getStatus() != null ? request.getStatus() : PaymentStatus.PENDING)
+                .status(request.getStatus() != null ? request.getStatus() : PaymentStatus.PAID)
                 .paymentMethod(request.getPaymentMethod())
                 .transactionReference(request.getTransactionReference())
                 .notes(request.getNotes())
@@ -105,11 +105,9 @@ public class PaymentService {
             payment.setNotes(request.getNotes());
         }
 
-        if (payment.getAmountPaid().compareTo(payment.getAmountDue()) >= 0) {
-            payment.setStatus(PaymentStatus.PAID);
-        } else {
-            payment.setStatus(PaymentStatus.PENDING);
-        }
+        // Una fila de pago es dinero recibido, cobre el mes entero o sólo una parte:
+        // lo que falte lo refleja el cargo del periodo (BillingService), no el estado.
+        payment.setStatus(PaymentStatus.PAID);
 
         return paymentRepository.save(payment);
     }
@@ -127,48 +125,6 @@ public class PaymentService {
             payment.setTransactionReference(reference);
         }
         return paymentRepository.save(payment);
-    }
-
-    @Transactional
-    public List<Payment> generateMonthlyBills(Integer month, Integer year) {
-        List<RentalAgreement> activeRentals = rentalAgreementRepository.findByStatus(RentalStatus.ACTIVE);
-        List<Payment> createdBills = new ArrayList<>();
-
-        for (RentalAgreement rental : activeRentals) {
-            Optional<Payment> existing = paymentRepository.findByRentalAgreementIdAndBillingPeriodYearAndBillingPeriodMonth(
-                    rental.getId(), year, month);
-
-            if (existing.isEmpty()) {
-                int day = Math.min(rental.getBillingDayOfMonth(), 28);
-                LocalDate dueDate = LocalDate.of(year, month, day);
-
-                Payment payment = Payment.builder()
-                        .rentalAgreement(rental)
-                        .storageUnit(rental.getStorageUnit())
-                        .client(rental.getClient())
-                        .billingPeriodMonth(month)
-                        .billingPeriodYear(year)
-                        .amountDue(rental.getMonthlyRent())
-                        .amountPaid(BigDecimal.ZERO)
-                        .dueDate(dueDate)
-                        .status(dueDate.isBefore(LocalDate.now()) ? PaymentStatus.OVERDUE : PaymentStatus.PENDING)
-                        .build();
-
-                createdBills.add(paymentRepository.save(payment));
-            }
-        }
-
-        return createdBills;
-    }
-
-    @Transactional
-    public void checkAndUpdateOverduePayments() {
-        LocalDate today = LocalDate.now();
-        List<Payment> overdueList = paymentRepository.findOverduePayments(today);
-        for (Payment payment : overdueList) {
-            payment.setStatus(PaymentStatus.OVERDUE);
-            paymentRepository.save(payment);
-        }
     }
 
     @Transactional

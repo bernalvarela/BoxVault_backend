@@ -6,14 +6,13 @@ import com.storagemanager.storage_management.dto.AnnualRevenueDTO;
 import com.storagemanager.storage_management.dto.DashboardStatsDTO;
 import com.storagemanager.storage_management.dto.ExpenseCategorySummaryDTO;
 import com.storagemanager.storage_management.dto.HistoryRangeDTO;
+import com.storagemanager.storage_management.dto.MonthlyChargeDTO;
 import com.storagemanager.storage_management.dto.MonthlyRevenueDTO;
 import com.storagemanager.storage_management.dto.QuarterlyRevenueDTO;
 import com.storagemanager.storage_management.dto.UnitOccupancyDTO;
 import com.storagemanager.storage_management.dto.UnitRevenueDTO;
-import com.storagemanager.storage_management.model.Payment;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.StorageUnit;
-import com.storagemanager.storage_management.model.enums.PaymentStatus;
 import com.storagemanager.storage_management.model.enums.RentalStatus;
 import com.storagemanager.storage_management.model.enums.UnitKind;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
@@ -30,7 +29,6 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.function.Function;
-import java.util.function.Predicate;
 
 /**
  * Dashboard and trend statistics.
@@ -45,6 +43,10 @@ import java.util.function.Predicate;
  * VAT breakdowns are accumulated payment by payment (or unit by unit), because
  * storage units carry 21% VAT while apartments are exempt: the base of a mixed
  * total is the sum of each item's base, not the total divided by 1.21.
+ * <p>
+ * "Esperado", "pendiente" y "vencido" salen de los cargos de {@link BillingService}
+ * (lo que cada contrato debe mes a mes), no de recibos guardados: aquí no se
+ * emiten recibos por adelantado. "Cobrado" es el dinero efectivamente recibido.
  */
 @Service
 @RequiredArgsConstructor
@@ -57,7 +59,7 @@ public class StatisticsService {
     private final ClientRepository clientRepository;
     private final RentalAgreementRepository rentalAgreementRepository;
     private final PaymentRepository paymentRepository;
-    private final PaymentService paymentService;
+    private final BillingService billingService;
     private final ExpenseService expenseService;
 
     // ------------------------------------------------------------------
@@ -91,11 +93,6 @@ public class StatisticsService {
                 .toList();
     }
 
-    private static List<Payment> paymentsIn(List<Payment> payments, Set<Long> rootIds) {
-        if (rootIds == null) return payments;
-        return payments.stream().filter(p -> unitInRoots(p.getStorageUnit(), rootIds)).toList();
-    }
-
     private static List<RentalAgreement> rentalsIn(List<RentalAgreement> rentals, Set<Long> rootIds) {
         if (rootIds == null) return rentals;
         return rentals.stream().filter(r -> unitInRoots(r.getStorageUnit(), rootIds)).toList();
@@ -109,42 +106,51 @@ public class StatisticsService {
         return unit == null || unit.isVatApplicable();
     }
 
-    /** Sums an amount of the matching payments, splitting base/VAT according to each payment's unit. */
-    private static Breakdown sum(List<Payment> payments, Predicate<Payment> filter, Function<Payment, BigDecimal> amount) {
+    /** Sums an amount of the charges, splitting base/VAT according to each charge's unit. */
+    private static Breakdown sum(List<MonthlyChargeDTO> charges, Function<MonthlyChargeDTO, BigDecimal> amount) {
         Breakdown acc = Breakdown.ZERO;
-        for (Payment p : payments) {
-            if (!filter.test(p)) continue;
-            BigDecimal value = amount.apply(p);
-            if (value == null) continue;
-            acc = acc.plus(VatUtils.breakdown(value, vatOf(p.getStorageUnit())));
+        for (MonthlyChargeDTO c : charges) {
+            BigDecimal value = amount.apply(c);
+            if (value == null || value.signum() == 0) continue;
+            acc = acc.plus(VatUtils.breakdown(value, vatOf(c.getStorageUnit())));
         }
         return acc;
     }
 
-    private static long count(List<Payment> payments, PaymentStatus status) {
-        return payments.stream().filter(p -> p.getStatus() == status).count();
-    }
-
-    private static boolean isOpen(Payment p) {
-        return p.getStatus() == PaymentStatus.PENDING || p.getStatus() == PaymentStatus.OVERDUE;
+    private static long count(List<MonthlyChargeDTO> charges, String status) {
+        return charges.stream().filter(c -> status.equals(c.getStatus())).count();
     }
 
     /**
-     * Revenue figures of a set of payments belonging to one period:
-     * expected = every amount due, collected = amount paid of PAID payments,
-     * pending = amount due of PENDING/OVERDUE payments.
+     * Revenue figures of the charges of one period: expected = la renta de cada mes
+     * en vigor, collected = lo efectivamente cobrado, pending = lo que falta por
+     * cobrar (del mes en curso y de los meses ya vencidos que caigan en el periodo).
      */
     private record PeriodTotals(Breakdown expected, Breakdown collected, Breakdown pending,
                                 long paidCount, long pendingCount, long overdueCount) {
-        static PeriodTotals of(List<Payment> payments) {
+        static PeriodTotals of(List<MonthlyChargeDTO> charges) {
             return new PeriodTotals(
-                    sum(payments, p -> true, Payment::getAmountDue),
-                    sum(payments, p -> p.getStatus() == PaymentStatus.PAID, Payment::getAmountPaid),
-                    sum(payments, StatisticsService::isOpen, Payment::getAmountDue),
-                    count(payments, PaymentStatus.PAID),
-                    count(payments, PaymentStatus.PENDING),
-                    count(payments, PaymentStatus.OVERDUE));
+                    sum(charges, MonthlyChargeDTO::getAmountDue),
+                    sum(charges, MonthlyChargeDTO::getAmountPaid),
+                    sum(charges, MonthlyChargeDTO::getOutstanding),
+                    count(charges, BillingService.COLLECTED),
+                    count(charges, BillingService.PENDING),
+                    count(charges, BillingService.OVERDUE));
         }
+    }
+
+    /** Charges of the units under the given roots (null = every root). */
+    private static List<MonthlyChargeDTO> chargesIn(List<MonthlyChargeDTO> charges, Set<Long> rootIds) {
+        if (rootIds == null) return charges;
+        return charges.stream().filter(c -> unitInRoots(c.getStorageUnit(), rootIds)).toList();
+    }
+
+    /** Charges whose billing period falls inside [from, to], both inclusive. */
+    private static List<MonthlyChargeDTO> between(List<MonthlyChargeDTO> charges, YearMonth from, YearMonth to) {
+        return charges.stream().filter(c -> {
+            YearMonth ym = YearMonth.of(c.getBillingPeriodYear(), c.getBillingPeriodMonth());
+            return !ym.isBefore(from) && !ym.isAfter(to);
+        }).toList();
     }
 
     // ------------------------------------------------------------------
@@ -156,25 +162,11 @@ public class StatisticsService {
     }
 
     public DashboardStatsDTO getDashboardStats(Collection<Long> rootIdsParam) {
-        paymentService.checkAndUpdateOverduePayments();
         Set<Long> rootIds = normalizeRootIds(rootIdsParam);
 
         YearMonth current = YearMonth.now();
-        List<Payment> currentMonthPayments = paymentsIn(
-                paymentRepository.findByBillingPeriodYearAndBillingPeriodMonth(current.getYear(), current.getMonthValue()),
-                rootIds);
-        PeriodTotals month = PeriodTotals.of(currentMonthPayments);
-
-        Breakdown expected = month.expected();
-        if (expected.total().compareTo(BigDecimal.ZERO) == 0) {
-            // Si aún no se generaron facturas en el mes, calcular en base a contratos activos
-            expected = Breakdown.ZERO;
-            for (RentalAgreement r : rentalsIn(rentalAgreementRepository.findAllActiveRentals(), rootIds)) {
-                if (r.getMonthlyRent() != null) {
-                    expected = expected.plus(VatUtils.breakdown(r.getMonthlyRent(), vatOf(r.getStorageUnit())));
-                }
-            }
-        }
+        List<MonthlyChargeDTO> allCharges = chargesIn(billingService.allCharges(), rootIds);
+        PeriodTotals month = PeriodTotals.of(between(allCharges, current, current));
 
         // Gastos del mes en curso y desglose histórico por categoría
         BigDecimal currentMonthExpenses = expenseService.sumExpensesForMonth(current, rootIds);
@@ -182,9 +174,10 @@ public class StatisticsService {
         List<ExpenseCategorySummaryDTO> expensesByCategory = expenseService.summarizeByCategory(null, null, rootIds);
 
         // 6 Meses de Histórico
-        List<MonthlyRevenueDTO> recentMonthlyRevenue = monthlyTrends(current.minusMonths(5), current, rootIds);
+        List<MonthlyRevenueDTO> recentMonthlyRevenue =
+                monthlyTrends(allCharges, current.minusMonths(5), current, rootIds);
 
-        return buildStats(rootIds, expected, month.collected(), month.pending(),
+        return buildStats(rootIds, allCharges, month.expected(), month.collected(), month.pending(),
                 currentMonthExpenses, currentMonthExpenseCount, recentMonthlyRevenue, expensesByCategory);
     }
 
@@ -203,8 +196,13 @@ public class StatisticsService {
         }
         Set<Long> rootIds = normalizeRootIds(rootIdsParam);
 
-        List<Payment> rangePayments = paymentsIn(paymentRepository.findByDueDateBetween(startDate, endDate), rootIds);
-        PeriodTotals range = PeriodTotals.of(rangePayments);
+        List<MonthlyChargeDTO> allCharges = chargesIn(billingService.allCharges(), rootIds);
+        // Los cargos del rango, por fecha de cobro pactada, como antes hacían los recibos
+        List<MonthlyChargeDTO> rangeCharges = allCharges.stream()
+                .filter(c -> c.getDueDate() != null
+                        && !c.getDueDate().isBefore(startDate) && !c.getDueDate().isAfter(endDate))
+                .toList();
+        PeriodTotals range = PeriodTotals.of(rangeCharges);
 
         // Gastos dentro del rango
         BigDecimal rangeExpenses = expenseService.sumExpensesBetween(startDate, endDate, rootIds);
@@ -213,14 +211,14 @@ public class StatisticsService {
 
         // Month-by-month breakdown covering every month touched by the range
         List<MonthlyRevenueDTO> recentMonthlyRevenue =
-                monthlyTrends(YearMonth.from(startDate), YearMonth.from(endDate), rootIds);
+                monthlyTrends(allCharges, YearMonth.from(startDate), YearMonth.from(endDate), rootIds);
 
-        return buildStats(rootIds, range.expected(), range.collected(), range.pending(),
+        return buildStats(rootIds, allCharges, range.expected(), range.collected(), range.pending(),
                 rangeExpenses, rangeExpenseCount, recentMonthlyRevenue, expensesByCategory);
     }
 
     /**
-     * First and last date with recorded activity for the groups - a payment due date
+     * First and last date with recorded activity for the groups - a charge's due date
      * (the same date the range statistics filter on) or an expense - so the UI can
      * offer a "whole history" range. Both dates are null when nothing is recorded.
      */
@@ -228,8 +226,8 @@ public class StatisticsService {
         Set<Long> rootIds = normalizeRootIds(rootIdsParam);
         LocalDate first = null;
         LocalDate last = null;
-        for (Payment p : paymentsIn(paymentRepository.findAll(), rootIds)) {
-            LocalDate due = p.getDueDate();
+        for (MonthlyChargeDTO c : chargesIn(billingService.allCharges(), rootIds)) {
+            LocalDate due = c.getDueDate();
             if (due == null) continue;
             if (first == null || due.isBefore(first)) first = due;
             if (last == null || due.isAfter(last)) last = due;
@@ -247,6 +245,7 @@ public class StatisticsService {
      * (units, clients, overdue, historical totals) are computed here for the groups.
      */
     private DashboardStatsDTO buildStats(Set<Long> rootIds,
+                                         List<MonthlyChargeDTO> allCharges,
                                          Breakdown periodExpected,
                                          Breakdown periodCollected,
                                          Breakdown periodPending,
@@ -281,11 +280,13 @@ public class StatisticsService {
             }
         }
 
-        List<Payment> overduePayments = paymentsIn(paymentRepository.findByStatus(PaymentStatus.OVERDUE), rootIds);
-        Breakdown overdue = sum(overduePayments, p -> true, Payment::getAmountDue);
+        // Vencido: meses ya cerrados que siguen sin cobrarse, en todo el histórico
+        List<MonthlyChargeDTO> overdueCharges = allCharges.stream()
+                .filter(c -> BillingService.OVERDUE.equals(c.getStatus()))
+                .toList();
+        Breakdown overdue = sum(overdueCharges, MonthlyChargeDTO::getOutstanding);
 
-        Breakdown allTime = sum(paymentsIn(paymentRepository.findByStatus(PaymentStatus.PAID), rootIds),
-                p -> true, Payment::getAmountPaid);
+        Breakdown allTime = sum(allCharges, MonthlyChargeDTO::getAmountPaid);
         BigDecimal totalExpensesAllTime = expenseService.sumTotalExpenses(rootIds);
 
         // Desglose de Trasteros
@@ -323,7 +324,7 @@ public class StatisticsService {
                 .totalOverdueAmount(overdue.total())
                 .totalOverdueWithoutVat(overdue.base())
                 .totalOverdueVatAmount(overdue.vat())
-                .overduePaymentCount(overduePayments.size())
+                .overduePaymentCount(overdueCharges.size())
                 // Histórico total con IVA y desglose
                 .totalRevenueAllTime(allTime.total())
                 .totalRevenueAllTimeWithoutVat(allTime.base())
@@ -348,11 +349,13 @@ public class StatisticsService {
         return getRecentMonthlyTrends(numberOfMonths, null);
     }
 
-    public List<MonthlyRevenueDTO> getRecentMonthlyTrends(int numberOfMonths, Collection<Long> rootIds) {
+    public List<MonthlyRevenueDTO> getRecentMonthlyTrends(int numberOfMonths, Collection<Long> rootIdsParam) {
         // Valores menores que 1 se interpretan como "solo el periodo actual"
         numberOfMonths = Math.max(1, numberOfMonths);
+        Set<Long> rootIds = normalizeRootIds(rootIdsParam);
         YearMonth current = YearMonth.now();
-        return monthlyTrends(current.minusMonths(numberOfMonths - 1L), current, normalizeRootIds(rootIds));
+        YearMonth start = current.minusMonths(numberOfMonths - 1L);
+        return monthlyTrends(chargesIn(billingService.charges(start, current), rootIds), start, current, rootIds);
     }
 
     /**
@@ -360,25 +363,25 @@ public class StatisticsService {
      * in chronological order.
      */
     public List<MonthlyRevenueDTO> getMonthlyTrendsBetween(YearMonth start, YearMonth end) {
-        return monthlyTrends(start, end, null);
+        return monthlyTrends(billingService.charges(start, end), start, end, null);
     }
 
-    private List<MonthlyRevenueDTO> monthlyTrends(YearMonth start, YearMonth end, Set<Long> rootIds) {
+    /** @param charges cargos que cubren al menos [start, end], ya filtrados por inmueble */
+    private List<MonthlyRevenueDTO> monthlyTrends(List<MonthlyChargeDTO> charges,
+                                                  YearMonth start, YearMonth end, Set<Long> rootIds) {
         List<MonthlyRevenueDTO> list = new ArrayList<>();
         for (YearMonth ym = start; !ym.isAfter(end); ym = ym.plusMonths(1)) {
-            list.add(buildMonthlyRevenue(ym, rootIds));
+            list.add(buildMonthlyRevenue(between(charges, ym, ym), ym, rootIds));
         }
         return list;
     }
 
-    private MonthlyRevenueDTO buildMonthlyRevenue(YearMonth yearMonth, Set<Long> rootIds) {
+    private MonthlyRevenueDTO buildMonthlyRevenue(List<MonthlyChargeDTO> monthCharges, YearMonth yearMonth, Set<Long> rootIds) {
         int year = yearMonth.getYear();
         int month = yearMonth.getMonthValue();
         String label = yearMonth.format(MONTH_LABEL_FORMATTER);
 
-        List<Payment> payments = paymentsIn(
-                paymentRepository.findByBillingPeriodYearAndBillingPeriodMonth(year, month), rootIds);
-        PeriodTotals t = PeriodTotals.of(payments);
+        PeriodTotals t = PeriodTotals.of(monthCharges);
 
         BigDecimal expenses = expenseService.sumExpensesForMonth(yearMonth, rootIds);
         long expenseCount = expenseService.countExpensesForMonth(yearMonth, rootIds);
@@ -420,6 +423,10 @@ public class StatisticsService {
         LocalDate current = LocalDate.now();
         List<QuarterlyRevenueDTO> list = new ArrayList<>();
 
+        YearMonth oldest = YearMonth.from(current.minusMonths(3L * (numberOfQuarters - 1)));
+        oldest = YearMonth.of(oldest.getYear(), (oldest.getMonthValue() - 1) / 3 * 3 + 1);
+        List<MonthlyChargeDTO> charges = chargesIn(billingService.charges(oldest, YearMonth.from(current)), rootIds);
+
         for (int i = numberOfQuarters - 1; i >= 0; i--) {
             // Calculate target date by going back i quarters (3 months each)
             LocalDate targetDate = current.minusMonths(3L * i);
@@ -428,10 +435,8 @@ public class StatisticsService {
             int startMonth = (quarter - 1) * 3 + 1;
             int endMonth = quarter * 3;
 
-            List<Payment> quarterPayments = paymentsIn(
-                    paymentRepository.findByBillingPeriodYearAndBillingPeriodMonthBetween(year, startMonth, endMonth),
-                    rootIds);
-            PeriodTotals t = PeriodTotals.of(quarterPayments);
+            PeriodTotals t = PeriodTotals.of(
+                    between(charges, YearMonth.of(year, startMonth), YearMonth.of(year, endMonth)));
 
             LocalDate quarterStart = LocalDate.of(year, startMonth, 1);
             LocalDate quarterEnd = YearMonth.of(year, endMonth).atEndOfMonth();
@@ -478,11 +483,15 @@ public class StatisticsService {
         LocalDate current = LocalDate.now();
         List<AnnualRevenueDTO> list = new ArrayList<>();
 
+        List<MonthlyChargeDTO> charges = chargesIn(
+                billingService.charges(YearMonth.of(current.getYear() - numberOfYears + 1, 1), YearMonth.from(current)),
+                rootIds);
+
         for (int i = numberOfYears - 1; i >= 0; i--) {
             int year = current.getYear() - i;
 
-            List<Payment> yearPayments = paymentsIn(paymentRepository.findByBillingPeriodYear(year), rootIds);
-            PeriodTotals t = PeriodTotals.of(yearPayments);
+            PeriodTotals t = PeriodTotals.of(
+                    between(charges, YearMonth.of(year, 1), YearMonth.of(year, 12)));
 
             LocalDate yearStart = LocalDate.of(year, 1, 1);
             LocalDate yearEnd = LocalDate.of(year, 12, 31);

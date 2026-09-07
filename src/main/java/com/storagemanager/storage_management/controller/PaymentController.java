@@ -1,11 +1,12 @@
 package com.storagemanager.storage_management.controller;
 
-import com.storagemanager.storage_management.dto.GenerateInvoicesRequest;
+import com.storagemanager.storage_management.dto.MonthlyChargeDTO;
 import com.storagemanager.storage_management.dto.PaymentRequest;
 import com.storagemanager.storage_management.dto.RecordPaymentRequest;
 import com.storagemanager.storage_management.model.Payment;
 import com.storagemanager.storage_management.model.enums.PaymentMethod;
 import com.storagemanager.storage_management.model.enums.PaymentStatus;
+import com.storagemanager.storage_management.service.BillingService;
 import com.storagemanager.storage_management.service.PaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.YearMonth;
 import java.util.List;
 
 @RestController
@@ -22,6 +24,22 @@ import java.util.List;
 public class PaymentController {
 
     private final PaymentService paymentService;
+    private final BillingService billingService;
+
+    /**
+     * Lo que cada contrato debe mes a mes, cobrado o no. Sin parámetros devuelve
+     * todo el histórico; con año y mes, sólo ese periodo.
+     */
+    @GetMapping("/charges")
+    public ResponseEntity<List<MonthlyChargeDTO>> getMonthlyCharges(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month) {
+
+        if (year != null && month != null) {
+            return ResponseEntity.ok(billingService.chargesOf(YearMonth.of(year, month)));
+        }
+        return ResponseEntity.ok(billingService.allCharges());
+    }
 
     @GetMapping
     public ResponseEntity<List<Payment>> getAllPayments(
@@ -67,12 +85,6 @@ public class PaymentController {
             @RequestParam(required = false, defaultValue = "BANK_TRANSFER") PaymentMethod method,
             @RequestParam(required = false) String reference) {
         return ResponseEntity.ok(paymentService.markAsPaid(id, method, reference));
-    }
-
-    @PostMapping("/generate-invoices")
-    public ResponseEntity<List<Payment>> generateInvoices(@Valid @RequestBody GenerateInvoicesRequest request) {
-        List<Payment> created = paymentService.generateMonthlyBills(request.getMonth(), request.getYear());
-        return new ResponseEntity<>(created, HttpStatus.CREATED);
     }
 
     @DeleteMapping("/{id}")
