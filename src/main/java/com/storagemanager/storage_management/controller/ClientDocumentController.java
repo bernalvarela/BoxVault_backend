@@ -5,6 +5,7 @@ import com.storagemanager.storage_management.model.enums.DocumentType;
 import com.storagemanager.storage_management.service.ClientDocumentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -35,16 +36,19 @@ public class ClientDocumentController {
      * Los tipos que admite la ficha del cliente, para el desplegable del
      * formulario. CONTRATO_ALQUILER no está: el contrato va en su alquiler.
      */
+    @PreAuthorize("@access.can('CLIENTES','LEER')")
     @GetMapping("/types")
     public ResponseEntity<List<DocumentType>> getTypes() {
         return ResponseEntity.ok(DocumentType.forClient());
     }
 
+    @PreAuthorize("@access.can('CLIENTES','LEER')")
     @GetMapping
     public ResponseEntity<List<ClientDocumentDTO>> getDocuments(@PathVariable Long clientId) {
         return ResponseEntity.ok(documentService.getDocuments(clientId));
     }
 
+    @PreAuthorize("@access.can('CLIENTES','ESCRIBIR')")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ClientDocumentDTO> upload(
             @PathVariable Long clientId,
@@ -55,11 +59,13 @@ public class ClientDocumentController {
                 documentService.upload(clientId, file, documentType, description), HttpStatus.CREATED);
     }
 
+    @PreAuthorize("@access.can('CLIENTES','LEER')")
     @GetMapping("/{documentId}/download")
     public ResponseEntity<Resource> download(@PathVariable Long clientId, @PathVariable Long documentId) {
         return DocumentDownload.respond(documentService.download(clientId, documentId));
     }
 
+    @PreAuthorize("@access.can('CLIENTES','ADMINISTRAR')")
     @DeleteMapping("/{documentId}")
     public ResponseEntity<Void> delete(@PathVariable Long clientId, @PathVariable Long documentId) {
         documentService.delete(clientId, documentId);

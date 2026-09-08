@@ -27,9 +27,20 @@ spring:
       max-file-size: 12MB
       max-request-size: 15MB
 
-# Almacén de ficheros adjuntos. Por defecto, el disco: en desarrollo no hay que
-# levantar nada. El perfil "pro" lo cambia a S3 (RustFS).
 boxvault:
+  # Sesión y contraseñas. El secreto de firma no tiene valor por defecto: en el
+  # servidor llega por variable de entorno (ver docker-compose.yml) y en
+  # desarrollo lo pone el perfil "dev" de más abajo.
+  security:
+    access-token-minutes: 15
+    refresh-token-days: 14
+    secure-cookies: true
+    bootstrap-username: ${BOXVAULT_ADMIN_USER:admin}
+    bootstrap-password: ${BOXVAULT_ADMIN_PASSWORD:}
+    jwt-secret: ${BOXVAULT_JWT_SECRET:}
+
+  # Almacén de ficheros adjuntos. Por defecto, el disco: en desarrollo no hay que
+  # levantar nada. El perfil "pro" lo cambia a S3 (RustFS).
   storage:
     type: local
     local-path: ${BOXVAULT_FILES_PATH:data/files}
@@ -59,6 +70,17 @@ spring:
       path: /h2-console
   jpa:
     database-platform: org.hibernate.dialect.H2Dialect
+
+# En desarrollo la sesión se apaña sola: secreto fijo (no protege nada que
+# importe, la base de datos se borra al parar), cookies sin exigir HTTPS porque
+# se entra por http://localhost, y un administrador "admin" con una contraseña
+# conocida. Nada de esto existe en "pro": allí todo viene del entorno.
+boxvault:
+  security:
+    jwt-secret: "clave-de-desarrollo-que-no-protege-nada-solo-para-arrancar-en-local"
+    secure-cookies: false
+    bootstrap-username: admin
+    bootstrap-password: "admin-local-2026"
 
 ---
 # ---------------------------------------------------------------------

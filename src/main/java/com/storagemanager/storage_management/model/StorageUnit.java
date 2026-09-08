@@ -4,6 +4,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.storagemanager.storage_management.model.enums.UnitKind;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
 import jakarta.persistence.*;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -18,6 +21,7 @@ import java.time.LocalDateTime;
  * is what the statistics filter by, and a unit without shares of its own inherits
  * the owners of its parent.
  */
+@EntityListeners(AuditingEntityListener.class)
 @Entity
 @Table(name = "storage_units")
 @Getter
@@ -128,4 +132,14 @@ public class StorageUnit {
             return u == null ? null : new UnitRef(u.getId(), u.getUnitNumber(), u.getName(), u.getKind());
         }
     }
+
+    /** Quién la creó; lo rellena solo AuditingConfig. */
+    @CreatedBy
+    @Column(updatable = false, length = 60)
+    private String createdBy;
+
+    /** Quién la cambió por última vez. */
+    @LastModifiedBy
+    @Column(length = 60)
+    private String updatedBy;
 }

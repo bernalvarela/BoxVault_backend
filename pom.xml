@@ -66,6 +66,22 @@
 		</dependency>
 
 		<!--
+		  Autenticación y autorización. Los JWT los emite y valida el propio Spring
+		  Security con Nimbus (lo que trae oauth2-resource-server), sin jjwt ni
+		  filtros a mano: es lo que la imagen nativa lleva probado, con sus pistas
+		  de AOT. El día que se quiera un proveedor externo (Keycloak y compañía)
+		  basta con cambiar el emisor: lo que valida los tokens no cambia.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+		</dependency>
+
+		<!--
 		  Cliente S3 para el almacén de ficheros adjuntos (RustFS en el servidor).
 		  Se excluyen los dos clientes HTTP que trae por defecto, Netty y Apache, y se
 		  usa url-connection-client: el HTTP del propio JDK, sin hilos ni pool propios

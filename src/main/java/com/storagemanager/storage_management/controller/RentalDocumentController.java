@@ -5,6 +5,7 @@ import com.storagemanager.storage_management.model.enums.DocumentType;
 import com.storagemanager.storage_management.service.RentalDocumentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -26,16 +27,19 @@ public class RentalDocumentController {
     private final RentalDocumentService documentService;
 
     /** Los tipos que admite un alquiler, para el desplegable del formulario. */
+    @PreAuthorize("@access.can('ALQUILERES','LEER')")
     @GetMapping("/types")
     public ResponseEntity<List<DocumentType>> getTypes() {
         return ResponseEntity.ok(DocumentType.forRental());
     }
 
+    @PreAuthorize("@access.can('ALQUILERES','LEER')")
     @GetMapping
     public ResponseEntity<List<RentalDocumentDTO>> getDocuments(@PathVariable Long rentalId) {
         return ResponseEntity.ok(documentService.getDocuments(rentalId));
     }
 
+    @PreAuthorize("@access.can('ALQUILERES','ESCRIBIR')")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<RentalDocumentDTO> upload(
             @PathVariable Long rentalId,
@@ -46,11 +50,13 @@ public class RentalDocumentController {
                 documentService.upload(rentalId, file, documentType, description), HttpStatus.CREATED);
     }
 
+    @PreAuthorize("@access.can('ALQUILERES','LEER')")
     @GetMapping("/{documentId}/download")
     public ResponseEntity<Resource> download(@PathVariable Long rentalId, @PathVariable Long documentId) {
         return DocumentDownload.respond(documentService.download(rentalId, documentId));
     }
 
+    @PreAuthorize("@access.can('ALQUILERES','ADMINISTRAR')")
     @DeleteMapping("/{documentId}")
     public ResponseEntity<Void> delete(@PathVariable Long rentalId, @PathVariable Long documentId) {
         documentService.delete(rentalId, documentId);

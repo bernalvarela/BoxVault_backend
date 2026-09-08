@@ -9,6 +9,7 @@ import com.storagemanager.storage_management.dto.UnitRevenueDTO;
 import com.storagemanager.storage_management.service.StatisticsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -28,12 +29,14 @@ public class StatisticsController {
 
     private final StatisticsService statisticsService;
 
+    @PreAuthorize("@access.can('UNIDADES','LEER')")
     @GetMapping("/dashboard")
     public ResponseEntity<DashboardStatsDTO> getDashboardStats(
             @RequestParam(required = false) List<Long> rootIds) {
         return ResponseEntity.ok(statisticsService.getDashboardStats(rootIds));
     }
 
+    @PreAuthorize("@access.can('PAGOS','LEER')")
     @GetMapping("/monthly-trends")
     public ResponseEntity<List<MonthlyRevenueDTO>> getMonthlyTrends(
             @RequestParam(defaultValue = "6") int months,
@@ -41,6 +44,7 @@ public class StatisticsController {
         return ResponseEntity.ok(statisticsService.getRecentMonthlyTrends(months, rootIds));
     }
 
+    @PreAuthorize("@access.can('PAGOS','LEER')")
     @GetMapping("/quarterly-trends")
     public ResponseEntity<List<QuarterlyRevenueDTO>> getQuarterlyTrends(
             @RequestParam(defaultValue = "4") int quarters,
@@ -48,6 +52,7 @@ public class StatisticsController {
         return ResponseEntity.ok(statisticsService.getQuarterlyTrends(quarters, rootIds));
     }
 
+    @PreAuthorize("@access.can('PAGOS','LEER')")
     @GetMapping("/annual-trends")
     public ResponseEntity<List<AnnualRevenueDTO>> getAnnualTrends(
             @RequestParam(defaultValue = "3") int years,
@@ -55,6 +60,7 @@ public class StatisticsController {
         return ResponseEntity.ok(statisticsService.getAnnualTrends(years, rootIds));
     }
 
+    @PreAuthorize("@access.can('PAGOS','LEER')")
     @GetMapping("/range")
     public ResponseEntity<DashboardStatsDTO> getStatisticsByDateRange(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
@@ -64,12 +70,14 @@ public class StatisticsController {
     }
 
     /** First and last activity date of the groups, for the "whole history" statistics range. */
+    @PreAuthorize("@access.can('UNIDADES','LEER')")
     @GetMapping("/history-range")
     public ResponseEntity<HistoryRangeDTO> getHistoryRange(
             @RequestParam(required = false) List<Long> rootIds) {
         return ResponseEntity.ok(statisticsService.getHistoryRange(rootIds));
     }
 
+    @PreAuthorize("@access.can('PAGOS','LEER')")
     @GetMapping("/unit-revenues")
     public ResponseEntity<List<UnitRevenueDTO>> getUnitRevenues(
             @RequestParam(required = false) List<Long> rootIds) {

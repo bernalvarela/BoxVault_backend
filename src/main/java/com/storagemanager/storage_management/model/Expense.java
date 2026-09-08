@@ -2,6 +2,9 @@ package com.storagemanager.storage_management.model;
 
 import com.storagemanager.storage_management.model.enums.ExpenseCategory;
 import jakarta.persistence.*;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -17,6 +20,7 @@ import java.time.LocalDateTime;
  * in which case it counts for the business as a whole and cannot be attributed
  * to any owner.
  */
+@EntityListeners(AuditingEntityListener.class)
 @Entity
 @Table(name = "expenses")
 @Getter
@@ -54,4 +58,14 @@ public class Expense {
 
     @UpdateTimestamp
     private LocalDateTime updatedAt;
+
+    /** Quién la creó; lo rellena solo AuditingConfig. */
+    @CreatedBy
+    @Column(updatable = false, length = 60)
+    private String createdBy;
+
+    /** Quién la cambió por última vez. */
+    @LastModifiedBy
+    @Column(length = 60)
+    private String updatedBy;
 }

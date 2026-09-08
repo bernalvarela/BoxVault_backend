@@ -81,6 +81,9 @@ DOCKER_IMAGE=<docker-hub-user>/boxvault-backend:latest
 POSTGRES_PASSWORD=$(openssl rand -base64 24)
 RUSTFS_ACCESS_KEY=boxvault
 RUSTFS_SECRET_KEY=$(openssl rand -base64 24)
+BOXVAULT_JWT_SECRET=$(openssl rand -base64 48)
+BOXVAULT_ADMIN_USER=admin
+BOXVAULT_ADMIN_PASSWORD=$(openssl rand -base64 12)
 EOF
 
 docker compose pull && docker compose up -d
@@ -88,6 +91,15 @@ docker compose pull && docker compose up -d
 
 - The app listens on port **8088**; put a reverse proxy (Caddy / nginx) in front
   for HTTPS if it is exposed to the internet.
+- **Logging in.** The app has its own users, so Traefik's basicauth middleware is
+  gone from `docker-compose.yml`. On the first start, if the `app_users` table is
+  empty, it creates the administrator named by `BOXVAULT_ADMIN_USER` with
+  `BOXVAULT_ADMIN_PASSWORD` and flags it *must change password* — that value sits
+  in `.env` in clear, so it is a way in, not a password. Read it once
+  (`grep BOXVAULT_ADMIN_PASSWORD .env`), log in, change it. `BOXVAULT_JWT_SECRET`
+  signs the session tokens: at least 32 characters, and changing it logs everyone
+  out (that is also how you kill every session at once). Later starts never touch
+  existing users, so removing someone's access stays removed.
 - The data lives in **PostgreSQL 18.6** (`postgres` service), in the `boxvault-db`
   volume. The database is not published outside the compose network; the app
   reaches it as `postgres:5432` with the `pro` Spring profile

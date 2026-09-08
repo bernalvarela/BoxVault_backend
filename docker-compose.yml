@@ -134,6 +134,12 @@ services:
       RUSTFS_BUCKET: ${RUSTFS_BUCKET:-boxvault}
       RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?set RUSTFS_ACCESS_KEY in .env}
       RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?set RUSTFS_SECRET_KEY in .env}
+      # Sesión: secreto de firma de los tokens (openssl rand -base64 48) y el
+      # administrador que se crea la primera vez, si no hay ningún usuario. Esa
+      # contraseña es provisional: la aplicación obliga a cambiarla al entrar.
+      BOXVAULT_JWT_SECRET: ${BOXVAULT_JWT_SECRET:?set BOXVAULT_JWT_SECRET in .env}
+      BOXVAULT_ADMIN_USER: ${BOXVAULT_ADMIN_USER:-admin}
+      BOXVAULT_ADMIN_PASSWORD: ${BOXVAULT_ADMIN_PASSWORD:?set BOXVAULT_ADMIN_PASSWORD in .env}
       # Native images accept the usual heap flags; far less is needed than on the JVM
       JAVA_OPTS: "-Xmx512m"
       TZ: Europe/Madrid
@@ -150,8 +156,10 @@ services:
       traefik.http.routers.boxvault-https.tls: "true"
       traefik.http.routers.boxvault-https.tls.certresolver: "letsencrypt"
       traefik.http.services.boxvault.loadbalancer.server.port: "8088"
-      traefik.http.middlewares.boxvault-auth.basicauth.users: "oscastros29:$$2y$$05$$oV1nD3O0uUebT3zz.U3p0eOyeRw9rE23HJLn5VnerIMxcztn4MFji"
-      traefik.http.routers.boxvault-https.middlewares: "boxvault-auth"
+      # Sin basicauth de Traefik: desde la fase de autenticación, quien decide
+      # quién entra es la propia aplicación, con su pantalla de login y los
+      # permisos de cada usuario. Un candado delante para todos sobraba y además
+      # tapaba el suyo.
     restart: unless-stopped
     # traefik-net to be reachable by the Traefik stack, boxvault-net to reach the database.
     networks: [traefik-net, boxvault-net]

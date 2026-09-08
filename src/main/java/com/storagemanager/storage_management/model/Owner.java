@@ -2,6 +2,9 @@ package com.storagemanager.storage_management.model;
 
 import com.storagemanager.storage_management.model.enums.OwnerType;
 import jakarta.persistence.*;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -15,6 +18,7 @@ import java.time.LocalDateTime;
  * holds in a unit is an {@link Ownership}; the members of a comunidad de bienes
  * and their percentages are {@link OwnerMembership}s.
  */
+@EntityListeners(AuditingEntityListener.class)
 @Entity
 @Table(name = "owners")
 @Getter
@@ -67,4 +71,14 @@ public class Owner {
     public boolean isEntity() {
         return getType() == OwnerType.COMUNIDAD_DE_BIENES;
     }
+
+    /** Quién la creó; lo rellena solo AuditingConfig. */
+    @CreatedBy
+    @Column(updatable = false, length = 60)
+    private String createdBy;
+
+    /** Quién la cambió por última vez. */
+    @LastModifiedBy
+    @Column(length = 60)
+    private String updatedBy;
 }

@@ -10,6 +10,7 @@ import com.storagemanager.storage_management.service.TaxFilingService;
 import com.storagemanager.storage_management.service.TaxService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -35,6 +36,7 @@ public class TaxController {
     }
 
     /** Modelo 303: quarterly VAT of the VAT-bearing units, optionally only those held by an owner (the comunidad de bienes). */
+    @PreAuthorize("@access.can('IMPUESTOS','LEER')")
     @GetMapping("/modelo-303")
     public ResponseEntity<Modelo303DTO> modelo303(
             @RequestParam(required = false) Integer year,
@@ -43,6 +45,7 @@ public class TaxController {
     }
 
     /** Modelo 184: yearly income of a comunidad de bienes (default: the first one) attributed to its members. */
+    @PreAuthorize("@access.can('IMPUESTOS','LEER')")
     @GetMapping("/modelo-184")
     public ResponseEntity<Modelo184DTO> modelo184(
             @RequestParam(required = false) Integer year,
@@ -51,6 +54,7 @@ public class TaxController {
     }
 
     /** IRPF: rental income (with deductible expenses) and atribución de rentas of the year, per person. */
+    @PreAuthorize("@access.can('IMPUESTOS','LEER')")
     @GetMapping("/irpf")
     public ResponseEntity<IrpfReportDTO> irpf(@RequestParam(required = false) Integer year) {
         return ResponseEntity.ok(taxService.irpf(yearOrCurrent(year)));
@@ -60,6 +64,7 @@ public class TaxController {
     // Filed returns
     // ------------------------------------------------------------------
 
+    @PreAuthorize("@access.can('IMPUESTOS','LEER')")
     @GetMapping("/filings")
     public ResponseEntity<List<TaxFilingDTO>> getFilings(
             @RequestParam(required = false) TaxModel model,
@@ -67,16 +72,19 @@ public class TaxController {
         return ResponseEntity.ok(taxFilingService.getFilings(model, year));
     }
 
+    @PreAuthorize("@access.can('IMPUESTOS','LEER')")
     @GetMapping("/filings/{id}")
     public ResponseEntity<TaxFilingDTO> getFiling(@PathVariable Long id) {
         return ResponseEntity.ok(taxFilingService.getFilingDtoById(id));
     }
 
+    @PreAuthorize("@access.can('IMPUESTOS','ESCRIBIR')")
     @PostMapping("/filings")
     public ResponseEntity<TaxFilingDTO> createFiling(@Valid @RequestBody TaxFilingRequest request) {
         return new ResponseEntity<>(taxFilingService.createFiling(request), HttpStatus.CREATED);
     }
 
+    @PreAuthorize("@access.can('IMPUESTOS','ADMINISTRAR')")
     @DeleteMapping("/filings/{id}")
     public ResponseEntity<Void> deleteFiling(@PathVariable Long id) {
         taxFilingService.deleteFiling(id);

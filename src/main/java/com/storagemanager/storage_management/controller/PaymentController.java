@@ -11,6 +11,7 @@ import com.storagemanager.storage_management.service.BillingService;
 import com.storagemanager.storage_management.service.PaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -31,6 +32,7 @@ public class PaymentController {
      * Lo que cada contrato debe mes a mes, cobrado o no. Sin parámetros devuelve
      * todo el histórico; con año y mes, sólo ese periodo.
      */
+    @PreAuthorize("@access.can('PAGOS','LEER')")
     @GetMapping("/charges")
     public ResponseEntity<List<MonthlyChargeDTO>> getMonthlyCharges(
             @RequestParam(required = false) Integer year,
@@ -42,6 +44,7 @@ public class PaymentController {
         return ResponseEntity.ok(billingService.allCharges());
     }
 
+    @PreAuthorize("@access.can('PAGOS','LEER')")
     @GetMapping
     public ResponseEntity<List<Payment>> getAllPayments(
             @RequestParam(required = false) PaymentStatus status,
@@ -65,21 +68,25 @@ public class PaymentController {
         return ResponseEntity.ok(paymentService.getAllPayments());
     }
 
+    @PreAuthorize("@access.can('PAGOS','LEER')")
     @GetMapping("/{id}")
     public ResponseEntity<Payment> getPaymentById(@PathVariable Long id) {
         return ResponseEntity.ok(paymentService.getPaymentById(id));
     }
 
+    @PreAuthorize("@access.can('PAGOS','ESCRIBIR')")
     @PostMapping
     public ResponseEntity<Payment> createPayment(@Valid @RequestBody PaymentRequest request) {
         return new ResponseEntity<>(paymentService.createPayment(request), HttpStatus.CREATED);
     }
 
+    @PreAuthorize("@access.can('PAGOS','ESCRIBIR')")
     @PostMapping("/{id}/record")
     public ResponseEntity<Payment> recordPayment(@PathVariable Long id, @Valid @RequestBody RecordPaymentRequest request) {
         return ResponseEntity.ok(paymentService.recordPayment(id, request));
     }
 
+    @PreAuthorize("@access.can('PAGOS','ESCRIBIR')")
     @PostMapping("/{id}/mark-paid")
     public ResponseEntity<Payment> markAsPaid(
             @PathVariable Long id,
@@ -93,6 +100,7 @@ public class PaymentController {
      * cobrado, o marcarla como no cobrable. Se direcciona por contrato y periodo,
      * no por id de cobro, porque un mes sin cobrar todavía no tiene fila propia.
      */
+    @PreAuthorize("@access.can('PAGOS','ESCRIBIR')")
     @PutMapping("/charges/{rentalAgreementId}/{year}/{month}")
     public ResponseEntity<Payment> adjustCharge(
             @PathVariable Long rentalAgreementId,
@@ -103,6 +111,7 @@ public class PaymentController {
     }
 
     /** Deshace la corrección: el mes vuelve a ser el que dicen los contratos. */
+    @PreAuthorize("@access.can('PAGOS','ADMINISTRAR')")
     @DeleteMapping("/charges/{rentalAgreementId}/{year}/{month}")
     public ResponseEntity<Void> clearChargeAdjustment(
             @PathVariable Long rentalAgreementId,
@@ -112,6 +121,7 @@ public class PaymentController {
         return ResponseEntity.noContent().build();
     }
 
+    @PreAuthorize("@access.can('PAGOS','ADMINISTRAR')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deletePayment(@PathVariable Long id) {
         paymentService.deletePayment(id);

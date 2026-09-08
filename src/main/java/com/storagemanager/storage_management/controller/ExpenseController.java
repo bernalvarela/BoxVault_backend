@@ -7,6 +7,7 @@ import com.storagemanager.storage_management.service.ExpenseService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -22,6 +23,7 @@ public class ExpenseController {
 
     private final ExpenseService expenseService;
 
+    @PreAuthorize("@access.can('GASTOS','LEER')")
     @GetMapping
     public ResponseEntity<List<Expense>> getExpenses(
             @RequestParam(required = false) Integer year,
@@ -41,26 +43,31 @@ public class ExpenseController {
         return ResponseEntity.ok(expenseService.searchExpenses(filter, ExpenseService.SortBy.from(sortBy), ascending));
     }
 
+    @PreAuthorize("@access.can('GASTOS','LEER')")
     @GetMapping("/categories")
     public ResponseEntity<ExpenseCategory[]> getCategories() {
         return ResponseEntity.ok(ExpenseCategory.values());
     }
 
+    @PreAuthorize("@access.can('GASTOS','LEER')")
     @GetMapping("/{id}")
     public ResponseEntity<Expense> getExpenseById(@PathVariable Long id) {
         return ResponseEntity.ok(expenseService.getExpenseById(id));
     }
 
+    @PreAuthorize("@access.can('GASTOS','ESCRIBIR')")
     @PostMapping
     public ResponseEntity<Expense> createExpense(@Valid @RequestBody ExpenseRequest request) {
         return new ResponseEntity<>(expenseService.createExpense(request), HttpStatus.CREATED);
     }
 
+    @PreAuthorize("@access.can('GASTOS','ESCRIBIR')")
     @PutMapping("/{id}")
     public ResponseEntity<Expense> updateExpense(@PathVariable Long id, @Valid @RequestBody ExpenseRequest request) {
         return ResponseEntity.ok(expenseService.updateExpense(id, request));
     }
 
+    @PreAuthorize("@access.can('GASTOS','ADMINISTRAR')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteExpense(@PathVariable Long id) {
         expenseService.deleteExpense(id);

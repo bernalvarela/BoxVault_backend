@@ -7,6 +7,7 @@ import com.storagemanager.storage_management.service.RentalAgreementService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -22,6 +23,7 @@ public class RentalAgreementController {
 
     private final RentalAgreementService rentalAgreementService;
 
+    @PreAuthorize("@access.can('ALQUILERES','LEER')")
     @GetMapping
     public ResponseEntity<List<RentalAgreement>> getAllRentals(@RequestParam(required = false) RentalStatus status) {
         if (status == RentalStatus.ACTIVE) {
@@ -30,21 +32,25 @@ public class RentalAgreementController {
         return ResponseEntity.ok(rentalAgreementService.getAllAgreements());
     }
 
+    @PreAuthorize("@access.can('ALQUILERES','LEER')")
     @GetMapping("/{id}")
     public ResponseEntity<RentalAgreement> getRentalById(@PathVariable Long id) {
         return ResponseEntity.ok(rentalAgreementService.getAgreementById(id));
     }
 
+    @PreAuthorize("@access.can('ALQUILERES','ESCRIBIR')")
     @PostMapping
     public ResponseEntity<RentalAgreement> createRental(@Valid @RequestBody RentalAgreementRequest request) {
         return new ResponseEntity<>(rentalAgreementService.createAgreement(request), HttpStatus.CREATED);
     }
 
+    @PreAuthorize("@access.can('ALQUILERES','ESCRIBIR')")
     @PutMapping("/{id}")
     public ResponseEntity<RentalAgreement> updateRental(@PathVariable Long id, @Valid @RequestBody RentalAgreementRequest request) {
         return ResponseEntity.ok(rentalAgreementService.updateAgreement(id, request));
     }
 
+    @PreAuthorize("@access.can('ALQUILERES','ESCRIBIR')")
     @PostMapping("/{id}/terminate")
     public ResponseEntity<RentalAgreement> terminateRental(
             @PathVariable Long id,
