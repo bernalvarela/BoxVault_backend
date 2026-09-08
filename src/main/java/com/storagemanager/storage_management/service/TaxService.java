@@ -23,6 +23,7 @@ import com.storagemanager.storage_management.repository.OwnerRepository;
 import com.storagemanager.storage_management.repository.OwnershipRepository;
 import com.storagemanager.storage_management.repository.PaymentRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
+import com.storagemanager.storage_management.security.UnitScope;
 import com.storagemanager.storage_management.service.OwnershipService.Effective;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -75,6 +76,7 @@ public class TaxService {
     private final OwnerRepository ownerRepository;
     private final OwnershipRepository ownershipRepository;
     private final OwnerMembershipRepository ownerMembershipRepository;
+    private final UnitScope unitScope;
 
     // ------------------------------------------------------------------
     // Shared helpers
@@ -108,8 +110,19 @@ public class TaxService {
             .thenComparing(u -> u.getUnitNumber().length())
             .thenComparing(StorageUnit::getUnitNumber, String.CASE_INSENSITIVE_ORDER);
 
+    /**
+     * Las unidades que entran en los impuestos: las del usuario.
+     * <p>
+     * De aquí salen el 303, el 184 y el IRPF, así que filtrar en un solo sitio
+     * los deja los tres dentro del ámbito. Ojo con lo que eso significa: quien no
+     * ve todas las unidades de un propietario obtiene un informe <em>parcial</em>,
+     * que no cuadra con lo que hay que presentar. La declaración de verdad la
+     * saca quien lo ve todo (un gestor), y la pantalla avisa de ello.
+     */
     private List<StorageUnit> allUnits() {
-        return storageUnitRepository.findAll().stream().sorted(UNIT_ORDER).toList();
+        return unitScope.filterByUnit(storageUnitRepository.findAll(), unit -> unit).stream()
+                .sorted(UNIT_ORDER)
+                .toList();
     }
 
     /** Units that can be rented (locales are containers, not rented units). */

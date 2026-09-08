@@ -9,6 +9,7 @@ import com.storagemanager.storage_management.model.StorageUnit;
 import com.storagemanager.storage_management.model.enums.ExpenseCategory;
 import com.storagemanager.storage_management.repository.ExpenseRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
+import com.storagemanager.storage_management.security.UnitScope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +31,7 @@ public class ExpenseService {
 
     private final ExpenseRepository expenseRepository;
     private final StorageUnitRepository storageUnitRepository;
+    private final UnitScope unitScope;
 
     /** The root unit (local / flat) an expense counts towards; null for a general expense. */
     public static Long rootOf(Expense expense) {
@@ -48,12 +50,14 @@ public class ExpenseService {
     }
 
     public List<Expense> getAllExpenses() {
-        return expenseRepository.findAllByOrderByExpenseDateDesc();
+        return unitScope.filterByUnit(expenseRepository.findAllByOrderByExpenseDateDesc(), Expense::getStorageUnit);
     }
 
     public Expense getExpenseById(Long id) {
-        return expenseRepository.findById(id)
+        Expense expense = expenseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Expense not found with id: " + id));
+        unitScope.requireAccessible(expense.getStorageUnit());
+        return expense;
     }
 
     /**
@@ -121,7 +125,7 @@ public class ExpenseService {
         order = order.thenComparing(Expense::getExpenseDate, Comparator.reverseOrder())
                 .thenComparing(Expense::getId, Comparator.reverseOrder());
 
-        return result.stream()
+        return unitScope.filterByUnit(result, Expense::getStorageUnit).stream()
                 .filter(e -> filter.storageUnitId() == null
                         || (e.getStorageUnit() != null && filter.storageUnitId().equals(e.getStorageUnit().getId())))
                 .filter(e -> filter.rootId() == null || belongsToRoots(e, Set.of(filter.rootId())))
@@ -152,12 +156,15 @@ public class ExpenseService {
     }
 
     private void applyRequest(Expense expense, ExpenseRequest request) {
-        StorageUnit unit = null;
-        if (request.getStorageUnitId() != null) {
-            unit = storageUnitRepository.findById(request.getStorageUnitId())
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "Storage unit not found with id: " + request.getStorageUnitId()));
+        // Todo gasto va contra una unidad: es lo que permite repartirlo por
+        // inmueble, imputarlo en los impuestos y saber a quién le toca verlo.
+        if (request.getStorageUnitId() == null) {
+            throw new BadRequestException("El gasto tiene que ir a una unidad");
         }
+        StorageUnit unit = storageUnitRepository.findById(request.getStorageUnitId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Storage unit not found with id: " + request.getStorageUnitId()));
+        unitScope.requireAccessible(unit);
         expense.setStorageUnit(unit);
         expense.setAmount(request.getAmount());
         expense.setDescription(request.getDescription().trim());
@@ -175,7 +182,7 @@ public class ExpenseService {
     }
 
     public BigDecimal sumTotalExpenses(Set<Long> rootIds) {
-        if (rootIds == null) return nz(expenseRepository.sumTotalExpenses());
+        if (canAggregateInSql(rootIds)) return nz(expenseRepository.sumTotalExpenses());
         return total(expensesIn(null, null, rootIds));
     }
 
@@ -184,7 +191,7 @@ public class ExpenseService {
     }
 
     public BigDecimal sumExpensesBetween(LocalDate start, LocalDate end, Set<Long> rootIds) {
-        if (rootIds == null) return nz(expenseRepository.sumExpensesBetween(start, end));
+        if (canAggregateInSql(rootIds)) return nz(expenseRepository.sumExpensesBetween(start, end));
         return total(expensesIn(start, end, rootIds));
     }
 
@@ -193,7 +200,7 @@ public class ExpenseService {
     }
 
     public long countExpensesBetween(LocalDate start, LocalDate end, Set<Long> rootIds) {
-        if (rootIds == null) return expenseRepository.countExpensesBetween(start, end);
+        if (canAggregateInSql(rootIds)) return expenseRepository.countExpensesBetween(start, end);
         return expensesIn(start, end, rootIds).size();
     }
 
@@ -234,7 +241,20 @@ public class ExpenseService {
         List<Expense> list = (start == null || end == null)
                 ? expenseRepository.findAll()
                 : expenseRepository.findByExpenseDateBetween(start, end);
-        return list.stream().filter(e -> belongsToRoots(e, rootIds)).toList();
+        // El ámbito va antes que el filtro por inmueble: lo que no es del usuario
+        // no suma en ningún total suyo.
+        return unitScope.filterByUnit(list, Expense::getStorageUnit).stream()
+                .filter(e -> belongsToRoots(e, rootIds))
+                .toList();
+    }
+
+    /**
+     * Si se puede resolver el total con un SUM en la base de datos. Con el ámbito
+     * puesto no: el SUM cuenta todos los gastos, también los de unidades que el
+     * usuario no ve, y entonces sus totales dirían de más.
+     */
+    private boolean canAggregateInSql(Set<Long> rootIds) {
+        return rootIds == null && unitScope.isUnrestricted();
     }
 
     private static BigDecimal total(List<Expense> expenses) {
@@ -245,14 +265,18 @@ public class ExpenseService {
     }
 
     public BigDecimal sumExpensesForUnit(Long unitId) {
+        if (!unitScope.isAccessible(unitId)) return BigDecimal.ZERO;
         return nz(expenseRepository.sumExpensesForUnit(unitId));
     }
 
     /** Total expenses attributed to each unit, keyed by unit id (units without expenses are absent). */
     public Map<Long, BigDecimal> sumExpensesByUnit() {
+        Set<Long> accessible = unitScope.accessibleUnitIds();
         Map<Long, BigDecimal> map = new HashMap<>();
         for (Object[] row : expenseRepository.sumExpensesByStorageUnit()) {
-            map.put((Long) row[0], nz((BigDecimal) row[1]));
+            Long unitId = (Long) row[0];
+            if (accessible != null && !accessible.contains(unitId)) continue;
+            map.put(unitId, nz((BigDecimal) row[1]));
         }
         return map;
     }
@@ -270,7 +294,7 @@ public class ExpenseService {
         Map<ExpenseCategory, BigDecimal> amounts = new EnumMap<>(ExpenseCategory.class);
         Map<ExpenseCategory, Long> counts = new EnumMap<>(ExpenseCategory.class);
 
-        if (rootIds == null) {
+        if (canAggregateInSql(rootIds)) {
             List<Object[]> rows = (start == null || end == null)
                     ? expenseRepository.sumExpensesByCategory()
                     : expenseRepository.sumExpensesByCategoryBetween(start, end);

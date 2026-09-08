@@ -9,6 +9,7 @@ import com.storagemanager.storage_management.model.RentalDocument;
 import com.storagemanager.storage_management.model.enums.DocumentType;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 import com.storagemanager.storage_management.repository.RentalDocumentRepository;
+import com.storagemanager.storage_management.security.UnitScope;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,6 +31,7 @@ public class RentalDocumentService {
     private final RentalDocumentRepository rentalDocumentRepository;
     private final RentalAgreementRepository rentalRepository;
     private final DocumentService documents;
+    private final UnitScope unitScope;
 
     public List<RentalDocumentDTO> getDocuments(Long rentalId) {
         requireRental(rentalId);
@@ -79,12 +81,17 @@ public class RentalDocumentService {
         return type;
     }
 
+    /** El contrato, comprobando que su unidad esté en el ámbito del usuario. */
     private RentalAgreement requireRental(Long rentalId) {
-        return rentalRepository.findById(rentalId)
+        RentalAgreement rental = rentalRepository.findById(rentalId)
                 .orElseThrow(() -> new ResourceNotFoundException("Rental agreement not found with id: " + rentalId));
+        unitScope.requireAccessible(rental.getStorageUnit());
+        return rental;
     }
 
+    /** Un documento de ese contrato; comprueba primero que el contrato sea suyo. */
     private RentalDocument requireLink(Long rentalId, Long documentId) {
+        requireRental(rentalId);
         return rentalDocumentRepository.findByRentalAgreementIdAndDocumentId(rentalId, documentId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Document " + documentId + " not found for rental " + rentalId));

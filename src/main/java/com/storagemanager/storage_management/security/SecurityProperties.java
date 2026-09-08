@@ -43,7 +43,14 @@ public class SecurityProperties {
     byte[] secretBytes() {
         if (jwtSecret == null || jwtSecret.length() < 32) {
             throw new IllegalStateException("boxvault.security.jwt-secret es obligatorio y debe tener al menos "
-                    + "32 caracteres (BOXVAULT_JWT_SECRET; genera uno con: openssl rand -base64 48)");
+                    + "32 caracteres. Llega por la variable BOXVAULT_JWT_SECRET (genera una con: "
+                    + "openssl rand -hex 32). Si ya está en el .env del servidor y sigue faltando, es que "
+                    + "docker-compose.yml no la pasa al contenedor: el .env sólo lo lee Compose, y la "
+                    + "variable tiene que estar además en el bloque environment: del servicio boxvault. "
+                    + (jwtSecret == null || jwtSecret.isBlank()
+                            ? "Ahora mismo llega vacía."
+                            : "Ahora mismo llegan sólo " + jwtSecret.length() + " caracteres, quizá porque "
+                              + "el valor lleva un '$' y Compose se lo ha comido."));
         }
         return jwtSecret.getBytes(StandardCharsets.UTF_8);
     }

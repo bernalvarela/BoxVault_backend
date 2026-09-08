@@ -17,6 +17,8 @@ import com.storagemanager.storage_management.repository.PaymentRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
 import com.storagemanager.storage_management.repository.UnitPriceHistoryRepository;
+import com.storagemanager.storage_management.security.UnitScope;
+import org.springframework.security.access.AccessDeniedException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,15 +37,23 @@ public class StorageUnitService {
     private final PaymentRepository paymentRepository;
     private final ExpenseRepository expenseRepository;
     private final OwnershipRepository ownershipRepository;
+    private final UnitScope unitScope;
 
+    /**
+     * Las unidades que ve quien pregunta: las suyas y, sólo para que el árbol se
+     * entienda, los locales que las contienen (ver {@link UnitScope}).
+     */
     public List<StorageUnit> getAllUnits() {
-        return storageUnitRepository.findAll();
+        return unitScope.visibleUnits(storageUnitRepository.findAll());
     }
 
     /** Units directly inside a local. */
     public List<StorageUnit> getChildren(Long parentId) {
-        getUnitById(parentId);
-        return storageUnitRepository.findByParentId(parentId);
+        // Sin exigir que el local esté en el ámbito: puede ser uno de contexto
+        // —se ve porque dentro hay unidades del usuario—, y lo que se devuelve
+        // son sólo las unidades que le tocan.
+        requireExisting(parentId);
+        return unitScope.visibleUnits(storageUnitRepository.findByParentId(parentId));
     }
 
     /**
@@ -65,7 +75,19 @@ public class StorageUnitService {
         return parent;
     }
 
+    /**
+     * Una unidad concreta, comprobando que sea del usuario. Todo lo que pase por
+     * aquí —abrirla, editarla, colgarle algo— queda cubierto; para los usos
+     * internos que sólo necesitan saber que existe está {@link #requireExisting}.
+     */
     public StorageUnit getUnitById(Long id) {
+        StorageUnit unit = requireExisting(id);
+        unitScope.requireAccessible(unit);
+        return unit;
+    }
+
+    /** La unidad, sin mirar el ámbito: para comprobaciones internas. */
+    private StorageUnit requireExisting(Long id) {
         return storageUnitRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Storage unit not found with id: " + id));
     }
@@ -79,11 +101,15 @@ public class StorageUnitService {
     }
 
     public List<StorageUnit> getUnitsByStatus(UnitStatus status) {
-        return storageUnitRepository.findByStatus(status);
+        return unitScope.visibleUnits(storageUnitRepository.findByStatus(status));
     }
 
     /** Units filtered by kind and/or status; both null returns everything. */
     public List<StorageUnit> getUnits(UnitKind kind, UnitStatus status) {
+        return unitScope.visibleUnits(unitsMatching(kind, status));
+    }
+
+    private List<StorageUnit> unitsMatching(UnitKind kind, UnitStatus status) {
         if (kind != null && status != null) return storageUnitRepository.findByKindAndStatus(kind, status);
         if (kind != null) return storageUnitRepository.findByKind(kind);
         if (status != null) return storageUnitRepository.findByStatus(status);
@@ -94,6 +120,12 @@ public class StorageUnitService {
     public StorageUnit createUnit(StorageUnitRequest request) {
         if (storageUnitRepository.findByUnitNumber(request.getUnitNumber()).isPresent()) {
             throw new BadRequestException("Storage unit number already exists: " + request.getUnitNumber());
+        }
+        // Una unidad sin padre es un inmueble nuevo, que no cuelga del ámbito de
+        // nadie: crearlo es cosa de quien ve todas las unidades. Con padre, basta
+        // con que el padre sea suyo, y de eso se encarga resolveParent.
+        if (request.getParentId() == null && !unitScope.isUnrestricted()) {
+            throw new AccessDeniedException("Sólo quien ve todas las unidades puede crear un inmueble nuevo");
         }
 
         StorageUnit unit = StorageUnit.builder()

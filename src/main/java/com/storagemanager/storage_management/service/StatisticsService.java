@@ -20,6 +20,7 @@ import com.storagemanager.storage_management.repository.ClientRepository;
 import com.storagemanager.storage_management.repository.PaymentRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
+import com.storagemanager.storage_management.security.UnitScope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -61,6 +62,7 @@ public class StatisticsService {
     private final PaymentRepository paymentRepository;
     private final BillingService billingService;
     private final ExpenseService expenseService;
+    private final UnitScope unitScope;
 
     // ------------------------------------------------------------------
     // Group filter helpers
@@ -87,15 +89,18 @@ public class StatisticsService {
      * of the occupancy figures) under the given roots; null = every root.
      */
     private List<StorageUnit> unitsIn(Set<Long> rootIds) {
-        return storageUnitRepository.findAll().stream()
+        // El ámbito manda sobre el filtro de inmuebles: las unidades que el
+        // usuario no ve no cuentan para su ocupación ni para sus totales.
+        return unitScope.filterByUnit(storageUnitRepository.findAll(), unit -> unit).stream()
                 .filter(u -> !u.isContainer())
                 .filter(u -> unitInRoots(u, rootIds))
                 .toList();
     }
 
-    private static List<RentalAgreement> rentalsIn(List<RentalAgreement> rentals, Set<Long> rootIds) {
-        if (rootIds == null) return rentals;
-        return rentals.stream().filter(r -> unitInRoots(r.getStorageUnit(), rootIds)).toList();
+    private List<RentalAgreement> rentalsIn(List<RentalAgreement> rentals, Set<Long> rootIds) {
+        List<RentalAgreement> inScope = unitScope.filterByUnit(rentals, RentalAgreement::getStorageUnit);
+        if (rootIds == null) return inScope;
+        return inScope.stream().filter(r -> unitInRoots(r.getStorageUnit(), rootIds)).toList();
     }
 
     // ------------------------------------------------------------------
@@ -267,8 +272,10 @@ public class StatisticsService {
 
         List<RentalAgreement> activeRentals = rentalsIn(rentalAgreementRepository.findByStatus(RentalStatus.ACTIVE), rootIds);
         long activeClients = activeRentals.stream().map(r -> r.getClient().getId()).distinct().count();
-        // Sin filtro: todos los clientes; con filtro: clientes que han alquilado (alguna vez) en esos grupos
-        long totalClients = rootIds == null
+        // Sin filtro ni ámbito: todos los clientes. Con cualquiera de los dos, los
+        // que han alquilado (alguna vez) algo de lo que se está mirando; contar
+        // todos delataría cuántos hay en el resto de la casa.
+        long totalClients = rootIds == null && unitScope.isUnrestricted()
                 ? clientRepository.count()
                 : rentalsIn(rentalAgreementRepository.findAll(), rootIds).stream()
                         .map(r -> r.getClient().getId()).distinct().count();
@@ -591,7 +598,9 @@ public class StatisticsService {
 
     public List<UnitRevenueDTO> getUnitRevenues(Collection<Long> rootIdsParam) {
         Set<Long> rootIds = normalizeRootIds(rootIdsParam);
-        Set<Long> unitIds = rootIds == null ? null
+        // Con filtro de inmuebles o con ámbito, la lista de unidades que valen ya
+        // sale de unitsIn, que aplica los dos.
+        Set<Long> unitIds = rootIds == null && unitScope.isUnrestricted() ? null
                 : unitsIn(rootIds).stream().map(StorageUnit::getId).collect(java.util.stream.Collectors.toSet());
 
         List<UnitRevenueDTO> list = new ArrayList<>();

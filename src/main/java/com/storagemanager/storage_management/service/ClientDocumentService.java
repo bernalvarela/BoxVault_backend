@@ -9,6 +9,7 @@ import com.storagemanager.storage_management.model.Document;
 import com.storagemanager.storage_management.model.enums.DocumentType;
 import com.storagemanager.storage_management.repository.ClientDocumentRepository;
 import com.storagemanager.storage_management.repository.ClientRepository;
+import com.storagemanager.storage_management.security.UnitScope;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,6 +35,7 @@ public class ClientDocumentService {
     private final ClientDocumentRepository clientDocumentRepository;
     private final ClientRepository clientRepository;
     private final DocumentService documents;
+    private final UnitScope unitScope;
 
     public List<ClientDocumentDTO> getDocuments(Long clientId) {
         requireClient(clientId);
@@ -99,12 +101,21 @@ public class ClientDocumentService {
         return type;
     }
 
+    /**
+     * El cliente, comprobando además que esté en el ámbito del usuario: la ficha
+     * se protege en {@code ClientService}, y sus documentos —que son lo delicado,
+     * un DNI escaneado— tienen que ir por la misma puerta.
+     */
     private Client requireClient(Long clientId) {
-        return clientRepository.findById(clientId)
+        Client client = clientRepository.findById(clientId)
                 .orElseThrow(() -> new ResourceNotFoundException("Client not found with id: " + clientId));
+        unitScope.requireClientVisible(clientId);
+        return client;
     }
 
+    /** Un documento de ese cliente; comprueba primero que el cliente sea suyo. */
     private ClientDocument requireLink(Long clientId, Long documentId) {
+        requireClient(clientId);
         return clientDocumentRepository.findByClientIdAndDocumentId(clientId, documentId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Document " + documentId + " not found for client " + clientId));

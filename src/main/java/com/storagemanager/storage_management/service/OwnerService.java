@@ -7,11 +7,14 @@ import com.storagemanager.storage_management.exception.BadRequestException;
 import com.storagemanager.storage_management.exception.ResourceNotFoundException;
 import com.storagemanager.storage_management.model.Owner;
 import com.storagemanager.storage_management.model.OwnerMembership;
+import com.storagemanager.storage_management.model.Ownership;
 import com.storagemanager.storage_management.model.enums.OwnerType;
 import com.storagemanager.storage_management.repository.OwnerMembershipRepository;
 import com.storagemanager.storage_management.repository.OwnerRepository;
 import com.storagemanager.storage_management.repository.OwnershipRepository;
+import com.storagemanager.storage_management.security.UnitScope;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,16 +31,59 @@ public class OwnerService {
     private final OwnershipRepository ownershipRepository;
     private final OwnerMembershipRepository ownerMembershipRepository;
     private final OwnershipService ownershipService;
+    private final UnitScope unitScope;
 
     public List<OwnerDTO> getAllOwners() {
+        Set<Long> visible = visibleOwnerIds();
         return ownerRepository.findAllByOrderByFullNameAsc().stream()
+                .filter(owner -> visible == null || visible.contains(owner.getId()))
                 .map(this::toDto)
                 .toList();
     }
 
     public Owner getOwnerById(Long id) {
-        return ownerRepository.findById(id)
+        Owner owner = ownerRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Owner not found with id: " + id));
+        Set<Long> visible = visibleOwnerIds();
+        if (visible != null && !visible.contains(id)) {
+            throw new AccessDeniedException("Ese propietario no tiene participaciones en tu ámbito");
+        }
+        return owner;
+    }
+
+    /**
+     * Los propietarios que se ven: los que participan en alguna unidad del
+     * usuario, directamente o a través de una entidad. Misma regla que con los
+     * clientes: quien no participa en nada se ve siempre, porque no cuelga de
+     * ninguna unidad y si no no se podría dar de alta antes de repartirle nada.
+     * <p>
+     * {@code null} = todos.
+     */
+    private Set<Long> visibleOwnerIds() {
+        if (unitScope.isUnrestricted()) return null;
+
+        Set<Long> visible = new HashSet<>();
+        Set<Long> withAnyShare = new HashSet<>();
+        Set<Long> accessibleUnits = unitScope.accessibleUnitIds();
+        for (Ownership share : ownershipRepository.findAll()) {
+            Long ownerId = share.getOwner().getId();
+            withAnyShare.add(ownerId);
+            if (share.getStorageUnit() != null && accessibleUnits.contains(share.getStorageUnit().getId())) {
+                visible.add(ownerId);
+            }
+        }
+        // Los miembros de una comunidad de bienes visible también se ven: la
+        // entidad reparte entre ellos lo de esas unidades.
+        for (OwnerMembership membership : ownerMembershipRepository.findAll()) {
+            if (visible.contains(membership.getEntity().getId())) {
+                visible.add(membership.getMember().getId());
+            }
+            withAnyShare.add(membership.getMember().getId());
+        }
+        for (Owner owner : ownerRepository.findAll()) {
+            if (!withAnyShare.contains(owner.getId())) visible.add(owner.getId());
+        }
+        return visible;
     }
 
     public OwnerDTO getOwnerDtoById(Long id) {

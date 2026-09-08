@@ -11,6 +11,7 @@ import com.storagemanager.storage_management.model.enums.PaymentMethod;
 import com.storagemanager.storage_management.model.enums.PaymentStatus;
 import com.storagemanager.storage_management.repository.PaymentRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
+import com.storagemanager.storage_management.security.UnitScope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,33 +33,43 @@ public class PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final RentalAgreementRepository rentalAgreementRepository;
+    private final UnitScope unitScope;
 
+    /**
+     * Cada cobro lleva su unidad, así que el ámbito se aplica directamente sobre
+     * ella: se ven los de las unidades del usuario y ningún otro.
+     */
     public List<Payment> getAllPayments() {
-        return paymentRepository.findAll();
+        return unitScope.filterByUnit(paymentRepository.findAll(), Payment::getStorageUnit);
     }
 
     public Payment getPaymentById(Long id) {
-        return paymentRepository.findById(id)
+        Payment payment = paymentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found with id: " + id));
+        unitScope.requireAccessible(payment.getStorageUnit());
+        return payment;
     }
 
     public List<Payment> getPaymentsByStatus(PaymentStatus status) {
-        return paymentRepository.findByStatus(status);
+        return unitScope.filterByUnit(paymentRepository.findByStatus(status), Payment::getStorageUnit);
     }
 
     public List<Payment> getPaymentsByMonthYear(Integer year, Integer month) {
-        return paymentRepository.findByBillingPeriodYearAndBillingPeriodMonth(year, month);
+        return unitScope.filterByUnit(
+                paymentRepository.findByBillingPeriodYearAndBillingPeriodMonth(year, month), Payment::getStorageUnit);
     }
 
     public List<Payment> getPaymentsByRental(Long rentalAgreementId) {
-        return paymentRepository.findByRentalAgreementId(rentalAgreementId);
+        return unitScope.filterByUnit(
+                paymentRepository.findByRentalAgreementId(rentalAgreementId), Payment::getStorageUnit);
     }
 
     public List<Payment> getPaymentsByClient(Long clientId) {
-        return paymentRepository.findByClientId(clientId);
+        return unitScope.filterByUnit(paymentRepository.findByClientId(clientId), Payment::getStorageUnit);
     }
 
     public List<Payment> getPaymentsByStorageUnit(Long unitId) {
+        unitScope.requireAccessible(unitId);
         return paymentRepository.findByStorageUnitId(unitId);
     }
 
@@ -66,6 +77,8 @@ public class PaymentService {
     public Payment createPayment(PaymentRequest request) {
         RentalAgreement agreement = rentalAgreementRepository.findById(request.getRentalAgreementId())
                 .orElseThrow(() -> new ResourceNotFoundException("Rental agreement not found with id: " + request.getRentalAgreementId()));
+        // El cobro es de la unidad del contrato: tiene que estar en el ámbito.
+        unitScope.requireAccessible(agreement.getStorageUnit());
 
         Optional<Payment> existing = paymentRepository.findByRentalAgreementIdAndBillingPeriodYearAndBillingPeriodMonth(
                 agreement.getId(), request.getBillingPeriodYear(), request.getBillingPeriodMonth());
@@ -145,6 +158,8 @@ public class PaymentService {
         }
         RentalAgreement agreement = rentalAgreementRepository.findById(rentalAgreementId)
                 .orElseThrow(() -> new ResourceNotFoundException("Rental agreement not found with id: " + rentalAgreementId));
+        // El cobro es de la unidad del contrato: tiene que estar en el ámbito.
+        unitScope.requireAccessible(agreement.getStorageUnit());
 
         BigDecimal due = request.isWaived() ? BigDecimal.ZERO : request.getAmountDue();
         BigDecimal paid = request.isWaived() || request.getAmountPaid() == null
@@ -188,7 +203,10 @@ public class PaymentService {
     public void clearChargeAdjustment(Long rentalAgreementId, Integer year, Integer month) {
         paymentRepository
                 .findByRentalAgreementIdAndBillingPeriodYearAndBillingPeriodMonth(rentalAgreementId, year, month)
-                .ifPresent(paymentRepository::delete);
+                .ifPresent(payment -> {
+                    unitScope.requireAccessible(payment.getStorageUnit());
+                    paymentRepository.delete(payment);
+                });
     }
 
     /** El día de cobro pactado de ese mes, recortado al último día (febrero, día 31...). */

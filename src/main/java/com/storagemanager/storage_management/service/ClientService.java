@@ -7,11 +7,13 @@ import com.storagemanager.storage_management.exception.ResourceNotFoundException
 import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.repository.ClientRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
+import com.storagemanager.storage_management.security.UnitScope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -22,21 +24,31 @@ public class ClientService {
     private final ClientRepository clientRepository;
     private final RentalAgreementRepository rentalAgreementRepository;
     private final ClientDocumentService clientDocumentService;
+    private final UnitScope unitScope;
 
     public List<Client> getAllClients() {
-        return clientRepository.findAll();
+        return visibleOnly(clientRepository.findAll());
     }
 
     public Client getClientById(Long id) {
-        return clientRepository.findById(id)
+        Client client = clientRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Client not found with id: " + id));
+        unitScope.requireClientVisible(client.getId());
+        return client;
     }
 
     public List<Client> searchClients(String query) {
         if (query == null || query.trim().isEmpty()) {
             return getAllClients();
         }
-        return clientRepository.searchClients(query.trim());
+        return visibleOnly(clientRepository.searchClients(query.trim()));
+    }
+
+    /** El ámbito de clientes lo resuelve {@link UnitScope}, que lo comparte con los documentos. */
+    private List<Client> visibleOnly(List<Client> clients) {
+        Set<Long> visible = unitScope.visibleClientIds();
+        if (visible == null) return clients;
+        return clients.stream().filter(client -> visible.contains(client.getId())).toList();
     }
 
     public List<ClientDTO> searchClientSummaries(String query) {

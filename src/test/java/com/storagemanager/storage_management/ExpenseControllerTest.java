@@ -11,6 +11,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 
 import java.math.BigDecimal;
@@ -110,14 +112,25 @@ class ExpenseControllerTest {
         assertNotNull(byUnit.getBody());
         assertTrue(List.of(byUnit.getBody()).stream().anyMatch(e -> e.getId().equals(expense.getId())));
 
-        // Update: make it a general expense in another category
+        // Un gasto siempre va contra una unidad: dejarlo sin ella se rechaza.
         request.setStorageUnitId(null);
+        ResponseEntity<Map> withoutUnit = restTemplate.exchange(
+                "/api/expenses/" + expense.getId(), HttpMethod.PUT, new HttpEntity<>(request), Map.class);
+        assertEquals(400, withoutUnit.getStatusCode().value(),
+                "Un gasto sin unidad no se admite: es lo que permite repartirlo e imputarlo");
+
+        // Update: cambiarlo de unidad y de categoría sí
+        StorageUnit otherUnit = storageUnitService.getAllUnits().stream()
+                .filter(u -> !u.getId().equals(unit.getId()))
+                .findFirst()
+                .orElseThrow();
+        request.setStorageUnitId(otherUnit.getId());
         request.setCategory(ExpenseCategory.OTROS);
-        request.setDescription("Cambio de cerradura (general)");
+        request.setDescription("Cambio de cerradura (otra unidad)");
         restTemplate.put("/api/expenses/" + expense.getId(), request);
         ResponseEntity<Expense> updated = restTemplate.getForEntity("/api/expenses/" + expense.getId(), Expense.class);
         assertNotNull(updated.getBody());
-        assertNull(updated.getBody().getStorageUnit());
+        assertEquals(otherUnit.getId(), updated.getBody().getStorageUnit().getId());
         assertEquals(ExpenseCategory.OTROS, updated.getBody().getCategory());
 
         restTemplate.delete("/api/expenses/" + expense.getId());

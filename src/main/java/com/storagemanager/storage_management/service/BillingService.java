@@ -6,6 +6,7 @@ import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.enums.PaymentStatus;
 import com.storagemanager.storage_management.model.enums.RentalStatus;
 import com.storagemanager.storage_management.repository.PaymentRepository;
+import com.storagemanager.storage_management.security.UnitScope;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -48,6 +49,7 @@ public class BillingService {
 
     private final RentalAgreementRepository rentalAgreementRepository;
     private final PaymentRepository paymentRepository;
+    private final UnitScope unitScope;
 
     /** Todos los cargos, desde el primer mes de cada contrato hasta el mes en curso. */
     public List<MonthlyChargeDTO> allCharges() {
@@ -69,7 +71,9 @@ public class BillingService {
         YearMonth lastGenerated = (to == null || to.isAfter(currentMonth)) ? currentMonth : to;
 
         Map<String, Payment> cobros = new HashMap<>();
-        for (Payment p : paymentRepository.findAll()) {
+        // También por el ámbito: de estos cobros salen los cargos "sueltos" de más
+        // abajo, los de periodos que ningún contrato cubre.
+        for (Payment p : unitScope.filterByUnit(paymentRepository.findAll(), Payment::getStorageUnit)) {
             if (p.getRentalAgreement() == null || p.getBillingPeriodYear() == null || p.getBillingPeriodMonth() == null) {
                 continue;
             }
@@ -79,7 +83,11 @@ public class BillingService {
         List<MonthlyChargeDTO> charges = new ArrayList<>();
         Set<String> generated = new HashSet<>();
 
-        for (RentalAgreement rental : rentalAgreementRepository.findAll()) {
+        // El ámbito se aplica aquí, en el origen: los cargos salen de los
+        // contratos, y de aquí beben tanto la pantalla de mensualidades como los
+        // totales del panel. Filtrando una vez, quedan cubiertos los dos.
+        for (RentalAgreement rental : unitScope.filterByUnit(
+                rentalAgreementRepository.findAll(), RentalAgreement::getStorageUnit)) {
             if (rental.getStartDate() == null) continue;
             YearMonth start = YearMonth.from(rental.getStartDate());
             YearMonth end = lastMonthInForce(rental, lastGenerated);

@@ -11,6 +11,7 @@ import com.storagemanager.storage_management.model.enums.UnitStatus;
 import com.storagemanager.storage_management.repository.ClientRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
+import com.storagemanager.storage_management.security.UnitScope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,26 +27,34 @@ public class RentalAgreementService {
     private final RentalAgreementRepository rentalAgreementRepository;
     private final StorageUnitRepository storageUnitRepository;
     private final ClientRepository clientRepository;
+    private final UnitScope unitScope;
 
+    /** Un contrato es de la unidad que alquila: se ve si esa unidad es del usuario. */
     public List<RentalAgreement> getAllAgreements() {
-        return rentalAgreementRepository.findAll();
+        return unitScope.filterByUnit(rentalAgreementRepository.findAll(), RentalAgreement::getStorageUnit);
     }
 
     public List<RentalAgreement> getActiveAgreements() {
-        return rentalAgreementRepository.findByStatus(RentalStatus.ACTIVE);
+        return unitScope.filterByUnit(
+                rentalAgreementRepository.findByStatus(RentalStatus.ACTIVE), RentalAgreement::getStorageUnit);
     }
 
     public RentalAgreement getAgreementById(Long id) {
-        return rentalAgreementRepository.findById(id)
+        RentalAgreement agreement = rentalAgreementRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Rental agreement not found with id: " + id));
+        unitScope.requireAccessible(agreement.getStorageUnit());
+        return agreement;
     }
 
     /** Contracts of a client as main or second tenant. */
     public List<RentalAgreement> getAgreementsByClient(Long clientId) {
-        return rentalAgreementRepository.findByClientIdOrCoClientId(clientId, clientId);
+        return unitScope.filterByUnit(
+                rentalAgreementRepository.findByClientIdOrCoClientId(clientId, clientId),
+                RentalAgreement::getStorageUnit);
     }
 
     public List<RentalAgreement> getAgreementsByStorageUnit(Long storageUnitId) {
+        unitScope.requireAccessible(storageUnitId);
         return rentalAgreementRepository.findByStorageUnitId(storageUnitId);
     }
 
@@ -53,6 +62,8 @@ public class RentalAgreementService {
     public RentalAgreement createAgreement(RentalAgreementRequest request) {
         StorageUnit unit = storageUnitRepository.findById(request.getStorageUnitId())
                 .orElseThrow(() -> new ResourceNotFoundException("Storage unit not found with id: " + request.getStorageUnitId()));
+        // Alquilar una unidad que no es tuya, no.
+        unitScope.requireAccessible(unit);
 
         if (unit.getStatus() == UnitStatus.OCCUPIED) {
             throw new BadRequestException("Storage unit " + unit.getUnitNumber() + " is already occupied");

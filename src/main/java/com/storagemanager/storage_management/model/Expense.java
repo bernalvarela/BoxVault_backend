@@ -34,9 +34,14 @@ public class Expense {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** Null means a general expense not attributable to a single unit. */
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "storage_unit_id")
+    /**
+     * La unidad contra la que va el gasto. Obligatoria: es lo que permite
+     * repartirlo por inmueble, imputarlo en el IRPF y saber a quién le toca
+     * verlo (el ámbito por unidades). Las filas antiguas sin unidad se arreglan
+     * con deploy/postgres/migrations/2026-09-08-gastos-con-unidad.sql.
+     */
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
+    @JoinColumn(name = "storage_unit_id", nullable = false)
     private StorageUnit storageUnit;
 
     @Column(nullable = false)

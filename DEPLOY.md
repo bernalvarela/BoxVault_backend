@@ -78,12 +78,12 @@ curl -o deploy/postgres/02-seed-data.sql $BASE/deploy/postgres/02-seed-data.sql
 
 cat > .env <<EOF
 DOCKER_IMAGE=<docker-hub-user>/boxvault-backend:latest
-POSTGRES_PASSWORD=$(openssl rand -base64 24)
+POSTGRES_PASSWORD=$(openssl rand -hex 24)
 RUSTFS_ACCESS_KEY=boxvault
-RUSTFS_SECRET_KEY=$(openssl rand -base64 24)
-BOXVAULT_JWT_SECRET=$(openssl rand -base64 48)
+RUSTFS_SECRET_KEY=$(openssl rand -hex 24)
+BOXVAULT_JWT_SECRET=$(openssl rand -hex 32)
 BOXVAULT_ADMIN_USER=admin
-BOXVAULT_ADMIN_PASSWORD=$(openssl rand -base64 12)
+BOXVAULT_ADMIN_PASSWORD=$(openssl rand -hex 8)
 EOF
 
 docker compose pull && docker compose up -d
@@ -136,6 +136,33 @@ docker compose pull && docker compose up -d
 - Upgrade: `docker compose pull && docker compose up -d`.
 - Logs: `docker compose logs -f boxvault` (add `postgres` for the database).
 - `psql` on the server: `docker compose exec postgres psql -U boxvault -d boxvault`.
+
+### `password authentication failed for user "boxvault"`
+
+`POSTGRES_PASSWORD` only creates the role the **first** time the `boxvault-db`
+volume is built. Changing it in `.env` afterwards changes nothing inside the
+database, so the app stops being able to log in. The old password cannot be read
+back — PostgreSQL only keeps a hash — but it does not need to be: set the role's
+password to whatever `.env` says now, over the container's local socket, which
+the official image trusts without a password.
+
+```bash
+grep POSTGRES_PASSWORD .env
+docker compose exec postgres psql -U boxvault -d boxvault \
+  -c "ALTER USER boxvault PASSWORD 'el-valor-de-.env';"
+docker compose up -d boxvault
+```
+
+Careful with `$` in `.env`: Compose substitutes variables in those values, so
+`abc$def` reaches the container cut short. Hence the `openssl rand -hex` above
+instead of `-base64` — hex has no characters Compose or a shell will touch.
+
+One confusing detail if it happens on the native image: right after the
+connection error you will also see *"Cannot reflectively invoke constructor
+`PostgreSQLDialect`"*. That is a consequence, not a second problem — with no
+connection, Hibernate falls back to building the dialect by reflection. The hint
+is registered in `NativeHints` so the real error is no longer buried, but the
+thing to fix is always the connection.
 
 ### Schema and initial data
 

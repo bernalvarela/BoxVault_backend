@@ -10,6 +10,7 @@ import com.storagemanager.storage_management.model.StorageUnit;
 import com.storagemanager.storage_management.repository.OwnerRepository;
 import com.storagemanager.storage_management.repository.OwnershipRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
+import com.storagemanager.storage_management.security.UnitScope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +34,7 @@ public class OwnershipService {
     private final OwnershipRepository ownershipRepository;
     private final OwnerRepository ownerRepository;
     private final StorageUnitRepository storageUnitRepository;
+    private final UnitScope unitScope;
 
     private static final Comparator<Ownership> BY_UNIT_THEN_SHARE = Comparator
             .comparing((Ownership o) -> o.getStorageUnit().getRoot().unitNumber().length())
@@ -85,13 +87,20 @@ public class OwnershipService {
     // Queries
     // ------------------------------------------------------------------
 
-    /** Every share, optionally restricted to one owner / unit (only one filter is applied, in that order). */
+    /**
+     * Every share, optionally restricted to one owner / unit (only one filter is applied, in that order).
+     * <p>
+     * Una participación es de una unidad, así que se ve si esa unidad es del
+     * usuario: quien sólo lleva un local no tiene por qué saber quién posee el
+     * resto de la casa.
+     */
     public List<OwnershipDTO> getOwnerships(Long ownerId, Long unitId) {
         List<Ownership> rows;
         if (ownerId != null) rows = ownershipRepository.findByOwnerId(ownerId);
         else if (unitId != null) rows = ownershipRepository.findByStorageUnitId(unitId);
         else rows = ownershipRepository.findAll();
-        return rows.stream().sorted(BY_UNIT_THEN_SHARE).map(o -> toDto(o, null)).toList();
+        return unitScope.filterByUnit(rows, Ownership::getStorageUnit).stream()
+                .sorted(BY_UNIT_THEN_SHARE).map(o -> toDto(o, null)).toList();
     }
 
     public List<OwnershipDTO> getOwnershipsByOwner(Long ownerId) {
@@ -99,8 +108,10 @@ public class OwnershipService {
     }
 
     public Ownership getOwnershipById(Long id) {
-        return ownershipRepository.findById(id)
+        Ownership ownership = ownershipRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Ownership not found with id: " + id));
+        unitScope.requireAccessible(ownership.getStorageUnit());
+        return ownership;
     }
 
     public OwnershipDTO getOwnershipDtoById(Long id) {
@@ -111,6 +122,7 @@ public class OwnershipService {
     public List<OwnershipDTO> getEffectiveOwnersOfUnit(Long unitId) {
         StorageUnit unit = storageUnitRepository.findById(unitId)
                 .orElseThrow(() -> new ResourceNotFoundException("Storage unit not found with id: " + unitId));
+        unitScope.requireAccessible(unit);
         Effective effective = resolve(unit, indexByUnit(ownershipRepository.findAll()));
         StorageUnit from = effective.inherited(unit) ? effective.holder() : null;
         return effective.shares().stream()
@@ -153,6 +165,8 @@ public class OwnershipService {
                 .orElseThrow(() -> new ResourceNotFoundException("Owner not found with id: " + request.getOwnerId()));
         StorageUnit unit = storageUnitRepository.findById(request.getStorageUnitId())
                 .orElseThrow(() -> new ResourceNotFoundException("Storage unit not found with id: " + request.getStorageUnitId()));
+        // Repartir la propiedad de una unidad que no es tuya, no.
+        unitScope.requireAccessible(unit);
         ownershipRepository.findByOwnerIdAndStorageUnitId(owner.getId(), unit.getId())
                 .filter(other -> !other.getId().equals(ownership.getId()))
                 .ifPresent(other -> {
