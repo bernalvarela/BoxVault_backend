@@ -11,8 +11,8 @@ import java.util.Optional;
 public interface ClientDocumentRepository extends JpaRepository<ClientDocument, Long> {
 
     /** Los documentos de un cliente, el último subido primero. */
-    List<ClientDocument> findByClientIdOrderByUploadedAtDescIdDesc(Long clientId);
+    List<ClientDocument> findByClientIdOrderByDocumentUploadedAtDescDocumentIdDesc(Long clientId);
 
-    /** El documento sólo si pertenece a ese cliente: la url lleva los dos. */
-    Optional<ClientDocument> findByIdAndClientId(Long id, Long clientId);
+    /** La relación con ese documento, sólo si es de ese cliente: la url lleva los dos. */
+    Optional<ClientDocument> findByClientIdAndDocumentId(Long clientId, Long documentId);
 }

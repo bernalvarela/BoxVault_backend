@@ -1,7 +1,7 @@
 package com.storagemanager.storage_management.dto;
 
-import com.storagemanager.storage_management.model.ClientDocument;
 import com.storagemanager.storage_management.model.Document;
+import com.storagemanager.storage_management.model.RentalDocument;
 import com.storagemanager.storage_management.model.enums.DocumentType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,20 +11,17 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * Un documento de la ficha de un cliente, aplanado: los datos del fichero y el
- * cliente del que es. El {@code id} es el del documento —no el de la fila de
- * relación—, que es lo que llevan las urls. No lleva la clave del objeto en el
- * almacén: el fichero se pide por {@link #downloadUrl}, que sirve el propio
- * backend.
+ * Un documento de un alquiler, aplanado. Igual que {@link ClientDocumentDTO},
+ * pero colgando del contrato.
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ClientDocumentDTO {
+public class RentalDocumentDTO {
 
     private Long id;
-    private Long clientId;
+    private Long rentalAgreementId;
     private DocumentType documentType;
     private String fileName;
     private String contentType;
@@ -34,19 +31,19 @@ public class ClientDocumentDTO {
     /** Ruta de descarga, relativa: el frontend la usa tal cual. */
     private String downloadUrl;
 
-    public static ClientDocumentDTO of(ClientDocument link) {
-        Long clientId = link.getClient().getId();
+    public static RentalDocumentDTO of(RentalDocument link) {
+        Long rentalId = link.getRentalAgreement().getId();
         Document doc = link.getDocument();
-        return ClientDocumentDTO.builder()
+        return RentalDocumentDTO.builder()
                 .id(doc.getId())
-                .clientId(clientId)
+                .rentalAgreementId(rentalId)
                 .documentType(doc.getDocumentType())
                 .fileName(doc.getFileName())
                 .contentType(doc.getContentType())
                 .sizeBytes(doc.getSizeBytes())
                 .description(doc.getDescription())
                 .uploadedAt(doc.getUploadedAt())
-                .downloadUrl("/api/clients/" + clientId + "/documents/" + doc.getId() + "/download")
+                .downloadUrl("/api/rentals/" + rentalId + "/documents/" + doc.getId() + "/download")
                 .build();
     }
 }

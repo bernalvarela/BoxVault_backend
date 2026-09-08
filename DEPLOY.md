@@ -127,7 +127,7 @@ docker compose pull && docker compose up -d
 
 ### Schema and initial data
 
-`deploy/postgres/01-schema.sql` is the hand-written schema: the eleven tables with
+`deploy/postgres/01-schema.sql` is the hand-written schema: the tables with
 their foreign keys and the indexes each repository query needs (they are
 documented next to the index that serves them). `deploy/postgres/02-seed-data.sql`
 is **generated** from `src/main/resources/seed-data.json`, which stays the single
@@ -139,7 +139,15 @@ node deploy/postgres/generate-seed-sql.mjs
 
 `spring.jpa.hibernate.ddl-auto` stays at `update` under `pro` too, so adding a
 field to an entity still creates its column by itself. `update` never drops
-anything, so the indexes above are safe. Under `dev` — no profile set, or
+anything, so the indexes above are safe.
+
+`deploy/postgres/migrations/` holds the changes `update` cannot make by itself —
+moving rows, dropping a table, relaxing a constraint. They are **not** run by
+anything automatically: `01-schema.sql` only executes when the database volume is
+created. Each file says at the top when to run it and how; the current one,
+`2026-09-08-documents.sql`, moves the archived documents to the new `documents`
+table with its relation tables (`client_documents`, `rental_documents`). A fresh
+deployment gets the same result straight from `01-schema.sql` and must skip it. Under `dev` — no profile set, or
 `SPRING_PROFILES_ACTIVE=dev` — nothing changes: the app runs on the in-memory H2
 database and `DataSeeder` loads the JSON on every start, as before.
 
