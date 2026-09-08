@@ -21,6 +21,7 @@ public class ClientService {
 
     private final ClientRepository clientRepository;
     private final RentalAgreementRepository rentalAgreementRepository;
+    private final ClientDocumentService clientDocumentService;
 
     public List<Client> getAllClients() {
         return clientRepository.findAll();
@@ -106,6 +107,9 @@ public class ClientService {
     @Transactional
     public void deleteClient(Long id) {
         Client client = getClientById(id);
+        // Los documentos archivados van con la ficha: sus filas apuntan al cliente
+        // y sus ficheros al almacén, y ninguno de los dos debe sobrevivirle.
+        clientDocumentService.deleteByClient(id);
         clientRepository.delete(client);
     }
 }

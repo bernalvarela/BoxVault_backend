@@ -33,3 +33,6 @@ build/
 .vscode/
 
 .claude
+
+# Ficheros adjuntos guardados en disco en desarrollo (boxvault.storage.local-path)
+data/

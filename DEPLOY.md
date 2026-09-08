@@ -19,6 +19,10 @@ changing the code):
 - resources read by hand and classes serialised outside controllers need hints:
   see `config/NativeHints.java` (seed-data.json, tax report DTOs);
 - the image's default locale is es-ES (`pom.xml`, native plugin `buildArgs`);
+- the S3 client of the attached files uses `url-connection-client` (the JDK's own
+  HTTP) and Netty / Apache are excluded from `software.amazon.awssdk:s3` on
+  purpose: fewer moving parts in the native image. The SDK ships its own GraalVM
+  metadata, so nothing of it goes in `NativeHints`;
 - the Docker build is a **static musl binary** (`-Pnative,native-static`) compiled for
   the baseline x86-64 ISA (`-march=compatibility`), so it starts on any server CPU or
   VM CPU model; a glibc-linked build from the Oracle Linux 9 GraalVM image needs
@@ -75,6 +79,8 @@ curl -o deploy/postgres/02-seed-data.sql $BASE/deploy/postgres/02-seed-data.sql
 cat > .env <<EOF
 DOCKER_IMAGE=<docker-hub-user>/boxvault-backend:latest
 POSTGRES_PASSWORD=$(openssl rand -base64 24)
+RUSTFS_ACCESS_KEY=boxvault
+RUSTFS_SECRET_KEY=$(openssl rand -base64 24)
 EOF
 
 docker compose pull && docker compose up -d
@@ -92,10 +98,22 @@ docker compose pull && docker compose up -d
   payments, expenses and registered tax returns survive restarts and upgrades.
   The filed tax returns are the exception: the app registers them itself on the
   first start, because their snapshot is a report computed from the seeded data.
-- Backup / restore:
+- The **attached files** (copies of a tenant's DNI, work contracts, photos) do
+  *not* live in PostgreSQL: they are objects in the **RustFS** service
+  (`boxvault-files`), in the `boxvault-files` volume. RustFS speaks S3 and the app
+  talks to it as `http://rustfs:9000` with the `RUSTFS_*` credentials from `.env`.
+  Like the database it has no published port and is not on `traefik-net`, so
+  nothing outside the compose network reaches it — which is why plain HTTP is
+  enough. The bucket is created by the app the first time something is uploaded;
+  downloads are served by the backend, never straight from the store.
+- Backup / restore — **both** the database and the file store:
   ```bash
   docker compose exec -T postgres pg_dump -U boxvault -Fc boxvault > boxvault-$(date +%F).dump
   docker compose exec -T postgres pg_restore -U boxvault -d boxvault --clean < boxvault-2026-09-03.dump
+
+  # the attached files (the dump above does not contain them)
+  docker run --rm -v boxvault-files:/data -v "$PWD":/backup alpine \
+    tar czf /backup/boxvault-files-$(date +%F).tar.gz -C /data .
   ```
 - Upgrade: `docker compose pull && docker compose up -d`.
 - Logs: `docker compose logs -f boxvault` (add `postgres` for the database).
@@ -103,7 +121,7 @@ docker compose pull && docker compose up -d
 
 ### Schema and initial data
 
-`deploy/postgres/01-schema.sql` is the hand-written schema: the ten tables with
+`deploy/postgres/01-schema.sql` is the hand-written schema: the eleven tables with
 their foreign keys and the indexes each repository query needs (they are
 documented next to the index that serves them). `deploy/postgres/02-seed-data.sql`
 is **generated** from `src/main/resources/seed-data.json`, which stays the single

@@ -19,6 +19,22 @@ spring:
       ddl-auto: update
     show-sql: false
 
+  # Subida de ficheros adjuntos. El límite real lo pone
+  # boxvault.storage.max-file-size (da un error legible); estos dos son la red de
+  # seguridad del servidor y van algo por encima para que salte primero el nuestro.
+  servlet:
+    multipart:
+      max-file-size: 12MB
+      max-request-size: 15MB
+
+# Almacén de ficheros adjuntos. Por defecto, el disco: en desarrollo no hay que
+# levantar nada. El perfil "pro" lo cambia a S3 (RustFS).
+boxvault:
+  storage:
+    type: local
+    local-path: ${BOXVAULT_FILES_PATH:data/files}
+    max-file-size: 10MB
+
 ---
 # ---------------------------------------------------------------------
 # dev — embedded H2 database, kept in memory, seeded by DataSeeder from
@@ -70,3 +86,14 @@ spring:
       minimum-idle: 2
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+# Los adjuntos van al RustFS del compose, por la red interna: sin puerto
+# publicado, sin TLS (no sale de la red del proyecto) y con las claves por
+# entorno. El bucket se crea solo la primera vez que se sube algo.
+boxvault:
+  storage:
+    type: s3
+    endpoint: ${RUSTFS_ENDPOINT:http://rustfs:9000}
+    bucket: ${RUSTFS_BUCKET:boxvault}
+    access-key: ${RUSTFS_ACCESS_KEY:boxvault}
+    secret-key: ${RUSTFS_SECRET_KEY:boxvault}

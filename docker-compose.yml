@@ -2,6 +2,7 @@
 #
 #   export DOCKER_IMAGE=<docker-hub-user>/boxvault-backend:latest   # or put it in a .env file
 #   export POSTGRES_PASSWORD=<a long random password>               # required, same file
+#   export RUSTFS_ACCESS_KEY=<a user name> RUSTFS_SECRET_KEY=<another long random password>
 #   docker compose pull && docker compose up -d
 #
 # The data lives in PostgreSQL, in the "boxvault-db" volume. The first time that
@@ -49,11 +50,64 @@ services:
       retries: 5
       start_period: 30s
 
+  # Almacén de objetos de los ficheros adjuntos (copias del DNI, contratos de
+  # trabajo, fotos...). Habla S3, así que el backend usa el SDK de AWS contra él.
+  #
+  # Como la base de datos: sólo en la red interna, sin puerto publicado y sin
+  # traefik-net, de modo que nada fuera del proyecto lo alcanza. Por eso va por
+  # HTTP: el tráfico no sale de la red del compose. Tampoco lleva la etiqueta de
+  # watchtower: el almacén se actualiza a mano, mirando antes las notas de la
+  # versión, no de madrugada y sin avisar.
+  #
+  # El bucket no hace falta crearlo: el backend lo crea la primera vez que sube
+  # algo (S3FileStorage.ensureBucket).
+  rustfs:
+    image: rustfs/rustfs:1.0.0-rc.5
+    container_name: boxvault-files
+    depends_on:
+      rustfs-permissions:
+        condition: service_completed_successfully
+    security_opt:
+      - "no-new-privileges:true"
+    environment:
+      # Un solo volumen: un único nodo con un único disco, que es lo que hay.
+      RUSTFS_VOLUMES: /data/rustfs0
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      # La consola web no se usa (no hay puerto publicado); se administra desde la app.
+      RUSTFS_CONSOLE_ENABLE: "false"
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?set RUSTFS_ACCESS_KEY in .env}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?set RUSTFS_SECRET_KEY in .env}
+      RUSTFS_OBS_LOGGER_LEVEL: info
+      TZ: Europe/Madrid
+    volumes:
+      - boxvault-files:/data/rustfs0
+    restart: unless-stopped
+    networks: [boxvault-net]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # RustFS corre como el usuario 10001; su volumen tiene que ser suyo. Se ejecuta
+  # una vez, antes que él, y termina.
+  rustfs-permissions:
+    image: alpine
+    container_name: boxvault-files-permissions
+    volumes:
+      - boxvault-files:/data0
+    command: sh -c "chown -R 10001:10001 /data0"
+    restart: "no"
+    networks: [boxvault-net]
+
   boxvault:
     image: ${DOCKER_IMAGE:-boxvault-backend:latest}
     container_name: boxvault
     depends_on:
       postgres:
+        condition: service_healthy
+      rustfs:
         condition: service_healthy
     # Direct LAN access, bypassing the Traefik router and therefore its basic
     # auth. Remove this block to make boxvault.duckdns.org the only way in.
@@ -68,6 +122,11 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-boxvault}
       POSTGRES_USER: ${POSTGRES_USER:-boxvault}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      # Almacén de los ficheros adjuntos: el RustFS de arriba, por la red interna.
+      RUSTFS_ENDPOINT: http://rustfs:9000
+      RUSTFS_BUCKET: ${RUSTFS_BUCKET:-boxvault}
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?set RUSTFS_ACCESS_KEY in .env}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?set RUSTFS_SECRET_KEY in .env}
       # Native images accept the usual heap flags; far less is needed than on the JVM
       JAVA_OPTS: "-Xmx512m"
       TZ: Europe/Madrid
@@ -117,6 +176,10 @@ services:
 volumes:
   boxvault-db:
   boxvault-data:
+  # Los ficheros adjuntos. Va aparte de la base de datos a propósito: son lo
+  # único que no está en el volcado de PostgreSQL, así que la copia de seguridad
+  # tiene que incluir este volumen además de aquél.
+  boxvault-files:
 
 networks:
   # Created by the Traefik stack; this project only joins it.

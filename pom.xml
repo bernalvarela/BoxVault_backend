@@ -28,7 +28,25 @@
 	</scm>
 	<properties>
 		<java.version>25</java.version>
+		<aws.sdk.version>2.54.9</aws.sdk.version>
 	</properties>
+
+	<!--
+	  El SDK de AWS no lo gestiona el parent de Spring Boot: su BOM fija aquí la
+	  versión de todos sus artefactos (s3, url-connection-client y lo que arrastren).
+	-->
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>software.amazon.awssdk</groupId>
+				<artifactId>bom</artifactId>
+				<version>${aws.sdk.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -45,6 +63,32 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
+		</dependency>
+
+		<!--
+		  Cliente S3 para el almacén de ficheros adjuntos (RustFS en el servidor).
+		  Se excluyen los dos clientes HTTP que trae por defecto, Netty y Apache, y se
+		  usa url-connection-client: el HTTP del propio JDK, sin hilos ni pool propios
+		  y con muchas menos aristas en la imagen nativa. El SDK trae sus metadatos de
+		  GraalVM, así que no hace falta registrar nada en NativeHints.
+		-->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
+			<exclusions>
+				<exclusion>
+					<groupId>software.amazon.awssdk</groupId>
+					<artifactId>netty-nio-client</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>software.amazon.awssdk</groupId>
+					<artifactId>apache-client</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>url-connection-client</artifactId>
 		</dependency>
 
 		<dependency>
