@@ -44,6 +44,25 @@ class SecurityAccessTest {
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode(), "Sin cookie de sesión hay que dar 401");
     }
 
+    /**
+     * Con la sesión en una cookie, el navegador la manda sola: sin el token
+     * antifalsificación, cualquier página podría hacer que tu navegador
+     * escribiera aquí. Esto se rompió una vez sin que se notara —el configurador
+     * de resource server exime del CSRF a las peticiones con token, y el nuestro
+     * salía de la cookie—, así que conviene tenerlo escrito.
+     */
+    @Test
+    void escribirSinElTokenAntifalsificacionNoCuela() {
+        Session session = login("admin", "admin-local-2026");
+        Map<String, String> cliente = Map.of(
+                "fullName", "Prueba CSRF", "email", "csrf@ejemplo.com", "phone", "600000001");
+
+        assertEquals(HttpStatus.FORBIDDEN, session.postWithoutCsrf("/api/clients", cliente).getStatusCode(),
+                "Un POST sin la cabecera X-XSRF-TOKEN tiene que rechazarse");
+        assertEquals(HttpStatus.CREATED, session.post("/api/clients", cliente).getStatusCode(),
+                "Con la cabecera, el mismo POST pasa");
+    }
+
     @Test
     void unUsuarioDeConsultaNoLlegaALoQueNoTiene() {
         // Un usuario con el perfil "Consulta": lee clientes, no toca impuestos.
@@ -109,13 +128,23 @@ class SecurityAccessTest {
     /** La sesión de otro usuario, con sus cookies a cuestas. */
     private final class Session {
         private final HttpHeaders headers = new HttpHeaders();
+        private final HttpHeaders headersSinCsrf = new HttpHeaders();
         private final RestTemplate client = new RestTemplate();
 
         Session(List<String> cookies, String csrfToken) {
-            cookies.forEach(cookie -> headers.add(HttpHeaders.COOKIE, cookie));
+            cookies.forEach(cookie -> {
+                headers.add(HttpHeaders.COOKIE, cookie);
+                headersSinCsrf.add(HttpHeaders.COOKIE, cookie);
+            });
             if (csrfToken != null) headers.add("X-XSRF-TOKEN", csrfToken);
             headers.setContentType(MediaType.APPLICATION_JSON);
+            headersSinCsrf.setContentType(MediaType.APPLICATION_JSON);
             client.setErrorHandler(new NoErrorHandler());
+        }
+
+        /** Como {@link #post}, pero sin la cabecera antifalsificación. */
+        ResponseEntity<String> postWithoutCsrf(String path, Object body) {
+            return client.exchange(url(path), HttpMethod.POST, new HttpEntity<>(body, headersSinCsrf), String.class);
         }
 
         ResponseEntity<String> get(String path) {

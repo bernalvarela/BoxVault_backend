@@ -16,6 +16,7 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
@@ -34,11 +35,35 @@ public class AuthController {
 
     private final AuthService authService;
     private final JwtTokens tokens;
+    private final CsrfTokenRepository csrfTokenRepository;
 
     @PostMapping("/login")
-    public ResponseEntity<MeResponse> login(@Valid @RequestBody LoginRequest request) {
+    public ResponseEntity<MeResponse> login(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest) {
         AppUser user = authService.login(request.username(), request.password());
-        return withSessionCookies(user, MeResponse.of(CurrentUser.of(user)));
+        return withSessionCookies(user, MeResponse.of(CurrentUser.of(user)), httpRequest);
+    }
+
+    /**
+     * La cookie del token antifalsificación, que se manda al entrar.
+     * <p>
+     * Entrar está exento de CSRF —el token todavía no existe—, así que el filtro
+     * ni pasa por aquí y la cookie no se pondría hasta la primera lectura: quien
+     * escribiera antes se comería un 403. Se escribe a mano, y no con
+     * {@code saveToken}, porque por ese camino el filtro no llega a volcarla en
+     * la respuesta. Vale igual: la comprobación es de doble envío, o sea que el
+     * valor bueno ES el de esta cookie, y se compara con la cabecera
+     * X-XSRF-TOKEN. No es HttpOnly a propósito: el navegador tiene que poder
+     * leerla para devolverla (axios lo hace solo).
+     */
+    private ResponseCookie csrfCookie(HttpServletRequest request) {
+        return ResponseCookie.from("XSRF-TOKEN", csrfTokenRepository.generateToken(request).getToken())
+                .httpOnly(false)
+                .secure(request.isSecure())
+                .sameSite("Strict")
+                .path("/")
+                .build();
     }
 
     /**
@@ -62,7 +87,7 @@ public class AuthController {
             throw new BadCredentialsException("Ese token no sirve para renovar");
         }
         AppUser user = authService.activeUser(JwtTokens.userIdOf(jwt));
-        return withSessionCookies(user, MeResponse.of(CurrentUser.of(user)));
+        return withSessionCookies(user, MeResponse.of(CurrentUser.of(user)), request);
     }
 
     /** Salir: las cookies se sustituyen por otras ya caducadas. */
@@ -92,12 +117,13 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
-    private ResponseEntity<MeResponse> withSessionCookies(AppUser user, MeResponse body) {
+    private ResponseEntity<MeResponse> withSessionCookies(AppUser user, MeResponse body, HttpServletRequest request) {
         ResponseCookie access = tokens.accessCookie(tokens.issueAccessToken(user));
         ResponseCookie refresh = tokens.refreshCookie(tokens.issueRefreshToken(user));
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, access.toString())
                 .header(HttpHeaders.SET_COOKIE, refresh.toString())
+                .header(HttpHeaders.SET_COOKIE, csrfCookie(request).toString())
                 .body(body);
     }
 

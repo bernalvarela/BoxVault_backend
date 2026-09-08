@@ -13,6 +13,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
@@ -43,7 +44,7 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final CookieJwtAuthentication.Resolver bearerTokenResolver;
+    private final CookieJwtAuthentication.CookieToAuthorizationHeader cookieToAuthorizationHeader;
     private final CookieJwtAuthentication.Converter jwtAuthenticationConverter;
 
     @Bean
@@ -59,10 +60,23 @@ public class SecurityConfig {
         return tokens::decode;
     }
 
+    /**
+     * Dónde vive el token antifalsificación: una cookie que JavaScript sí puede
+     * leer —tiene que poder, para devolverla en la cabecera— y que no es la
+     * sesión. Es un bean porque el login también lo usa: entrar está exento de
+     * CSRF (el token todavía no existe), así que es ahí donde hay que crearlo,
+     * en vez de esperar a que lo cree la primera lectura.
+     */
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        CookieCsrfTokenRepository csrfRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
-        csrfRepository.setCookieCustomizer(cookie -> cookie.sameSite("Strict"));
+    public CookieCsrfTokenRepository csrfTokenRepository() {
+        CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        repository.setCookieCustomizer(cookie -> cookie.sameSite("Strict"));
+        return repository;
+    }
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http, CookieCsrfTokenRepository csrfRepository)
+            throws Exception {
         // El token va tal cual en la cabecera; es lo que manda axios.
         CsrfTokenRequestAttributeHandler csrfHandler = new CsrfTokenRequestAttributeHandler();
         csrfHandler.setCsrfRequestAttributeName(null);
@@ -82,8 +96,11 @@ public class SecurityConfig {
                     .requestMatchers("/api/**").authenticated()
                     // Cualquier otra ruta la resuelve el index.html de la SPA.
                     .anyRequest().permitAll())
+            // El token pasa de la cookie a la cabecera Authorization aquí, ya
+            // pasado el CsrfFilter: así la protección CSRF sigue aplicándose (ver
+            // CookieJwtAuthentication, que explica por qué importa el orden).
+            .addFilterBefore(cookieToAuthorizationHeader, BearerTokenAuthenticationFilter.class)
             .oauth2ResourceServer(oauth -> oauth
-                    .bearerTokenResolver(bearerTokenResolver)
                     .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter))
                     .authenticationEntryPoint((request, response, ex) ->
                             write(response, HttpStatus.UNAUTHORIZED, "Hay que iniciar sesión"))
