@@ -69,12 +69,19 @@ services:
         condition: service_completed_successfully
     security_opt:
       - "no-new-privileges:true"
+    # Consola web de administración en la LAN, igual que el 8088 de la app: no
+    # pasa por Traefik, así que no queda expuesta a Internet. El 9000 (la API S3)
+    # sigue sin publicarse: solo la app lo alcanza por boxvault-net.
+    ports:
+      - "9001:9001"
     environment:
       # Un solo volumen: un único nodo con un único disco, que es lo que hay.
       RUSTFS_VOLUMES: /data/rustfs0
       RUSTFS_ADDRESS: 0.0.0.0:9000
-      # La consola web no se usa (no hay puerto publicado); se administra desde la app.
-      RUSTFS_CONSOLE_ENABLE: "false"
+      # Consola web en http://<servidor>:9001; se entra con RUSTFS_ACCESS_KEY /
+      # RUSTFS_SECRET_KEY, las mismas credenciales que usa la app.
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
       RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?set RUSTFS_ACCESS_KEY in .env}
       RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?set RUSTFS_SECRET_KEY in .env}
       RUSTFS_OBS_LOGGER_LEVEL: info

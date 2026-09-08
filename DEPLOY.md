@@ -102,10 +102,16 @@ docker compose pull && docker compose up -d
   *not* live in PostgreSQL: they are objects in the **RustFS** service
   (`boxvault-files`), in the `boxvault-files` volume. RustFS speaks S3 and the app
   talks to it as `http://rustfs:9000` with the `RUSTFS_*` credentials from `.env`.
-  Like the database it has no published port and is not on `traefik-net`, so
+  The S3 port is not published and the service is not on `traefik-net`, so
   nothing outside the compose network reaches it — which is why plain HTTP is
   enough. The bucket is created by the app the first time something is uploaded;
   downloads are served by the backend, never straight from the store.
+- RustFS' **web console** is published on the LAN at `http://<server>:9001`, the
+  same way the app is on `:8088`: it bypasses Traefik and is not reachable from
+  the Internet. Log in with `RUSTFS_ACCESS_KEY` / `RUSTFS_SECRET_KEY` from
+  `.env`. It is for inspecting buckets and objects; the app is the normal way in.
+  To turn it off again, drop the `ports:` block from the `rustfs` service and set
+  `RUSTFS_CONSOLE_ENABLE: "false"`.
 - Backup / restore — **both** the database and the file store:
   ```bash
   docker compose exec -T postgres pg_dump -U boxvault -Fc boxvault > boxvault-$(date +%F).dump

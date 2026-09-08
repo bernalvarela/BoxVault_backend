@@ -4,7 +4,6 @@ import com.storagemanager.storage_management.service.storage.FileStorage;
 import com.storagemanager.storage_management.service.storage.LocalFileStorage;
 import com.storagemanager.storage_management.service.storage.S3FileStorage;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -41,9 +40,24 @@ import java.net.URI;
 @EnableConfigurationProperties(StorageProperties.class)
 public class StorageConfig {
 
+    /**
+     * El almacén, elegido <em>al arrancar</em>. La decisión no puede ser una
+     * {@code @ConditionalOnProperty}: el binario nativo se compila con AOT, que
+     * evalúa las condiciones al construir la imagen —sin perfil, o sea "local"—
+     * y las deja congeladas, de modo que el {@code type: s3} del perfil "pro" no
+     * llegaría a aplicarse nunca. Con un solo bean y un {@code if} las dos
+     * implementaciones entran en la imagen y manda la configuración de verdad.
+     */
     @Bean
-    @ConditionalOnProperty(name = "boxvault.storage.type", havingValue = "s3")
-    public S3Client s3Client(StorageProperties properties) {
+    public FileStorage fileStorage(StorageProperties properties) {
+        if (properties.getType() == StorageProperties.Type.S3) {
+            log.info("Ficheros adjuntos en {} (bucket '{}')", properties.getEndpoint(), properties.getBucket());
+            return new S3FileStorage(s3Client(properties), properties);
+        }
+        return new LocalFileStorage(properties.getLocalPath());
+    }
+
+    private S3Client s3Client(StorageProperties properties) {
         if (properties.getEndpoint() == null || properties.getEndpoint().isBlank()) {
             throw new IllegalStateException("boxvault.storage.endpoint es obligatorio con boxvault.storage.type=s3");
         }
@@ -59,17 +73,4 @@ public class StorageConfig {
                 .build();
     }
 
-    @Bean
-    @ConditionalOnProperty(name = "boxvault.storage.type", havingValue = "s3")
-    public FileStorage s3FileStorage(S3Client s3Client, StorageProperties properties) {
-        log.info("Ficheros adjuntos en {} (bucket '{}')", properties.getEndpoint(), properties.getBucket());
-        return new S3FileStorage(s3Client, properties);
-    }
-
-    /** Por defecto: el disco, sin configurar nada. */
-    @Bean
-    @ConditionalOnProperty(name = "boxvault.storage.type", havingValue = "local", matchIfMissing = true)
-    public FileStorage localFileStorage(StorageProperties properties) {
-        return new LocalFileStorage(properties.getLocalPath());
-    }
 }
