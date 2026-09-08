@@ -1,6 +1,7 @@
 package com.storagemanager.storage_management.service;
 
 import com.storagemanager.storage_management.dto.ClientDocumentDTO;
+import com.storagemanager.storage_management.exception.BadRequestException;
 import com.storagemanager.storage_management.exception.ResourceNotFoundException;
 import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.model.ClientDocument;
@@ -44,7 +45,8 @@ public class ClientDocumentService {
     @Transactional
     public ClientDocumentDTO upload(Long clientId, MultipartFile file, DocumentType type, String description) {
         Client client = requireClient(clientId);
-        Document document = documents.store("clients/" + clientId, file, type, description);
+        Document document = documents.store(
+                "clients/" + clientId, file, requireClientType(type), description);
 
         try {
             ClientDocument saved = clientDocumentRepository.save(ClientDocument.builder()
@@ -81,6 +83,20 @@ public class ClientDocumentService {
                 clientDocumentRepository.findByClientIdOrderByDocumentUploadedAtDescDocumentIdDesc(clientId);
         clientDocumentRepository.deleteAll(links);
         links.forEach(link -> documents.delete(link.getDocument()));
+    }
+
+    /**
+     * En la ficha sólo cabe lo que es del cliente. El caso que importa es
+     * CONTRATO_ALQUILER: el contrato va en su alquiler, y aceptarlo aquí sería
+     * volver a repartir el mismo documento por dos sitios.
+     */
+    private DocumentType requireClientType(DocumentType type) {
+        if (type == null) return DocumentType.OTRO;
+        if (!DocumentType.forClient().contains(type)) {
+            throw new BadRequestException("Un documento de tipo " + type
+                    + " no va en la ficha del cliente, sino en el alquiler al que pertenece");
+        }
+        return type;
     }
 
     private Client requireClient(Long clientId) {

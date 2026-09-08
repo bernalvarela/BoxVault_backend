@@ -31,10 +31,13 @@ public class ClientDocumentController {
 
     private final ClientDocumentService documentService;
 
-    /** Los tipos de documento, para el desplegable del formulario. */
+    /**
+     * Los tipos que admite la ficha del cliente, para el desplegable del
+     * formulario. CONTRATO_ALQUILER no está: el contrato va en su alquiler.
+     */
     @GetMapping("/types")
-    public ResponseEntity<DocumentType[]> getTypes() {
-        return ResponseEntity.ok(DocumentType.values());
+    public ResponseEntity<List<DocumentType>> getTypes() {
+        return ResponseEntity.ok(DocumentType.forClient());
     }
 
     @GetMapping

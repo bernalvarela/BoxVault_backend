@@ -25,6 +25,12 @@ public class RentalDocumentController {
 
     private final RentalDocumentService documentService;
 
+    /** Los tipos que admite un alquiler, para el desplegable del formulario. */
+    @GetMapping("/types")
+    public ResponseEntity<List<DocumentType>> getTypes() {
+        return ResponseEntity.ok(DocumentType.forRental());
+    }
+
     @GetMapping
     public ResponseEntity<List<RentalDocumentDTO>> getDocuments(@PathVariable Long rentalId) {
         return ResponseEntity.ok(documentService.getDocuments(rentalId));

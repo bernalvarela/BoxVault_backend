@@ -1,6 +1,7 @@
 package com.storagemanager.storage_management.service;
 
 import com.storagemanager.storage_management.dto.RentalDocumentDTO;
+import com.storagemanager.storage_management.exception.BadRequestException;
 import com.storagemanager.storage_management.exception.ResourceNotFoundException;
 import com.storagemanager.storage_management.model.Document;
 import com.storagemanager.storage_management.model.RentalAgreement;
@@ -42,7 +43,7 @@ public class RentalDocumentService {
     public RentalDocumentDTO upload(Long rentalId, MultipartFile file, DocumentType type, String description) {
         RentalAgreement rental = requireRental(rentalId);
         Document document = documents.store(
-                "rentals/" + rentalId, file, type != null ? type : DocumentType.CONTRATO_ALQUILER, description);
+                "rentals/" + rentalId, file, requireRentalType(type), description);
 
         try {
             RentalDocument saved = rentalDocumentRepository.save(RentalDocument.builder()
@@ -66,6 +67,16 @@ public class RentalDocumentService {
         RentalDocument link = requireLink(rentalId, documentId);
         rentalDocumentRepository.delete(link);
         documents.delete(link.getDocument());
+    }
+
+    /** En un alquiler sólo cabe lo suyo; sin decir nada, la copia del contrato. */
+    private DocumentType requireRentalType(DocumentType type) {
+        if (type == null) return DocumentType.CONTRATO_ALQUILER;
+        if (!DocumentType.forRental().contains(type)) {
+            throw new BadRequestException("Un documento de tipo " + type
+                    + " no va en el alquiler, sino en la ficha del cliente");
+        }
+        return type;
     }
 
     private RentalAgreement requireRental(Long rentalId) {

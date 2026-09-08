@@ -1,5 +1,7 @@
 package com.storagemanager.storage_management.model.enums;
 
+import java.util.List;
+
 /**
  * Qué es un documento archivado, para poder filtrarlo y saber qué falta en una
  * ficha sin abrir el fichero. Los mismos valores sirven para los documentos del
@@ -30,5 +32,26 @@ public enum DocumentType {
     CONTRATO_ALQUILER,
     ANEXO,
     JUSTIFICANTE,
-    OTRO
+    OTRO;
+
+    private static final List<DocumentType> FOR_CLIENT =
+            List.of(DNI, CONTRATO_TRABAJO, NOMINA, FOTO, JUSTIFICANTE, OTRO);
+
+    private static final List<DocumentType> FOR_RENTAL =
+            List.of(CONTRATO_ALQUILER, ANEXO, FOTO, JUSTIFICANTE, OTRO);
+
+    /**
+     * Lo que se puede archivar en la ficha de un cliente. CONTRATO_ALQUILER no
+     * está: el contrato es del alquiler. Las fichas anteriores a ese cambio
+     * pueden tener alguno, y se siguen leyendo; lo que no se admite es subir uno
+     * nuevo ahí.
+     */
+    public static List<DocumentType> forClient() {
+        return FOR_CLIENT;
+    }
+
+    /** Lo que se puede archivar en un alquiler. */
+    public static List<DocumentType> forRental() {
+        return FOR_RENTAL;
+    }
 }
