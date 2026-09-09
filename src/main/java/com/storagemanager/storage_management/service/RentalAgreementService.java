@@ -4,15 +4,18 @@ import com.storagemanager.storage_management.dto.RentalAgreementRequest;
 import com.storagemanager.storage_management.exception.BadRequestException;
 import com.storagemanager.storage_management.exception.ResourceNotFoundException;
 import com.storagemanager.storage_management.model.Client;
+import com.storagemanager.storage_management.model.Payment;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.StorageUnit;
 import com.storagemanager.storage_management.model.enums.RentalStatus;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
 import com.storagemanager.storage_management.repository.ClientRepository;
+import com.storagemanager.storage_management.repository.PaymentRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
 import com.storagemanager.storage_management.security.UnitScope;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +23,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RentalAgreementService {
@@ -27,6 +31,7 @@ public class RentalAgreementService {
     private final RentalAgreementRepository rentalAgreementRepository;
     private final StorageUnitRepository storageUnitRepository;
     private final ClientRepository clientRepository;
+    private final PaymentRepository paymentRepository;
     private final UnitScope unitScope;
 
     /** Un contrato es de la unidad que alquila: se ve si esa unidad es del usuario. */
@@ -106,8 +111,24 @@ public class RentalAgreementService {
         RentalAgreement agreement = getAgreementById(id);
 
         if (request.getClientId() != null && !request.getClientId().equals(agreement.getClient().getId())) {
-            agreement.setClient(clientRepository.findById(request.getClientId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Client not found with id: " + request.getClientId())));
+            Client previous = agreement.getClient();
+            Client corrected = clientRepository.findById(request.getClientId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Client not found with id: " + request.getClientId()));
+            agreement.setClient(corrected);
+
+            // Los cobros llevan su propio cliente, y BillingService da preferencia
+            // a ése sobre el del contrato: si no se cambian también, corregir el
+            // titular dejaría las mensualidades ya registradas a nombre del
+            // anterior —en el registro de cobros y en la ficha de los dos—.
+            // Cambiar el titular de un contrato es corregir un error de captura,
+            // no traspasarlo: sus meses siempre fueron de quien de verdad alquila.
+            List<Payment> ofAgreement = paymentRepository.findByRentalAgreementId(id);
+            ofAgreement.forEach(payment -> payment.setClient(corrected));
+            paymentRepository.saveAll(ofAgreement);
+
+            log.info("Contrato {}: titular corregido de '{}' a '{}'; {} cobro(s) reasignado(s)",
+                    agreement.getAgreementNumber(), previous.getFullName(), corrected.getFullName(),
+                    ofAgreement.size());
         }
         agreement.setCoClient(resolveCoClient(request.getCoClientId(), agreement.getClient()));
         agreement.setStartDate(request.getStartDate());
