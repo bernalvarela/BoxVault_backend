@@ -6,12 +6,14 @@ import com.storagemanager.storage_management.exception.ResourceNotFoundException
 import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.model.Payment;
 import com.storagemanager.storage_management.model.RentalAgreement;
+import com.storagemanager.storage_management.model.RentalDocument;
 import com.storagemanager.storage_management.model.StorageUnit;
 import com.storagemanager.storage_management.model.enums.RentalStatus;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
 import com.storagemanager.storage_management.repository.ClientRepository;
 import com.storagemanager.storage_management.repository.PaymentRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
+import com.storagemanager.storage_management.repository.RentalDocumentRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
 import com.storagemanager.storage_management.security.UnitScope;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +22,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.UUID;
 
 @Slf4j
@@ -32,6 +37,7 @@ public class RentalAgreementService {
     private final StorageUnitRepository storageUnitRepository;
     private final ClientRepository clientRepository;
     private final PaymentRepository paymentRepository;
+    private final RentalDocumentRepository rentalDocumentRepository;
     private final UnitScope unitScope;
 
     /** Un contrato es de la unidad que alquila: se ve si esa unidad es del usuario. */
@@ -145,6 +151,122 @@ public class RentalAgreementService {
         agreement.setNotes(request.getNotes());
 
         return rentalAgreementRepository.save(agreement);
+    }
+
+    /**
+     * Vuelve a poner en vigor un contrato que se dio por terminado sin estarlo
+     * (una fecha de fin puesta por error, una migración que lo cerró).
+     * <p>
+     * La unidad no puede tener otro contrato en vigor: dos a la vez sobre el
+     * mismo trastero es justo el estado que hay que deshacer, no uno más que
+     * crear. Si lo hay, primero se resuelve aquél —uniéndolo a éste con
+     * {@link #absorb} o terminándolo—.
+     */
+    @Transactional
+    public RentalAgreement reactivate(Long id) {
+        RentalAgreement agreement = getAgreementById(id);
+        if (agreement.getStatus() == RentalStatus.ACTIVE) {
+            throw new BadRequestException("El contrato " + agreement.getAgreementNumber() + " ya está en vigor");
+        }
+
+        StorageUnit unit = agreement.getStorageUnit();
+        rentalAgreementRepository.findByStorageUnitIdAndStatus(unit.getId(), RentalStatus.ACTIVE)
+                .ifPresent(other -> {
+                    throw new BadRequestException("La unidad " + unit.getUnitNumber() + " ya tiene el contrato "
+                            + other.getAgreementNumber() + " en vigor (" + other.getClient().getFullName()
+                            + "). Resuelve ése antes de reactivar éste.");
+                });
+
+        agreement.setStatus(RentalStatus.ACTIVE);
+        // Un contrato en vigor no tiene fecha de fin: si se dejara, BillingService
+        // dejaría de generarle mensualidades a partir de ella.
+        agreement.setEndDate(null);
+        unit.setStatus(UnitStatus.OCCUPIED);
+        storageUnitRepository.save(unit);
+
+        log.info("Contrato {} reactivado; unidad {} vuelve a ocupada",
+                agreement.getAgreementNumber(), unit.getUnitNumber());
+        return rentalAgreementRepository.save(agreement);
+    }
+
+    /**
+     * Une dos contratos duplicados de la misma unidad: los cobros y los
+     * documentos de {@code sourceId} pasan a {@code targetId}, y el duplicado
+     * desaparece.
+     * <p>
+     * Es para lo que crea una migración mal hecha: la misma unidad con dos
+     * contratos, y las mensualidades registradas en el que no era. Los cobros se
+     * llevan también el titular del contrato bueno, porque un cobro lleva su
+     * propio cliente y es el del contrato al que pertenece.
+     * <p>
+     * No es un traspaso entre inquilinos: eso se hace terminando un contrato y
+     * abriendo otro, y cada uno se queda con sus meses.
+     */
+    @Transactional
+    public RentalAgreement absorb(Long targetId, Long sourceId) {
+        if (targetId.equals(sourceId)) {
+            throw new BadRequestException("Un contrato no se puede unir consigo mismo");
+        }
+        RentalAgreement target = getAgreementById(targetId);
+        RentalAgreement source = getAgreementById(sourceId);
+
+        if (!target.getStorageUnit().getId().equals(source.getStorageUnit().getId())) {
+            throw new BadRequestException("Sólo se unen contratos de la misma unidad: "
+                    + target.getAgreementNumber() + " es de la " + target.getStorageUnit().getUnitNumber()
+                    + " y " + source.getAgreementNumber() + " de la " + source.getStorageUnit().getUnitNumber());
+        }
+
+        List<Payment> moving = paymentRepository.findByRentalAgreementId(sourceId);
+
+        // Un contrato no puede tener dos cobros del mismo mes (índice único
+        // ux_payments_agreement_period): si los dos contratos cubren el mismo
+        // periodo hay que decidir a mano cuál vale, no dejar que reviente al guardar.
+        Set<YearMonth> targetPeriods = paymentRepository.findByRentalAgreementId(targetId).stream()
+                .map(RentalAgreementService::periodOf)
+                .collect(Collectors.toSet());
+        List<String> clashes = moving.stream()
+                .map(RentalAgreementService::periodOf)
+                .filter(targetPeriods::contains)
+                .sorted()
+                .map(period -> String.format("%02d/%d", period.getMonthValue(), period.getYear()))
+                .toList();
+        if (!clashes.isEmpty()) {
+            throw new BadRequestException("Los dos contratos tienen cobros de los mismos meses ("
+                    + String.join(", ", clashes) + "). Borra o corrige esos cobros duplicados antes de unirlos.");
+        }
+
+        moving.forEach(payment -> {
+            payment.setRentalAgreement(target);
+            payment.setClient(target.getClient());
+            payment.setStorageUnit(target.getStorageUnit());
+        });
+        paymentRepository.saveAll(moving);
+
+        // Los documentos del duplicado (una copia del contrato, una foto) se van
+        // con él: si se quedaran, su borrado fallaría por la clave ajena.
+        List<RentalDocument> documents =
+                rentalDocumentRepository.findByRentalAgreementIdOrderByDocumentUploadedAtDescDocumentIdDesc(sourceId);
+        documents.forEach(link -> link.setRentalAgreement(target));
+        rentalDocumentRepository.saveAll(documents);
+
+        rentalAgreementRepository.delete(source);
+
+        log.info("Contrato {} unido a {}: {} cobro(s) y {} documento(s) trasladados; el duplicado se ha borrado",
+                source.getAgreementNumber(), target.getAgreementNumber(), moving.size(), documents.size());
+
+        // La unidad queda libre si el que se ha borrado era el que la ocupaba;
+        // reactivar el bueno la vuelve a ocupar.
+        StorageUnit unit = target.getStorageUnit();
+        if (source.getStatus() == RentalStatus.ACTIVE && target.getStatus() != RentalStatus.ACTIVE) {
+            unit.setStatus(UnitStatus.AVAILABLE);
+            storageUnitRepository.save(unit);
+        }
+        return target;
+    }
+
+    /** El periodo facturado de un cobro, para comparar meses entre contratos. */
+    private static YearMonth periodOf(Payment payment) {
+        return YearMonth.of(payment.getBillingPeriodYear(), payment.getBillingPeriodMonth());
     }
 
     /** The optional second tenant: must exist and differ from the main tenant. */

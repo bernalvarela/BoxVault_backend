@@ -50,6 +50,29 @@ public class RentalAgreementController {
         return ResponseEntity.ok(rentalAgreementService.updateAgreement(id, request));
     }
 
+    /**
+     * Vuelve a poner en vigor un contrato terminado por error (una fecha de fin
+     * equivocada, una migración que lo cerró).
+     */
+    @PreAuthorize("@access.can('ALQUILERES','ESCRIBIR')")
+    @PostMapping("/{id}/reactivate")
+    public ResponseEntity<RentalAgreement> reactivate(@PathVariable Long id) {
+        return ResponseEntity.ok(rentalAgreementService.reactivate(id));
+    }
+
+    /**
+     * Une un contrato duplicado de la misma unidad a éste: sus cobros y sus
+     * documentos pasan aquí y el duplicado se borra.
+     * <p>
+     * Pide ADMINISTRAR y no ESCRIBIR porque borra un contrato: es una corrección
+     * de datos, no la operación de cada día.
+     */
+    @PreAuthorize("@access.can('ALQUILERES','ADMINISTRAR')")
+    @PostMapping("/{id}/absorb/{sourceId}")
+    public ResponseEntity<RentalAgreement> absorb(@PathVariable Long id, @PathVariable Long sourceId) {
+        return ResponseEntity.ok(rentalAgreementService.absorb(id, sourceId));
+    }
+
     @PreAuthorize("@access.can('ALQUILERES','ESCRIBIR')")
     @PostMapping("/{id}/terminate")
     public ResponseEntity<RentalAgreement> terminateRental(
