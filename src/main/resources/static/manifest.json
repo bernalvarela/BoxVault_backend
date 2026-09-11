@@ -1,0 +1,25 @@
+{
+  "name": "BoxVault - Gestión de Unidades y Alquileres",
+  "short_name": "BoxVault",
+  "description": "Gestión de trasteros y alquileres: unidades, clientes, contratos, cobros, gastos e impuestos.",
+  "lang": "es",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "id": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f8fafc",
+  "theme_color": "#4f46e5",
+  "categories": ["business", "productivity", "finance"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Mensualidades", "short_name": "Cobros", "url": "/#/mensualidades", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Unidades", "short_name": "Unidades", "url": "/#/unidades", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Clientes", "short_name": "Clientes", "url": "/#/clientes", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
