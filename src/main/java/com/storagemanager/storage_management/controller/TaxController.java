@@ -6,15 +6,21 @@ import com.storagemanager.storage_management.dto.Modelo303DTO;
 import com.storagemanager.storage_management.dto.TaxFilingDTO;
 import com.storagemanager.storage_management.dto.TaxFilingRequest;
 import com.storagemanager.storage_management.model.enums.TaxModel;
+import com.storagemanager.storage_management.service.Modelo303FileService;
 import com.storagemanager.storage_management.service.TaxFilingService;
 import com.storagemanager.storage_management.service.TaxService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.Year;
 import java.util.List;
 
@@ -30,6 +36,7 @@ public class TaxController {
 
     private final TaxService taxService;
     private final TaxFilingService taxFilingService;
+    private final Modelo303FileService modelo303FileService;
 
     private static int yearOrCurrent(Integer year) {
         return year != null ? year : Year.now().getValue();
@@ -42,6 +49,36 @@ public class TaxController {
             @RequestParam(required = false) Integer year,
             @RequestParam(required = false) Long ownerId) {
         return ResponseEntity.ok(taxService.modelo303(yearOrCurrent(year), ownerId));
+    }
+
+    /**
+     * Fichero de importación del Modelo 303 de un trimestre, con el diseño de registro
+     * de la AEAT: se descarga y se sube en "Importar" del formulario web de la Sede.
+     */
+    @PreAuthorize("@access.can('IMPUESTOS','LEER')")
+    @GetMapping("/modelo-303/fichero")
+    public ResponseEntity<byte[]> modelo303File(
+            @RequestParam(required = false) Integer year,
+            @RequestParam int quarter,
+            @RequestParam(required = false) Long ownerId,
+            @RequestParam(required = false) Modelo303FileService.Basis basis,
+            @RequestParam(required = false) BigDecimal pendingToOffset,
+            @RequestParam(required = false) BigDecimal offsetApplied,
+            @RequestParam(defaultValue = "false") boolean directDebit) {
+        Modelo303FileService.Options defaults = Modelo303FileService.Options.defaults();
+        Modelo303FileService.Options options = new Modelo303FileService.Options(
+                basis != null ? basis : defaults.basis(),
+                pendingToOffset != null ? pendingToOffset : defaults.pendingToOffset(),
+                offsetApplied != null ? offsetApplied : defaults.offsetApplied(),
+                directDebit);
+        Modelo303FileService.Modelo303File file =
+                modelo303FileService.generate(yearOrCurrent(year), quarter, ownerId, options);
+        // El fichero de la AEAT es texto de posiciones fijas en ISO-8859-1.
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_PLAIN)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(file.fileName()).build().toString())
+                .body(file.content().getBytes(StandardCharsets.ISO_8859_1));
     }
 
     /** Modelo 184: yearly income of a comunidad de bienes (default: the first one) attributed to its members. */
