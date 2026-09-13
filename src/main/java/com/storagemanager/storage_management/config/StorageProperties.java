@@ -67,5 +67,17 @@ public class StorageProperties {
             "image/webp",
             "image/heic",
             "image/heif",
-            "image/tiff");
+            "image/tiff",
+            "text/plain");
+
+    /**
+     * Extensiones que se admiten aunque el navegador no sepa qué tipo mandar. El
+     * fichero de importación del 303 se llama {@code .303}: ningún sistema conoce
+     * esa extensión, así que llega como {@code application/octet-stream}. Sólo
+     * vale para tipos genéricos, no para colar un ejecutable con otro nombre.
+     */
+    private List<String> allowedExtensions = List.of(".303", ".txt");
+
+    /** Tipos que un navegador manda cuando no reconoce el fichero. */
+    private List<String> genericContentTypes = List.of("", "application/octet-stream", "text/plain");
 }

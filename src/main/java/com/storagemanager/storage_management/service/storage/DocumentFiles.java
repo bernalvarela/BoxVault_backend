@@ -79,10 +79,17 @@ public class DocumentFiles {
                     + properties.getMaxFileSize().toMegabytes() + " MB");
         }
         String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
-        if (!properties.getAllowedContentTypes().contains(contentType)) {
-            throw new BadRequestException("Tipo de fichero no admitido (" + contentType
-                    + "). Se admiten: " + String.join(", ", properties.getAllowedContentTypes()));
+        if (properties.getAllowedContentTypes().contains(contentType)) return;
+        // El navegador no sabe poner tipo a todo: un .303 llega como octet-stream.
+        // Se acepta por la extensión, y sólo cuando el tipo es de los genéricos.
+        String extension = extensionOf(cleanFileName(file.getOriginalFilename()));
+        if (properties.getGenericContentTypes().contains(contentType)
+                && properties.getAllowedExtensions().contains(extension)) {
+            return;
         }
+        throw new BadRequestException("Tipo de fichero no admitido (" + contentType
+                + "). Se admiten: " + String.join(", ", properties.getAllowedContentTypes())
+                + " y los ficheros " + String.join(", ", properties.getAllowedExtensions()));
     }
 
     /** El nombre a secas, sin rutas: algunos navegadores mandan la ruta completa. */
