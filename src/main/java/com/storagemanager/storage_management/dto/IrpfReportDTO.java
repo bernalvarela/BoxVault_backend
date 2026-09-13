@@ -42,11 +42,19 @@ public class IrpfReportDTO {
     private BigDecimal totalRentalExpenses;
     private BigDecimal totalRentalNet;
     private BigDecimal totalAttributionIncomeBase;
+    /** Gastos de las entidades que ya van descontados en lo atribuido, y el neto resultante. */
+    private BigDecimal totalAttributionExpenses;
+    private BigDecimal totalAttributionNet;
 
     // What could not be attributed to any owner, and what belongs to the entities
     private BigDecimal unattributedIncomeBase;
     private BigDecimal unattributedExpenses;
     private List<String> unitsWithoutOwners;
+    /**
+     * Gastos de las comunidades de bienes. No salen en el rendimiento de alquileres
+     * de nadie: la comunidad los resta de sus ingresos y atribuye el neto, así que
+     * ya van descontados en la línea de atribución de cada miembro.
+     */
     private BigDecimal entityExpenses;
 
     /** Expenses of the year left out because their category is not deductible, by category. */

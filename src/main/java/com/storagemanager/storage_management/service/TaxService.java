@@ -332,15 +332,48 @@ public class TaxService {
     // Income of a comunidad de bienes (shared by the Modelo 184 and the IRPF)
     // ------------------------------------------------------------------
 
-    private record EntityIncome(Owner entity, Breakdown income, List<Modelo184DTO.UnitShare> units) {
+    /**
+     * Lo que la entidad gana y gasta en un año. Lo que se atribuye a los miembros
+     * es el rendimiento <em>neto</em> ({@link #net()}): una comunidad de bienes no
+     * tributa, calcula el rendimiento como lo haría una persona —ingresos menos
+     * gastos deducibles— y lo reparte; son sus miembros quienes lo declaran en su
+     * IRPF. Atribuir el ingreso íntegro les haría declarar de más.
+     */
+    private record EntityIncome(Owner entity, Breakdown income, BigDecimal expenses,
+                                Map<String, BigDecimal> expensesByCategory, List<Modelo184DTO.UnitShare> units) {
+        BigDecimal net() {
+            return income.base().subtract(expenses);
+        }
     }
 
-    /** The entity's part of the year's income of every rentable unit it holds a share of. */
+    /**
+     * Gastos deducibles del año por unidad y categoría, ya netos del IVA soportado
+     * que se deduce en el 303. Incluye las unidades contenedoras: los gastos
+     * gordos de la comunidad (IBI, luz y seguro del local) van contra el local.
+     */
+    private Map<Long, Map<String, BigDecimal>> deductibleExpensesByUnit(int year) {
+        Map<Long, Map<String, BigDecimal>> byUnit = new HashMap<>();
+        for (Expense e : expenseRepository.findByExpenseDateBetween(LocalDate.of(year, 1, 1), LocalDate.of(year, 12, 31))) {
+            if (!DEDUCTIBLE_CATEGORIES.contains(e.getCategory()) || e.getStorageUnit() == null) continue;
+            addExpense(byUnit.computeIfAbsent(e.getStorageUnit().getId(), k -> new TreeMap<>()),
+                    e.getCategory(), e.netAmount());
+        }
+        return byUnit;
+    }
+
+    /**
+     * La parte de la entidad de los ingresos y los gastos deducibles del año de
+     * cada unidad en la que participa. Recorre todas las unidades, no sólo las
+     * alquilables: el local no se alquila pero soporta los gastos de las que sí.
+     */
     private EntityIncome entityIncome(Owner entity, int year, Map<Long, List<Ownership>> byUnit,
                                       Map<Long, List<Payment>> paymentsByUnit) {
+        Map<Long, Map<String, BigDecimal>> expensesByUnit = deductibleExpensesByUnit(year);
         Breakdown total = Breakdown.ZERO;
+        BigDecimal expensesTotal = zero();
+        Map<String, BigDecimal> expensesByCategory = new TreeMap<>();
         List<Modelo184DTO.UnitShare> units = new ArrayList<>();
-        for (StorageUnit unit : rentableUnits()) {
+        for (StorageUnit unit : allUnits()) {
             Effective effective = OwnershipService.resolve(unit, byUnit);
             BigDecimal percent = null;
             for (Ownership o : effective.shares()) {
@@ -348,8 +381,18 @@ public class TaxService {
             }
             if (percent == null) continue;
             Breakdown income = collected(paymentsByUnit.get(unit.getId()));
+            Map<String, BigDecimal> unitExpenses = expensesByUnit.getOrDefault(unit.getId(), Map.of());
+            BigDecimal unitExpenseTotal = sumValues(unitExpenses);
+            // Una unidad sin ingresos ni gastos no dice nada en el modelo
+            if (income.total().signum() == 0 && unitExpenseTotal.signum() == 0) continue;
+
             Breakdown entityPart = part(income, percent);
+            Map<String, BigDecimal> entityExpenses = partOf(unitExpenses, percent);
+            BigDecimal entityExpenseTotal = sumValues(entityExpenses);
             total = total.plus(entityPart);
+            expensesTotal = expensesTotal.add(entityExpenseTotal);
+            entityExpenses.forEach((category, amount) -> expensesByCategory.merge(category, amount, BigDecimal::add));
+
             units.add(Modelo184DTO.UnitShare.builder()
                     .unitId(unit.getId())
                     .unitNumber(unit.getUnitNumber())
@@ -361,9 +404,12 @@ public class TaxService {
                     .incomeBase(entityPart.base())
                     .incomeVat(entityPart.vat())
                     .incomeTotal(entityPart.total())
+                    .unitExpenses(unitExpenseTotal)
+                    .expenses(entityExpenseTotal)
+                    .net(entityPart.base().subtract(entityExpenseTotal))
                     .build());
         }
-        return new EntityIncome(entity, total, units);
+        return new EntityIncome(entity, total, expensesTotal, expensesByCategory, units);
     }
 
     private List<OwnerMembership> membersOf(Owner entity) {
@@ -404,8 +450,11 @@ public class TaxService {
         List<Modelo184DTO.Member> members = new ArrayList<>();
         Breakdown attributed = Breakdown.ZERO;
         BigDecimal membersPercent = BigDecimal.ZERO;
+        BigDecimal attributedNet = zero();
         for (OwnerMembership m : membersOf(entity)) {
             Breakdown memberPart = part(ei.income(), m.getSharePercent());
+            BigDecimal memberExpenses = part(ei.expenses(), m.getSharePercent());
+            BigDecimal memberNet = memberPart.base().subtract(memberExpenses);
             members.add(Modelo184DTO.Member.builder()
                     .ownerId(m.getMember().getId())
                     .ownerName(m.getMember().getFullName())
@@ -413,8 +462,11 @@ public class TaxService {
                     .incomeBase(memberPart.base())
                     .incomeVat(memberPart.vat())
                     .incomeTotal(memberPart.total())
+                    .expenses(memberExpenses)
+                    .net(memberNet)
                     .build());
             attributed = attributed.plus(memberPart);
+            attributedNet = attributedNet.add(memberNet);
             membersPercent = membersPercent.add(m.getSharePercent());
         }
 
@@ -426,8 +478,12 @@ public class TaxService {
                 .incomeBase(ei.income().base())
                 .incomeVat(ei.income().vat())
                 .incomeTotal(ei.income().total())
+                .expenses(ei.expenses())
+                .expensesByCategory(ei.expensesByCategory())
+                .netBase(ei.net())
                 .attributedBase(attributed.base())
                 .unattributedBase(ei.income().base().subtract(attributed.base()))
+                .attributedNet(attributedNet)
                 .membersSharePercent(membersPercent)
                 .members(members)
                 .units(ei.units())
@@ -616,6 +672,7 @@ public class TaxService {
 
         // --- Atribución de rentas: each entity's income by membership percentage
         Breakdown totalAttribution = Breakdown.ZERO;
+        BigDecimal totalAttributionExpenses = zero();
         for (Owner entity : entities) {
             EntityIncome ei = entityIncome(entity, year, byUnit, paymentsByUnit);
             // Nothing to attribute (e.g. years before the trasteros existed): no lines, so members
@@ -623,7 +680,12 @@ public class TaxService {
             if (ei.income().total().signum() == 0) continue;
             for (OwnerMembership m : membersOf(entity)) {
                 Breakdown memberPart = part(ei.income(), m.getSharePercent());
+                // La comunidad no tributa: atribuye su rendimiento neto, así que
+                // cada miembro se lleva también su parte de los gastos.
+                Map<String, BigDecimal> memberExpensesByCategory = partOf(ei.expensesByCategory(), m.getSharePercent());
+                BigDecimal memberExpenses = sumValues(memberExpensesByCategory);
                 totalAttribution = totalAttribution.plus(memberPart);
+                totalAttributionExpenses = totalAttributionExpenses.add(memberExpenses);
                 IrpfReportDTO.Line line = IrpfReportDTO.Line.builder()
                         .scope("ENTITY")
                         .entityId(entity.getId())
@@ -636,10 +698,10 @@ public class TaxService {
                         .incomeVat(memberPart.vat())
                         .incomeTotal(memberPart.total())
                         .rentals(List.of())
-                        .expensesByCategory(Map.of())
-                        .unitExpenses(zero())
-                        .expenses(zero())
-                        .net(memberPart.base())
+                        .expensesByCategory(memberExpensesByCategory)
+                        .unitExpenses(ei.expenses())
+                        .expenses(memberExpenses)
+                        .net(memberPart.base().subtract(memberExpenses))
                         .build();
                 byOwner.computeIfAbsent(m.getMember().getId(), k -> new OwnerYield(m.getMember())).attribution.add(line);
             }
@@ -655,7 +717,7 @@ public class TaxService {
                     .ownerName(acc.owner.getFullName())
                     .rental(rental)
                     .attribution(attribution)
-                    .totalNet(rental.getNet().add(attribution.getIncomeBase()))
+                    .totalNet(rental.getNet().add(attribution.getNet()))
                     .build());
         }
         reports.sort(Comparator.comparing(IrpfReportDTO.OwnerReport::getOwnerName, String.CASE_INSENSITIVE_ORDER));
@@ -669,6 +731,8 @@ public class TaxService {
                 .totalRentalExpenses(totalRentalExpenses)
                 .totalRentalNet(totalRentalIncome.base().subtract(totalRentalExpenses))
                 .totalAttributionIncomeBase(totalAttribution.base())
+                .totalAttributionExpenses(totalAttributionExpenses)
+                .totalAttributionNet(totalAttribution.base().subtract(totalAttributionExpenses))
                 .unattributedIncomeBase(unattributedIncome.base())
                 .unattributedExpenses(unattributedExpenses)
                 .unitsWithoutOwners(unitsWithoutOwners)

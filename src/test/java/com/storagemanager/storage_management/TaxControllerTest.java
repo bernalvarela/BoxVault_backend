@@ -91,21 +91,36 @@ class TaxControllerTest {
         Modelo184DTO report = response.getBody();
         assertNotNull(report);
         assertEquals(DataSeeder.ENTITY_NAME, report.getEntityName());
-        assertEquals(9, report.getUnitCount(), "The comunidad owns the local with the 9 trasteros");
-        assertTrue(report.getUnits().stream().allMatch(Modelo184DTO.UnitShare::isInherited));
+        // Los 9 trasteros, que son los que dan renta, más los dos locales: no se
+        // alquilan, pero soportan los gastos (IBI, luz, seguro) y por eso cuentan
+        assertEquals(11, report.getUnitCount(), "The 9 trasteros plus the two locales that carry the expenses");
+        assertTrue(report.getUnits().stream().filter(u -> !u.isInherited())
+                .allMatch(u -> u.getUnitNumber().startsWith("B")), "sólo los bajos son propiedad directa");
+        assertTrue(report.getUnits().stream().anyMatch(u -> "BD".equals(u.getUnitNumber())
+                && u.getExpenses().compareTo(BigDecimal.ZERO) > 0), "el local del negocio soporta gastos");
         assertTrue(report.getIncomeBase().compareTo(BigDecimal.ZERO) > 0);
+
+        // La comunidad no tributa: atribuye el rendimiento neto, no el ingreso íntegro
+        assertTrue(report.getExpenses().compareTo(BigDecimal.ZERO) > 0, "the comunidad has deductible expenses");
+        assertEquals(0, report.getIncomeBase().subtract(report.getExpenses()).compareTo(report.getNetBase()));
+        assertTrue(report.getNetBase().compareTo(report.getIncomeBase()) < 0);
 
         // Four members adding up to 100 %: everything is attributed
         assertEquals(4, report.getMembers().size());
         assertTrue(new BigDecimal("100").subtract(report.getMembersSharePercent()).abs().compareTo(new BigDecimal("0.001")) < 0);
         assertTrue(sameMoney(report.getAttributedBase(), report.getIncomeBase()));
+        assertTrue(sameMoney(report.getAttributedNet(), report.getNetBase()));
         BigDecimal membersTotal = BigDecimal.ZERO;
+        BigDecimal membersNet = BigDecimal.ZERO;
         for (Modelo184DTO.Member m : report.getMembers()) {
             membersTotal = membersTotal.add(m.getIncomeBase());
+            membersNet = membersNet.add(m.getNet());
             BigDecimal expected = report.getIncomeBase().multiply(m.getSharePercent()).divide(new BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP);
             assertEquals(0, expected.compareTo(m.getIncomeBase()), "Member " + m.getOwnerName());
+            assertEquals(0, m.getIncomeBase().subtract(m.getExpenses()).compareTo(m.getNet()), "Member " + m.getOwnerName());
         }
         assertTrue(sameMoney(membersTotal, report.getAttributedBase()));
+        assertTrue(sameMoney(membersNet, report.getAttributedNet()));
         assertTrue(report.getMembers().stream().noneMatch(m -> m.getOwnerName().startsWith("Marta")));
 
         // A person cannot file a Modelo 184
@@ -130,7 +145,9 @@ class TaxControllerTest {
             IrpfReportDTO.Section rental = owner.getRental();
             IrpfReportDTO.Section attribution = owner.getAttribution();
             assertEquals(0, rental.getIncomeBase().subtract(rental.getExpenses()).compareTo(rental.getNet()));
-            assertEquals(0, rental.getNet().add(attribution.getIncomeBase()).compareTo(owner.getTotalNet()));
+            // Lo que declara cada persona es el neto de sus alquileres más el neto atribuido
+            assertEquals(0, rental.getNet().add(attribution.getNet()).compareTo(owner.getTotalNet()));
+            assertEquals(0, attribution.getIncomeBase().subtract(attribution.getExpenses()).compareTo(attribution.getNet()));
             for (IrpfReportDTO.Line line : rental.getLines()) {
                 assertEquals("UNIT", line.getScope());
                 assertTrue(line.getUnitNumber().matches("[13][DE]"), "Only the flats are held directly by persons: " + line.getUnitNumber());
@@ -139,7 +156,9 @@ class TaxControllerTest {
             for (IrpfReportDTO.Line line : attribution.getLines()) {
                 assertEquals("ENTITY", line.getScope());
                 assertEquals(DataSeeder.ENTITY_NAME, line.getEntityName());
-                assertEquals(0, BigDecimal.ZERO.compareTo(line.getExpenses()));
+                // La comunidad atribuye su rendimiento neto: los gastos van dentro
+                assertTrue(line.getExpenses().compareTo(BigDecimal.ZERO) > 0, "la comunidad tiene gastos que descontar");
+                assertEquals(0, line.getIncomeBase().subtract(line.getExpenses()).compareTo(line.getNet()));
             }
         }
 
@@ -151,6 +170,7 @@ class TaxControllerTest {
         assertNotNull(m184);
         Modelo184DTO.Member xiao184 = m184.getMembers().stream().filter(m -> m.getOwnerName().startsWith("Xiao")).findFirst().orElseThrow();
         assertEquals(0, xiao184.getIncomeBase().compareTo(xiao.getAttribution().getIncomeBase()));
+        assertEquals(0, xiao184.getNet().compareTo(xiao.getAttribution().getNet()), "el 184 y el IRPF atribuyen el mismo neto");
 
         // Marta only has 1/4 of 3D: direct rental income, nothing attributed; the comunidad itself is not in the IRPF
         IrpfReportDTO.OwnerReport marta = report.getOwners().stream().filter(o -> o.getOwnerName().startsWith("Marta")).findFirst().orElseThrow();
