@@ -86,6 +86,7 @@ public class RentalAgreementService {
         Client client = clientRepository.findById(request.getClientId())
                 .orElseThrow(() -> new ResourceNotFoundException("Client not found with id: " + request.getClientId()));
         Client coClient = resolveCoClient(request.getCoClientId(), client);
+        requireNoOverlap(unit, null, request.getStartDate(), request.getEndDate());
 
         String agreementNumber = "RNT-" + LocalDate.now().getYear() + "-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
 
@@ -137,6 +138,7 @@ public class RentalAgreementService {
                     ofAgreement.size());
         }
         agreement.setCoClient(resolveCoClient(request.getCoClientId(), agreement.getClient()));
+        requireNoOverlap(agreement.getStorageUnit(), agreement.getId(), request.getStartDate(), request.getEndDate());
         agreement.setStartDate(request.getStartDate());
         agreement.setEndDate(request.getEndDate());
         agreement.setBillingDayOfMonth(request.getBillingDayOfMonth() != null ? request.getBillingDayOfMonth() : 1);
@@ -176,6 +178,10 @@ public class RentalAgreementService {
                             + other.getAgreementNumber() + " en vigor (" + other.getClient().getFullName()
                             + "). Resuelve ése antes de reactivar éste.");
                 });
+
+        // Al quitarle la fecha de fin vuelve a correr hasta hoy, así que no puede
+        // haber otro contrato de la unidad por el medio (aunque esté terminado).
+        requireNoOverlap(unit, agreement.getId(), agreement.getStartDate(), null);
 
         agreement.setStatus(RentalStatus.ACTIVE);
         // Un contrato en vigor no tiene fecha de fin: si se dejara, BillingService
@@ -279,11 +285,39 @@ public class RentalAgreementService {
                 .orElseThrow(() -> new ResourceNotFoundException("Client not found with id: " + coClientId));
     }
 
+    /**
+     * Dos contratos de la misma unidad no pueden pisarse: uno termina el último día
+     * del mes y el siguiente empieza el día 1 del siguiente. Si se solapan aunque
+     * sea un día —lo típico, poner como fin el día en que entra el inquilino
+     * nuevo—, ese mes se le factura a los dos, y al que se fue le aparece un cargo
+     * vencido por un mes que no debe.
+     *
+     * @param agreementId el contrato que se está guardando, para no compararlo consigo mismo
+     */
+    private void requireNoOverlap(StorageUnit unit, Long agreementId, LocalDate start, LocalDate end) {
+        if (start == null) return;
+        for (RentalAgreement other : rentalAgreementRepository.findByStorageUnitId(unit.getId())) {
+            if (other.getId().equals(agreementId) || other.getStartDate() == null) continue;
+            LocalDate otherEnd = other.getEndDate();
+            boolean overlaps = (end == null || !end.isBefore(other.getStartDate()))
+                    && (otherEnd == null || !start.isAfter(otherEnd));
+            if (overlaps) {
+                throw new BadRequestException("El contrato se solapa con " + other.getAgreementNumber()
+                        + " (" + other.getStartDate() + " → " + (otherEnd != null ? otherEnd : "abierto")
+                        + ") en la unidad " + unit.getUnitNumber()
+                        + ": un contrato tiene que terminar antes de que empiece el siguiente"
+                        + " (el último día del mes, y el siguiente el día 1)");
+            }
+        }
+    }
+
     @Transactional
     public RentalAgreement terminateAgreement(Long id, LocalDate terminationDate) {
         RentalAgreement agreement = getAgreementById(id);
+        LocalDate end = terminationDate != null ? terminationDate : LocalDate.now();
+        requireNoOverlap(agreement.getStorageUnit(), agreement.getId(), agreement.getStartDate(), end);
         agreement.setStatus(RentalStatus.TERMINATED);
-        agreement.setEndDate(terminationDate != null ? terminationDate : LocalDate.now());
+        agreement.setEndDate(end);
 
         // Free up the storage unit if no other active agreement exists
         StorageUnit unit = agreement.getStorageUnit();

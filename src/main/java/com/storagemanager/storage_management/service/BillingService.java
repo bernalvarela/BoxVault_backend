@@ -123,11 +123,18 @@ public class BillingService {
      * terminado deja de deber tras su fecha de fin; si le falta (sólo posible
      * editándolo a mano) se le da por terminado en su mes de inicio, antes que
      * cobrarle meses de más.
+     * <p>
+     * El mes en el que termina sólo se debe si el inquilino seguía dentro cuando
+     * venció la renta. Lo normal aquí es que un contrato acabe el día 1 y el
+     * siguiente empiece ese mismo día: ese mes es del inquilino que entra, no del
+     * que se va. Sin esto aparecía un cargo fantasma cada vez que alguien dejaba
+     * un trastero, marcado como vencido por un mes que nadie debía.
      */
     private static YearMonth lastMonthInForce(RentalAgreement rental, YearMonth cap) {
         YearMonth end;
         if (rental.getEndDate() != null) {
-            end = YearMonth.from(rental.getEndDate());
+            YearMonth endMonth = YearMonth.from(rental.getEndDate());
+            end = rental.getEndDate().isAfter(dueDate(rental, endMonth)) ? endMonth : endMonth.minusMonths(1);
         } else if (rental.getStatus() == RentalStatus.TERMINATED) {
             end = YearMonth.from(rental.getStartDate());
         } else {
