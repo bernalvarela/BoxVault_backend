@@ -44,6 +44,12 @@ public class Modelo303DTO {
     private BigDecimal pendingTotal;
     private long paidCount;
 
+    /** IVA soportado deducible del año: base de los gastos con IVA y su cuota. */
+    private BigDecimal deductibleBase;
+    private BigDecimal deductibleVat;
+    /** Resultado del año: IVA devengado menos IVA soportado. */
+    private BigDecimal resultVat;
+
     @Data
     @Builder
     @NoArgsConstructor
@@ -69,8 +75,36 @@ public class Modelo303DTO {
         private long pendingCount;
         private long overdueCount;
 
+        /** IVA soportado deducible del trimestre (gastos con cuota de IVA declarada). */
+        private BigDecimal deductibleBase;
+        private BigDecimal deductibleVat;
+        /** Lo que sale a pagar: {@code collectedVat - deductibleVat}. */
+        private BigDecimal resultVat;
+
         /** The mensualidades of the quarter the figures come from (PAID ones make the "collected" amounts). */
         private List<PaymentLine> payments;
+
+        /** Los gastos con IVA soportado que forman la cuota deducible del trimestre. */
+        private List<ExpenseLine> expenses;
+    }
+
+    /** Un gasto con IVA soportado deducible, tal como entra en el 303. */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ExpenseLine {
+        private Long expenseId;
+        private Long unitId;
+        private String unitNumber;
+        private String unitName;
+        private String description;
+        private String category;
+        private LocalDate expenseDate;
+        /** Importe pagado, IVA incluido. */
+        private BigDecimal total;
+        private BigDecimal base;
+        private BigDecimal vat;
     }
 
     @Data

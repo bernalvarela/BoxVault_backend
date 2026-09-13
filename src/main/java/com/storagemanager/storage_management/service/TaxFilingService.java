@@ -23,6 +23,7 @@ public class TaxFilingService {
 
     private final TaxFilingRepository taxFilingRepository;
     private final OwnerRepository ownerRepository;
+    private final TaxFilingDocumentService filingDocuments;
 
     /** Filings, newest first, optionally restricted to a model and / or a year. */
     public List<TaxFilingDTO> getFilings(TaxModel model, Integer year) {
@@ -76,7 +77,11 @@ public class TaxFilingService {
 
     @Transactional
     public void deleteFiling(Long id) {
-        taxFilingRepository.delete(getFilingById(id));
+        TaxFiling filing = getFilingById(id);
+        // Primero sus documentos: la clave ajena no dejaría borrar la declaración
+        // y los justificantes se quedarían en el almacén sin dueño.
+        filingDocuments.deleteByFiling(id);
+        taxFilingRepository.delete(filing);
     }
 
     private static TaxFilingDTO toDto(TaxFiling f) {

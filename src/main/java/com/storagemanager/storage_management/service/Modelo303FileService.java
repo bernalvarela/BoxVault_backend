@@ -28,10 +28,12 @@ import java.util.List;
  * se incluyen porque no aplican al alquiler de trasteros.
  * <p>
  * Sólo se rellena lo que BoxVault conoce: el IVA repercutido al 21 % de las
- * mensualidades del trimestre (casillas [07], [08], [09], [27]). El IVA soportado
- * ([28]…[45]) va a cero, porque los gastos no guardan cuota de IVA: si hay IVA
- * deducible hay que añadirlo en el formulario de la AEAT después de importar.
- * El fichero es un borrador para importar y revisar, nunca una presentación.
+ * mensualidades del trimestre (casillas [07], [08], [09], [27]) y el IVA soportado
+ * que declaran los gastos, todo como operaciones interiores corrientes ([28], [29],
+ * [45]). Los demás orígenes de cuota deducible —bienes de inversión, importaciones,
+ * adquisiciones intracomunitarias— no se conocen y van a cero: si los hay, se
+ * añaden en el formulario de la AEAT después de importar. El fichero es un
+ * borrador para importar y revisar, nunca una presentación.
  */
 @Service
 @RequiredArgsConstructor
@@ -95,10 +97,12 @@ public class Modelo303FileService {
         BigDecimal base = money(collected ? q.getCollectedBase() : q.getExpectedBase());
         BigDecimal vat = money(collected ? q.getCollectedVat() : q.getExpectedVat());
 
-        // [45] va a cero mientras los gastos no guarden IVA soportado, así que el
-        // resultado del régimen general [46] es toda la cuota devengada [27].
-        BigDecimal deductible = ZERO;
-        BigDecimal result46 = vat.subtract(deductible);
+        // IVA soportado: la cuota que declaran los gastos del trimestre, toda por
+        // operaciones interiores corrientes ([28] y [29]); [45] es el total a
+        // deducir y [46] el resultado del régimen general.
+        BigDecimal deductibleBase = money(q.getDeductibleBase());
+        BigDecimal deductibleVat = money(q.getDeductibleVat());
+        BigDecimal result46 = vat.subtract(deductibleVat);
         BigDecimal pending110 = money(options.pendingToOffset());
         BigDecimal applied78 = money(options.offsetApplied());
         BigDecimal remaining87 = pending110.subtract(applied78).max(ZERO);
@@ -106,13 +110,18 @@ public class Modelo303FileService {
         BigDecimal result71 = result69;
 
         String period = quarter + "T";
-        char declarationType = declarationType(result71, quarter, options.directDebit());
         String iban = normalize(declarant.getBankAccount()).replace(" ", "");
+        if (options.directDebit() && iban.isBlank()) {
+            throw new BadRequestException("Para domiciliar el ingreso, " + declarant.getFullName()
+                    + " necesita una cuenta bancaria en su ficha");
+        }
+        char declarationType = declarationType(result71, quarter, options.directDebit());
 
         String content = header(year, period)
-                + page1(nif, declarant.getFullName(), year, period, declarationType, base, vat, result46)
+                + page1(nif, declarant.getFullName(), year, period, declarationType,
+                        base, vat, deductibleBase, deductibleVat, result46)
                 + page3(result46, result69, result71, pending110, applied78, remaining87,
-                        base.signum() == 0 && vat.signum() == 0)
+                        base.signum() == 0 && vat.signum() == 0 && deductibleVat.signum() == 0)
                 + pageDid(declarationType, iban)
                 + "</T3030" + year + period + "0000>";
 
@@ -167,7 +176,8 @@ public class Modelo303FileService {
 
     /** Página 1: identificación, devengo e IVA devengado / deducible del régimen general. */
     private static String page1(String nif, String name, int year, String period, char declarationType,
-                                BigDecimal base, BigDecimal vat, BigDecimal result46) {
+                                BigDecimal base, BigDecimal vat,
+                                BigDecimal deductibleBase, BigDecimal deductibleVat, BigDecimal result46) {
         Rec r = new Rec();
         r.raw("<T303");
         r.raw("01000");
@@ -212,13 +222,15 @@ public class Modelo303FileService {
         r.signed(ZERO); r.signed(ZERO);                   // [25] [26] modificación del recargo
         r.signed(vat);                                    // [27] total cuota devengada
 
-        // IVA deducible: BoxVault no guarda cuotas soportadas, todo va a cero.
-        for (int i = 0; i < 12; i++) r.amount(ZERO);      // [28]…[39] bases y cuotas soportadas
+        // IVA deducible: los gastos con IVA entran como operaciones interiores
+        // corrientes; el resto de orígenes (inversión, importaciones...) no aplica.
+        r.amount(deductibleBase); r.amount(deductibleVat); // [28] [29] operaciones interiores corrientes
+        for (int i = 0; i < 10; i++) r.amount(ZERO);      // [30]…[39] inversión, importaciones e intracomunitarias
         r.signed(ZERO); r.signed(ZERO);                   // [40] [41] rectificación de deducciones
         r.signed(ZERO);                                   // [42] compensaciones REAGP
         r.signed(ZERO);                                   // [43] regularización de inversiones
         r.signed(ZERO);                                   // [44] regularización de prorrata
-        r.signed(ZERO);                                   // [45] total a deducir
+        r.signed(deductibleVat);                          // [45] total a deducir
         r.signed(result46);                               // [46] resultado del régimen general
 
         r.blanks(521);   // 1036-1556 reservado para la AEAT

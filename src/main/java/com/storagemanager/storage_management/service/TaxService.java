@@ -206,10 +206,22 @@ public class TaxService {
                 .filter(p -> p.getStatus() != PaymentStatus.CANCELLED)
                 .toList();
 
+        // IVA soportado: los gastos del año de las unidades de esta comunidad que
+        // declaran cuota de IVA. Se imputan por fecha del gasto, y sin prorratear
+        // por la parte que se tenga de la unidad, igual que los ingresos.
+        List<Expense> vatExpenses = expenseRepository
+                .findByExpenseDateBetween(LocalDate.of(year, 1, 1), LocalDate.of(year, 12, 31)).stream()
+                .filter(e -> e.deductibleVat().signum() > 0)
+                .filter(e -> e.getStorageUnit() != null)
+                .filter(e -> owner == null || OwnershipService.shareOf(owner.getId(), e.getStorageUnit(), byUnit) != null)
+                .toList();
+
         List<Modelo303DTO.Quarter> quarters = new ArrayList<>();
         Breakdown collectedYear = Breakdown.ZERO;
         Breakdown expectedYear = Breakdown.ZERO;
         Breakdown pendingYear = Breakdown.ZERO;
+        BigDecimal deductibleBaseYear = zero();
+        BigDecimal deductibleVatYear = zero();
         long paidYear = 0;
         for (int q = 1; q <= 4; q++) {
             int startMonth = (q - 1) * 3 + 1;
@@ -247,6 +259,35 @@ public class TaxService {
                     })
                     .toList();
 
+            List<Expense> quarterExpenses = vatExpenses.stream()
+                    .filter(e -> e.getExpenseDate().getMonthValue() >= startMonth
+                            && e.getExpenseDate().getMonthValue() <= endMonth)
+                    .sorted(Comparator.comparing(Expense::getExpenseDate).thenComparing(Expense::getId))
+                    .toList();
+            BigDecimal deductibleVat = zero();
+            BigDecimal deductibleBase = zero();
+            List<Modelo303DTO.ExpenseLine> expenseLines = new ArrayList<>();
+            for (Expense e : quarterExpenses) {
+                BigDecimal vat = money(e.deductibleVat());
+                BigDecimal base = money(e.netAmount());
+                deductibleVat = deductibleVat.add(vat);
+                deductibleBase = deductibleBase.add(base);
+                expenseLines.add(Modelo303DTO.ExpenseLine.builder()
+                        .expenseId(e.getId())
+                        .unitId(e.getStorageUnit().getId())
+                        .unitNumber(e.getStorageUnit().getUnitNumber())
+                        .unitName(e.getStorageUnit().getName())
+                        .description(e.getDescription())
+                        .category(e.getCategory() != null ? e.getCategory().name() : null)
+                        .expenseDate(e.getExpenseDate())
+                        .total(money(e.getAmount()))
+                        .base(base)
+                        .vat(vat)
+                        .build());
+            }
+            deductibleBaseYear = deductibleBaseYear.add(deductibleBase);
+            deductibleVatYear = deductibleVatYear.add(deductibleVat);
+
             quarters.add(Modelo303DTO.Quarter.builder()
                     .quarter(q)
                     .label(q + "T " + year)
@@ -258,7 +299,11 @@ public class TaxService {
                     .paidCount(paidCount)
                     .pendingCount(pendingCount)
                     .overdueCount(overdueCount)
+                    .deductibleBase(deductibleBase)
+                    .deductibleVat(deductibleVat)
+                    .resultVat(collected.vat().subtract(deductibleVat))
                     .payments(lines)
+                    .expenses(expenseLines)
                     .build());
             collectedYear = collectedYear.plus(collected);
             expectedYear = expectedYear.plus(expected);
@@ -277,6 +322,9 @@ public class TaxService {
                 .expectedBase(expectedYear.base()).expectedVat(expectedYear.vat()).expectedTotal(expectedYear.total())
                 .pendingBase(pendingYear.base()).pendingVat(pendingYear.vat()).pendingTotal(pendingYear.total())
                 .paidCount(paidYear)
+                .deductibleBase(deductibleBaseYear)
+                .deductibleVat(deductibleVatYear)
+                .resultVat(collectedYear.vat().subtract(deductibleVatYear))
                 .build();
     }
 
@@ -491,9 +539,11 @@ public class TaxService {
             if (!DEDUCTIBLE_CATEGORIES.contains(e.getCategory())) {
                 addExpense(excluded, e.getCategory(), e.getAmount());
             } else if (e.getStorageUnit() == null) {
-                unassigned = unassigned.add(money(e.getAmount()));
+                unassigned = unassigned.add(money(e.netAmount()));
             } else {
-                addExpense(unitExpenses.computeIfAbsent(e.getStorageUnit().getId(), k -> new TreeMap<>()), e.getCategory(), e.getAmount());
+                // Sin el IVA soportado: esa cuota se deduce en el 303, y volver a
+                // restarla aquí sería descontar dos veces lo mismo.
+                addExpense(unitExpenses.computeIfAbsent(e.getStorageUnit().getId(), k -> new TreeMap<>()), e.getCategory(), e.netAmount());
             }
         }
 

@@ -47,8 +47,18 @@ public class Expense {
     @Column(nullable = false)
     private LocalDate expenseDate;
 
+    /** Lo pagado por el gasto, IVA incluido (igual que el precio de un alquiler). */
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
+
+    /**
+     * Cuota de IVA soportado incluida en {@link #amount} y deducible en el Modelo
+     * 303. Nula o cero cuando el gasto no lleva IVA (el IBI) o cuando no se
+     * conoce: lo que no se declara aquí no se deduce en el 303 y sigue contando
+     * entero como coste en el IRPF.
+     */
+    @Column(name = "vat_amount", precision = 10, scale = 2)
+    private BigDecimal vatAmount;
 
     @Column(nullable = false, length = 255)
     private String description;
@@ -73,4 +83,18 @@ public class Expense {
     @LastModifiedBy
     @Column(length = 60)
     private String updatedBy;
+
+    /** La cuota de IVA soportado, nunca nula: cero cuando el gasto no la declara. */
+    public BigDecimal deductibleVat() {
+        return vatAmount == null ? BigDecimal.ZERO.setScale(2) : vatAmount;
+    }
+
+    /**
+     * Lo que cuesta el gasto de verdad: el importe sin el IVA que se deduce en el
+     * 303. Es lo que se imputa como gasto deducible en el IRPF, para no restar
+     * dos veces la misma cuota.
+     */
+    public BigDecimal netAmount() {
+        return amount == null ? BigDecimal.ZERO.setScale(2) : amount.subtract(deductibleVat());
+    }
 }

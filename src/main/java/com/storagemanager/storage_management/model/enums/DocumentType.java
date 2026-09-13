@@ -40,6 +40,8 @@ public enum DocumentType {
     private static final List<DocumentType> FOR_RENTAL =
             List.of(CONTRATO_ALQUILER, ANEXO, FOTO, JUSTIFICANTE, OTRO);
 
+    private static final List<DocumentType> FOR_TAX_FILING = List.of(JUSTIFICANTE, OTRO);
+
     /**
      * Lo que se puede archivar en la ficha de un cliente. CONTRATO_ALQUILER no
      * está: el contrato es del alquiler. Las fichas anteriores a ese cambio
@@ -53,5 +55,14 @@ public enum DocumentType {
     /** Lo que se puede archivar en un alquiler. */
     public static List<DocumentType> forRental() {
         return FOR_RENTAL;
+    }
+
+    /**
+     * Lo que se puede archivar en una declaración presentada: el justificante que
+     * devuelve la Sede electrónica (lo normal) y poco más —el PDF de la
+     * declaración o el fichero que se importó— bajo OTRO.
+     */
+    public static List<DocumentType> forTaxFiling() {
+        return FOR_TAX_FILING;
     }
 }

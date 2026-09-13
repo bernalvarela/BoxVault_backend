@@ -17,6 +17,13 @@ public class ExpenseRequest {
     @DecimalMin(value = "0.01", message = "Amount must be greater than zero")
     private BigDecimal amount;
 
+    /**
+     * Cuota de IVA soportado incluida en el importe, la que se deduce en el 303.
+     * Opcional: nula o cero para los gastos sin IVA (el IBI) o cuando no se sabe.
+     */
+    @DecimalMin(value = "0.00", message = "VAT amount cannot be negative")
+    private BigDecimal vatAmount;
+
     @NotBlank(message = "Description is required")
     @Size(max = 255, message = "Description must be at most 255 characters")
     private String description;

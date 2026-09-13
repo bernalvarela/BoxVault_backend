@@ -38,15 +38,24 @@ class Modelo303FileServiceTest {
     }
 
     private static Modelo303DTO reportWith(BigDecimal base, BigDecimal vat) {
+        return reportWith(base, vat, BigDecimal.ZERO.setScale(2), BigDecimal.ZERO.setScale(2));
+    }
+
+    /** Un informe donde sólo el 1T tiene cifras. */
+    private static Modelo303DTO reportWith(BigDecimal base, BigDecimal vat,
+                                           BigDecimal deductibleBase, BigDecimal deductibleVat) {
         List<Modelo303DTO.Quarter> quarters = new ArrayList<>();
         for (int q = 1; q <= 4; q++) {
-            BigDecimal qBase = q == 1 ? base : BigDecimal.ZERO.setScale(2);
-            BigDecimal qVat = q == 1 ? vat : BigDecimal.ZERO.setScale(2);
+            BigDecimal zero = BigDecimal.ZERO.setScale(2);
+            BigDecimal qBase = q == 1 ? base : zero;
+            BigDecimal qVat = q == 1 ? vat : zero;
             quarters.add(Modelo303DTO.Quarter.builder()
                     .quarter(q)
                     .label(q + "T 2026")
                     .collectedBase(qBase).collectedVat(qVat).collectedTotal(qBase.add(qVat))
                     .expectedBase(qBase).expectedVat(qVat).expectedTotal(qBase.add(qVat))
+                    .deductibleBase(q == 1 ? deductibleBase : zero)
+                    .deductibleVat(q == 1 ? deductibleVat : zero)
                     .build());
         }
         return Modelo303DTO.builder().year(2026).quarters(quarters).build();
@@ -119,6 +128,39 @@ class Modelo303FileServiceTest {
     }
 
     @Test
+    void deductibleVatOfTheExpensesLowersTheQuota() {
+        Modelo303FileService service = serviceReturning(
+                reportWith(new BigDecimal("1000.00"), new BigDecimal("210.00"),
+                        new BigDecimal("400.00"), new BigDecimal("84.00")), entity());
+
+        String content = service.generate(2026, 1, 7L, Modelo303FileService.Options.defaults()).content();
+        String page1 = content.substring(HEADER, HEADER + PAGE_1);
+        String page3 = content.substring(HEADER + PAGE_1, HEADER + PAGE_1 + PAGE_3);
+
+        assertEquals("00000000000040000", field(page1, 713, 17));  // [28] base soportada
+        assertEquals("00000000000008400", field(page1, 730, 17));  // [29] cuota soportada
+        assertEquals("00000000000000000", field(page1, 747, 17));  // [30] bienes de inversión, sin datos
+        assertEquals("00000000000008400", field(page1, 1002, 17)); // [45] total a deducir
+        assertEquals("00000000000012600", field(page1, 1019, 17)); // [46] 210 - 84
+        assertEquals("00000000000012600", field(page3, 408, 17));  // [71] resultado
+    }
+
+    @Test
+    void aQuarterThatEndsInFavourOfTheTaxpayerIsFiledToOffset() {
+        Modelo303FileService service = serviceReturning(
+                reportWith(new BigDecimal("100.00"), new BigDecimal("21.00"),
+                        new BigDecimal("400.00"), new BigDecimal("84.00")), entity());
+
+        String content = service.generate(2026, 1, 7L, Modelo303FileService.Options.defaults()).content();
+        String page1 = content.substring(HEADER, HEADER + PAGE_1);
+        String page3 = content.substring(HEADER + PAGE_1, HEADER + PAGE_1 + PAGE_3);
+
+        assertEquals("C", field(page1, 13, 1));                    // a compensar: no es el 4T
+        assertEquals("N0000000000006300", field(page1, 1019, 17)); // [46] 21 - 84, negativo
+        assertEquals("N0000000000006300", field(page3, 408, 17));  // [71] con la N del signo
+    }
+
+    @Test
     void quarterWithoutIncomeIsFiledAsNoActivity() {
         BigDecimal zero = BigDecimal.ZERO.setScale(2);
         Modelo303FileService service = serviceReturning(reportWith(zero, zero), entity());
@@ -146,6 +188,33 @@ class Modelo303FileServiceTest {
         assertEquals("00000000000005000", field(page3, 272, 17)); // [78] aplicadas en este periodo
         assertEquals("00000000000000000", field(page3, 289, 17)); // [87] pendientes para periodos posteriores
         assertEquals("00000000000016000", field(page3, 408, 17)); // [71] 210 - 50
+    }
+
+    @Test
+    void directDebitFilesTheAccountOfTheEntity() {
+        Owner withAccount = entity();
+        withAccount.setBankAccount("ES91 2100 0418 4502 0005 1332");
+        Modelo303FileService service = serviceReturning(
+                reportWith(new BigDecimal("1000.00"), new BigDecimal("210.00")), withAccount);
+
+        Modelo303FileService.Options options = new Modelo303FileService.Options(
+                Modelo303FileService.Basis.COLLECTED, BigDecimal.ZERO, BigDecimal.ZERO, true);
+        String content = service.generate(2026, 1, 7L, options).content();
+        String page1 = content.substring(HEADER, HEADER + PAGE_1);
+        String did = content.substring(HEADER + PAGE_1 + PAGE_3, HEADER + PAGE_1 + PAGE_3 + PAGE_DID);
+
+        assertEquals("U", field(page1, 13, 1));                          // domiciliado
+        assertEquals("ES9121000418450200051332", field(did, 23, 24));    // IBAN, sin espacios
+    }
+
+    @Test
+    void directDebitWithoutAnAccountIsRejected() {
+        Modelo303FileService service = serviceReturning(
+                reportWith(new BigDecimal("1000.00"), new BigDecimal("210.00")), entity());
+
+        Modelo303FileService.Options options = new Modelo303FileService.Options(
+                Modelo303FileService.Basis.COLLECTED, BigDecimal.ZERO, BigDecimal.ZERO, true);
+        assertThrows(RuntimeException.class, () -> service.generate(2026, 1, 7L, options));
     }
 
     @Test

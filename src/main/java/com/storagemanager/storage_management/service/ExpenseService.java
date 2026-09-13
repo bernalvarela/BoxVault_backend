@@ -167,6 +167,12 @@ public class ExpenseService {
         unitScope.requireAccessible(unit);
         expense.setStorageUnit(unit);
         expense.setAmount(request.getAmount());
+        // El IVA soportado va dentro del importe pagado: no puede ser mayor que él.
+        BigDecimal vat = request.getVatAmount();
+        if (vat != null && vat.compareTo(request.getAmount()) > 0) {
+            throw new BadRequestException("El IVA soportado no puede ser mayor que el importe del gasto");
+        }
+        expense.setVatAmount(vat != null && vat.signum() != 0 ? vat : null);
         expense.setDescription(request.getDescription().trim());
         expense.setCategory(request.getCategory());
         expense.setExpenseDate(request.getExpenseDate());
