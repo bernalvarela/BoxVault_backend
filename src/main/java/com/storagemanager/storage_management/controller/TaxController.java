@@ -64,13 +64,22 @@ public class TaxController {
             @RequestParam(required = false) Modelo303FileService.Basis basis,
             @RequestParam(required = false) BigDecimal pendingToOffset,
             @RequestParam(required = false) BigDecimal offsetApplied,
-            @RequestParam(defaultValue = "false") boolean directDebit) {
+            @RequestParam(defaultValue = "false") boolean directDebit,
+            @RequestParam(required = false) String rectifiesReceipt,
+            @RequestParam(required = false) BigDecimal previouslyPaid,
+            @RequestParam(defaultValue = "false") boolean administrativeCriterion) {
         Modelo303FileService.Options defaults = Modelo303FileService.Options.defaults();
+        // Con el justificante de la anterior, el fichero sale como autoliquidación rectificativa.
+        Modelo303FileService.Rectification rectification = rectifiesReceipt == null || rectifiesReceipt.isBlank()
+                ? null
+                : new Modelo303FileService.Rectification(rectifiesReceipt,
+                        previouslyPaid != null ? previouslyPaid : BigDecimal.ZERO, administrativeCriterion);
         Modelo303FileService.Options options = new Modelo303FileService.Options(
                 basis != null ? basis : defaults.basis(),
                 pendingToOffset != null ? pendingToOffset : defaults.pendingToOffset(),
                 offsetApplied != null ? offsetApplied : defaults.offsetApplied(),
-                directDebit);
+                directDebit,
+                rectification);
         Modelo303FileService.Modelo303File file =
                 modelo303FileService.generate(yearOrCurrent(year), quarter, ownerId, options);
         // El fichero de la AEAT es texto de posiciones fijas en ISO-8859-1.

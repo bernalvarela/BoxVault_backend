@@ -180,7 +180,7 @@ class Modelo303FileServiceTest {
 
         Modelo303FileService.Options options = new Modelo303FileService.Options(
                 Modelo303FileService.Basis.COLLECTED,
-                new BigDecimal("50.00"), new BigDecimal("50.00"), false);
+                new BigDecimal("50.00"), new BigDecimal("50.00"), false, null);
         String content = service.generate(2026, 1, 7L, options).content();
         String page3 = content.substring(HEADER + PAGE_1, HEADER + PAGE_1 + PAGE_3);
 
@@ -198,7 +198,7 @@ class Modelo303FileServiceTest {
                 reportWith(new BigDecimal("1000.00"), new BigDecimal("210.00")), withAccount);
 
         Modelo303FileService.Options options = new Modelo303FileService.Options(
-                Modelo303FileService.Basis.COLLECTED, BigDecimal.ZERO, BigDecimal.ZERO, true);
+                Modelo303FileService.Basis.COLLECTED, BigDecimal.ZERO, BigDecimal.ZERO, true, null);
         String content = service.generate(2026, 1, 7L, options).content();
         String page1 = content.substring(HEADER, HEADER + PAGE_1);
         String did = content.substring(HEADER + PAGE_1 + PAGE_3, HEADER + PAGE_1 + PAGE_3 + PAGE_DID);
@@ -213,7 +213,78 @@ class Modelo303FileServiceTest {
                 reportWith(new BigDecimal("1000.00"), new BigDecimal("210.00")), entity());
 
         Modelo303FileService.Options options = new Modelo303FileService.Options(
-                Modelo303FileService.Basis.COLLECTED, BigDecimal.ZERO, BigDecimal.ZERO, true);
+                Modelo303FileService.Basis.COLLECTED, BigDecimal.ZERO, BigDecimal.ZERO, true, null);
+        assertThrows(RuntimeException.class, () -> service.generate(2026, 1, 7L, options));
+    }
+
+    /**
+     * Rectificar un trimestre pagado de más: mismas cifras correctas, marca de
+     * rectificativa, el justificante de la anterior, lo ingresado en [70] y la
+     * diferencia a devolver como ingreso indebido en [111].
+     */
+    @Test
+    void aRectificationClaimsBackWhatWasOverpaid() {
+        Owner withAccount = entity();
+        withAccount.setBankAccount("ES91 2100 0418 4502 0005 1332");
+        Modelo303FileService service = serviceReturning(
+                reportWith(new BigDecimal("1000.00"), new BigDecimal("210.00")), withAccount);
+
+        Modelo303FileService.Options options = new Modelo303FileService.Options(
+                Modelo303FileService.Basis.COLLECTED, BigDecimal.ZERO, BigDecimal.ZERO, false,
+                new Modelo303FileService.Rectification("2026303123456", new BigDecimal("278.58"), false));
+
+        Modelo303FileService.Modelo303File file = service.generate(2026, 1, 7L, options);
+        assertEquals("303-2026-1T-rectificativa.303", file.fileName());
+        String content = file.content();
+        String page1 = content.substring(HEADER, HEADER + PAGE_1);
+        String page3 = content.substring(HEADER + PAGE_1, HEADER + PAGE_1 + PAGE_3);
+        String did = content.substring(HEADER + PAGE_1 + PAGE_3, HEADER + PAGE_1 + PAGE_3 + PAGE_DID);
+
+        assertEquals("00000000000021000", field(page3, 340, 17)); // [69] resultado correcto: 210
+        assertEquals("00000000000027858", field(page3, 357, 17)); // [70] lo ingresado entonces
+        assertEquals("N0000000000006858", field(page3, 408, 17)); // [71] 210 − 278,58, a favor del declarante
+        assertEquals("X", field(page3, 426, 1));                  // es rectificativa
+        assertEquals("2026303123456", field(page3, 427, 13));      // justificante de la anterior
+        assertEquals("00000000000006858", field(page3, 441, 17)); // [111] ingreso indebido
+        assertEquals("X", field(page3, 458, 1));                  // motivo: rectificación corriente
+        assertEquals(" ", field(page3, 459, 1));                  // no es discrepancia de criterio
+        assertEquals(" ", field(page3, 425, 1));                  // hubo actividad
+        // Todo el negativo se pide como ingreso indebido, así que no queda resultado que declarar
+        assertEquals("N", field(page1, 13, 1));
+        // Y hace falta la cuenta, que es por donde llega la devolución
+        assertEquals("ES9121000418450200051332", field(did, 23, 24));
+        assertEquals("1", field(did, 194, 1)); // marca SEPA: cuenta de España
+    }
+
+    @Test
+    void aRectificationThatFallsShortIsPaidIn() {
+        Modelo303FileService service = serviceReturning(
+                reportWith(new BigDecimal("1000.00"), new BigDecimal("210.00")), entity());
+
+        Modelo303FileService.Options options = new Modelo303FileService.Options(
+                Modelo303FileService.Basis.COLLECTED, BigDecimal.ZERO, BigDecimal.ZERO, false,
+                new Modelo303FileService.Rectification("2026303123456", new BigDecimal("150.00"), true));
+
+        String content = service.generate(2026, 1, 7L, options).content();
+        String page1 = content.substring(HEADER, HEADER + PAGE_1);
+        String page3 = content.substring(HEADER + PAGE_1, HEADER + PAGE_1 + PAGE_3);
+
+        assertEquals("00000000000006000", field(page3, 408, 17)); // [71] 210 − 150, a ingresar
+        assertEquals("00000000000000000", field(page3, 441, 17)); // [111] no hay ingreso indebido
+        assertEquals("I", field(page1, 13, 1));                   // a ingresar
+        assertEquals(" ", field(page3, 458, 1));
+        assertEquals("X", field(page3, 459, 1));                  // motivo: discrepancia de criterio
+    }
+
+    @Test
+    void aRectificationNeedsTheReceiptOfThePreviousFiling() {
+        Modelo303FileService service = serviceReturning(
+                reportWith(new BigDecimal("1000.00"), new BigDecimal("210.00")), entity());
+
+        Modelo303FileService.Options options = new Modelo303FileService.Options(
+                Modelo303FileService.Basis.COLLECTED, BigDecimal.ZERO, BigDecimal.ZERO, false,
+                new Modelo303FileService.Rectification("123", new BigDecimal("278.58"), false));
+
         assertThrows(RuntimeException.class, () -> service.generate(2026, 1, 7L, options));
     }
 

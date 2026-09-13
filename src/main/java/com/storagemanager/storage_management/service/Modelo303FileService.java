@@ -34,6 +34,11 @@ import java.util.List;
  * adquisiciones intracomunitarias— no se conocen y van a cero: si los hay, se
  * añaden en el formulario de la AEAT después de importar. El fichero es un
  * borrador para importar y revisar, nunca una presentación.
+ * <p>
+ * Sirve también para corregir un trimestre ya presentado: con una
+ * {@link Rectification} sale como <b>autoliquidación rectificativa</b>, con las
+ * cifras correctas, el justificante de la anterior y lo ya ingresado en [70],
+ * que es la forma de rectificar desde 2024 (ya no hay complementaria).
  */
 @Service
 @RequiredArgsConstructor
@@ -44,6 +49,8 @@ public class Modelo303FileService {
     private static final int PAGE_3_LENGTH = 1017;
     private static final int PAGE_DID_LENGTH = 823;
     private static final int HEADER_LENGTH = 328;
+    /** Longitud del número de justificante de una autoliquidación. */
+    private static final int RECEIPT_LENGTH = 13;
 
     /** Tipo impositivo general, en centésimas de punto: 21,00 %. */
     private static final String VAT_RATE_21 = "02100";
@@ -59,6 +66,20 @@ public class Modelo303FileService {
     public enum Basis { COLLECTED, EXPECTED }
 
     /**
+     * Rectificación de un trimestre ya presentado. Desde 2024 no se presenta una
+     * complementaria: se vuelve a presentar el mismo 303 <em>con las cifras
+     * correctas</em>, marcado como autoliquidación rectificativa y con el número
+     * de justificante del anterior. Lo ya ingresado va a [70], de modo que [71]
+     * sale por la diferencia: positiva se ingresa, negativa se devuelve, y esa
+     * devolución es un ingreso indebido que además se consigna en [111].
+     *
+     * @param receiptNumber          número de justificante de la autoliquidación que se rectifica (13 caracteres)
+     * @param previouslyPaid         [70] lo ingresado en su día por ese mismo trimestre
+     * @param administrativeCriterion motivo: discrepancia de criterio administrativo, en vez de una rectificación corriente
+     */
+    public record Rectification(String receiptNumber, BigDecimal previouslyPaid, boolean administrativeCriterion) {}
+
+    /**
      * Opciones que no se pueden deducir de los datos guardados y que el declarante
      * decide al presentar.
      *
@@ -66,10 +87,12 @@ public class Modelo303FileService {
      * @param pendingToOffset      [110] cuotas a compensar pendientes de periodos anteriores
      * @param offsetApplied        [78] cuotas a compensar de periodos anteriores aplicadas en este periodo
      * @param directDebit          domiciliar el ingreso en la cuenta del titular (tipo de declaración "U")
+     * @param rectification        cuando rectifica un trimestre ya presentado; null en una declaración normal
      */
-    public record Options(Basis basis, BigDecimal pendingToOffset, BigDecimal offsetApplied, boolean directDebit) {
+    public record Options(Basis basis, BigDecimal pendingToOffset, BigDecimal offsetApplied, boolean directDebit,
+                          Rectification rectification) {
         public static Options defaults() {
-            return new Options(Basis.COLLECTED, ZERO, ZERO, false);
+            return new Options(Basis.COLLECTED, ZERO, ZERO, false, null);
         }
     }
 
@@ -107,7 +130,19 @@ public class Modelo303FileService {
         BigDecimal applied78 = money(options.offsetApplied());
         BigDecimal remaining87 = pending110.subtract(applied78).max(ZERO);
         BigDecimal result69 = result46.subtract(applied78);
-        BigDecimal result71 = result69;
+
+        // En una rectificativa, lo ya ingresado por el trimestre va a [70] y el
+        // resultado sale por la diferencia; si queda a favor del declarante es un
+        // ingreso indebido y se repite en [111].
+        Rectification rectification = options.rectification();
+        String receipt = rectification == null ? "" : normalize(rectification.receiptNumber());
+        if (rectification != null && receipt.length() != RECEIPT_LENGTH) {
+            throw new BadRequestException("El número de justificante de la autoliquidación que se rectifica"
+                    + " tiene " + RECEIPT_LENGTH + " caracteres; se recibió \"" + rectification.receiptNumber() + "\"");
+        }
+        BigDecimal paid70 = rectification == null ? ZERO : money(rectification.previouslyPaid());
+        BigDecimal result71 = result69.subtract(paid70);
+        BigDecimal refund111 = rectification != null && result71.signum() < 0 ? result71.abs() : ZERO;
 
         String period = quarter + "T";
         String iban = normalize(declarant.getBankAccount()).replace(" ", "");
@@ -115,17 +150,26 @@ public class Modelo303FileService {
             throw new BadRequestException("Para domiciliar el ingreso, " + declarant.getFullName()
                     + " necesita una cuenta bancaria en su ficha");
         }
-        char declarationType = declarationType(result71, quarter, options.directDebit());
+        if (refund111.signum() > 0 && iban.isBlank()) {
+            throw new BadRequestException("Una rectificativa a devolver necesita la cuenta bancaria de "
+                    + declarant.getFullName() + ": rellénala en su ficha de propietarios");
+        }
+        // El tipo se decide por lo que queda de [71] al quitarle la parte que se
+        // pide como ingreso indebido (nota 1 del diseño de registro).
+        char declarationType = declarationType(result71.add(refund111), quarter, options.directDebit());
 
         String content = header(year, period)
                 + page1(nif, declarant.getFullName(), year, period, declarationType,
                         base, vat, deductibleBase, deductibleVat, result46)
-                + page3(result46, result69, result71, pending110, applied78, remaining87,
-                        base.signum() == 0 && vat.signum() == 0 && deductibleVat.signum() == 0)
-                + pageDid(declarationType, iban)
+                + page3(new Page3(result46, result69, result71, pending110, applied78, remaining87, paid70,
+                        refund111, receipt, rectification != null && rectification.administrativeCriterion(),
+                        rectification == null
+                                && base.signum() == 0 && vat.signum() == 0 && deductibleVat.signum() == 0))
+                + pageDid(declarationType, refund111.signum() > 0, iban)
                 + "</T3030" + year + period + "0000>";
 
-        return new Modelo303File("303-" + year + "-" + period + ".303", content);
+        String name = "303-" + year + "-" + period + (rectification != null ? "-rectificativa" : "") + ".303";
+        return new Modelo303File(name, content);
     }
 
     /**
@@ -239,10 +283,18 @@ public class Modelo303FileService {
         return r.done(PAGE_1_LENGTH);
     }
 
+    /** Lo que necesita la página 3, que son demasiadas cifras para una lista de argumentos. */
+    private record Page3(BigDecimal result46, BigDecimal result69, BigDecimal result71,
+                         BigDecimal pending110, BigDecimal applied78, BigDecimal remaining87,
+                         BigDecimal paid70, BigDecimal refund111, String receipt,
+                         boolean administrativeCriterion, boolean noActivity) {
+        boolean rectifying() {
+            return !receipt.isBlank();
+        }
+    }
+
     /** Página 3: información adicional y resultado de la autoliquidación. */
-    private static String page3(BigDecimal result46, BigDecimal result69, BigDecimal result71,
-                                BigDecimal pending110, BigDecimal applied78, BigDecimal remaining87,
-                                boolean noActivity) {
+    private static String page3(Page3 p) {
         Rec r = new Rec();
         r.raw("<T303");
         r.raw("03000");
@@ -258,35 +310,40 @@ public class Modelo303FileService {
         r.signed(ZERO);   // [74]  adquisiciones con criterio de caja, base
         r.signed(ZERO);   // [75]  adquisiciones con criterio de caja, cuota
         r.signed(ZERO);   // [76]  regularización art. 80.cinco.5ª LIVA
-        r.signed(result46);   // [64] suma de resultados
-        r.raw(STATE_PERCENT); // [65] % atribuible al Estado
-        r.signed(result46);   // [66] atribuible al Estado
-        r.amount(ZERO);       // [77] IVA a la importación pendiente de ingreso
-        r.amount(pending110); // [110] cuotas a compensar pendientes de periodos anteriores
-        r.amount(applied78);  // [78]  aplicadas en este periodo
-        r.amount(remaining87);// [87]  pendientes para periodos posteriores
-        r.signed(ZERO);       // [68] regularización anual (tributación conjunta con forales)
-        r.signed(ZERO);       // [108] otros ajustes de la rectificativa
-        r.signed(result69);   // [69] resultado de la autoliquidación
-        r.amount(ZERO);       // [70] resultados a ingresar de autoliquidaciones anteriores
-        r.amount(ZERO);       // [109] devoluciones acordadas por la AEAT
-        r.amount(ZERO);       // [112] pago a cuenta de gasolinas
-        r.signed(result71);   // [71] resultado
-        r.raw(noActivity ? "X" : " "); // declaración sin actividad
-        r.blanks(1);          // autoliquidación rectificativa
-        r.blanks(13);         // número de justificante de la autoliquidación anterior
-        r.blanks(1);          // baja / modificación de la domiciliación
-        r.amount(ZERO);       // [111] importe de la rectificación
-        r.blanks(1);          // motivo: rectificaciones
-        r.blanks(1);          // motivo: discrepancia de criterio administrativo
+        r.signed(p.result46());   // [64] suma de resultados
+        r.raw(STATE_PERCENT);     // [65] % atribuible al Estado
+        r.signed(p.result46());   // [66] atribuible al Estado
+        r.amount(ZERO);           // [77] IVA a la importación pendiente de ingreso
+        r.amount(p.pending110()); // [110] cuotas a compensar pendientes de periodos anteriores
+        r.amount(p.applied78());  // [78]  aplicadas en este periodo
+        r.amount(p.remaining87());// [87]  pendientes para periodos posteriores
+        r.signed(ZERO);           // [68] regularización anual (tributación conjunta con forales)
+        r.signed(ZERO);           // [108] otros ajustes de la rectificativa
+        r.signed(p.result69());   // [69] resultado de la autoliquidación
+        r.amount(p.paid70());     // [70] lo ya ingresado por este mismo trimestre
+        r.amount(ZERO);           // [109] devoluciones acordadas por la AEAT
+        r.amount(ZERO);           // [112] pago a cuenta de gasolinas
+        r.signed(p.result71());   // [71] resultado
+        r.raw(p.noActivity() ? "X" : " ");            // declaración sin actividad
+        r.raw(p.rectifying() ? "X" : " ");            // autoliquidación rectificativa
+        r.an(p.receipt(), 13);                        // justificante de la autoliquidación que se rectifica
+        r.blanks(1);                                  // baja / modificación de la domiciliación
+        r.amount(p.refund111());                      // [111] importe de la rectificación (ingreso indebido)
+        // El motivo es obligatorio en una rectificativa y excluyente entre sí
+        r.raw(p.rectifying() && !p.administrativeCriterion() ? "X" : " "); // rectificaciones (salvo el motivo siguiente)
+        r.raw(p.rectifying() && p.administrativeCriterion() ? "X" : " ");  // discrepancia de criterio administrativo
         r.blanks(546);        // reservado para la AEAT
         r.raw("</T30303000>");
         return r.done(PAGE_3_LENGTH);
     }
 
-    /** Página DID: cuenta bancaria de la domiciliación o de la devolución. */
-    private static String pageDid(char declarationType, String iban) {
-        boolean needsAccount = declarationType == 'U' || declarationType == 'D';
+    /**
+     * Página DID: cuenta bancaria de la domiciliación o de la devolución. Una
+     * rectificativa con importe en [111] también la necesita, aunque el tipo de
+     * declaración no sea de devolución: es por donde llega el ingreso indebido.
+     */
+    private static String pageDid(char declarationType, boolean undueIncomeRefund, String iban) {
+        boolean needsAccount = declarationType == 'U' || declarationType == 'D' || undueIncomeRefund;
         Rec r = new Rec();
         r.raw("<T303");
         r.raw("DID00");
@@ -297,7 +354,9 @@ public class Modelo303FileService {
         r.blanks(35);                                   // dirección del banco
         r.blanks(30);                                   // ciudad
         r.blanks(2);                                    // código de país
-        r.raw(declarationType == 'D' ? "1" : "0");      // marca SEPA: cuenta de España
+        // Marca SEPA: 1 = cuenta de España. Es de las devoluciones; en la
+        // domiciliación del ingreso va a cero.
+        r.raw(declarationType == 'D' || undueIncomeRefund ? "1" : "0");
         r.blanks(617);                                  // reservado para la AEAT
         r.raw("</T303DID00>");
         return r.done(PAGE_DID_LENGTH);
