@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -14,9 +15,18 @@ import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
+import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.header.writers.DelegatingRequestMatcherHeaderWriter;
+import org.springframework.security.web.header.writers.frameoptions.XFrameOptionsHeaderWriter;
+import org.springframework.security.web.header.writers.frameoptions.XFrameOptionsHeaderWriter.XFrameOptionsMode;
+import org.springframework.security.web.util.matcher.NegatedRequestMatcher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+
+import static org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher.pathPattern;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -81,7 +91,26 @@ public class SecurityConfig {
         CsrfTokenRequestAttributeHandler csrfHandler = new CsrfTokenRequestAttributeHandler();
         csrfHandler.setCsrfRequestAttributeName(null);
 
+        // El visor de documentos enseña los PDF archivados en un iframe de la
+        // propia aplicación. Spring Security manda por defecto X-Frame-Options:
+        // DENY, que lo impide incluso siendo del mismo origen, así que se baja a
+        // SAMEORIGIN sólo en la descarga de un documento: el resto de la
+        // aplicación sigue sin poder enmarcarse en ningún sitio.
+        RequestMatcher documentDownloads = new OrRequestMatcher(
+                pathPattern(HttpMethod.GET, "/api/clients/{clientId}/documents/{documentId}/download"),
+                pathPattern(HttpMethod.GET, "/api/rentals/{rentalId}/documents/{documentId}/download"),
+                pathPattern(HttpMethod.GET, "/api/taxes/filings/{filingId}/documents/{documentId}/download"));
+
         http
+            .headers(headers -> headers
+                    // Se quita el escritor por defecto y se ponen los dos casos a
+                    // mano, para no depender de en qué orden se escriben.
+                    .frameOptions(HeadersConfigurer.FrameOptionsConfig::disable)
+                    .addHeaderWriter(new DelegatingRequestMatcherHeaderWriter(documentDownloads,
+                            new XFrameOptionsHeaderWriter(XFrameOptionsMode.SAMEORIGIN)))
+                    .addHeaderWriter(new DelegatingRequestMatcherHeaderWriter(
+                            new NegatedRequestMatcher(documentDownloads),
+                            new XFrameOptionsHeaderWriter(XFrameOptionsMode.DENY))))
             .csrf(csrf -> csrf
                     .csrfTokenRepository(csrfRepository)
                     .csrfTokenRequestHandler(csrfHandler)
