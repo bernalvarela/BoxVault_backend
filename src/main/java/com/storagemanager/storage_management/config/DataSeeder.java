@@ -2,7 +2,6 @@ package com.storagemanager.storage_management.config;
 
 import com.storagemanager.storage_management.dto.IrpfReportDTO;
 import com.storagemanager.storage_management.dto.Modelo184DTO;
-import com.storagemanager.storage_management.dto.Modelo303DTO;
 import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.model.Expense;
 import com.storagemanager.storage_management.model.Owner;
@@ -24,6 +23,7 @@ import com.storagemanager.storage_management.repository.RentalAgreementRepositor
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
 import com.storagemanager.storage_management.repository.TaxFilingRepository;
 import com.storagemanager.storage_management.repository.UnitPriceHistoryRepository;
+import com.storagemanager.storage_management.service.Modelo303RegisterService;
 import com.storagemanager.storage_management.service.TaxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -116,6 +116,7 @@ public class DataSeeder implements CommandLineRunner {
     private final OwnerMembershipRepository ownerMembershipRepository;
     private final TaxFilingRepository taxFilingRepository;
     private final TaxService taxService;
+    private final Modelo303RegisterService modelo303Register;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -654,8 +655,9 @@ public class DataSeeder implements CommandLineRunner {
      * Tax returns already filed, from the "taxFilings" array. Each entry describes a
      * range of returns that were presented:
      * <ul>
-     *   <li>MODELO_303: quarters "fromYear"/"fromQuarter" to "toYear"/"toQuarter",
-     *       optionally scoped to an "owner" (the comunidad de bienes);</li>
+     *   <li>MODELO_303: no se siembra desde aquí. Lo presentado se reconstruye de los
+     *       pagos a la AEAT anotados en los gastos ({@link Modelo303RegisterService}),
+     *       que es lo único que acredita lo que de verdad se ingresó;</li>
      *   <li>MODELO_184: years "fromYear" to "toYear", one return per year for the
      *       "owner" (comunidad de bienes) or, when omitted, for every comunidad;</li>
      *   <li>IRPF: years "fromYear" to "toYear", one return per person with income
@@ -691,30 +693,10 @@ public class DataSeeder implements CommandLineRunner {
 
             switch (model) {
                 case MODELO_303 -> {
-                    int fromQuarter = ((Number) spec.get("fromQuarter")).intValue();
-                    int toQuarter = ((Number) spec.get("toQuarter")).intValue();
-                    Long ownerId = specOwner != null ? specOwner.getId() : null;
-                    Map<Integer, Modelo303DTO> reportsByYear = new HashMap<>();
-                    for (int index = fromYear * 4 + (fromQuarter - 1); index <= toYear * 4 + (toQuarter - 1); index++) {
-                        int year = index / 4;
-                        int quarter = index % 4 + 1;
-                        String key = filingKey(model, year, quarter, null);
-                        inSeedRanges.add(key);
-                        if (!registered.add(key)) continue;
-                        Modelo303DTO report = reportsByYear.computeIfAbsent(year, y -> taxService.modelo303(y, ownerId));
-                        Modelo303DTO.Quarter q = report.getQuarters().get(quarter - 1);
-                        taxFilingRepository.save(TaxFiling.builder()
-                                .model(model)
-                                .year(year)
-                                .quarter(quarter)
-                                .filedDate(modelo303Deadline(year, quarter))
-                                .amount(q.getCollectedVat())
-                                .description("IVA " + q.getLabel() + ": base " + q.getCollectedBase() + " EUR · cuota " + q.getCollectedVat() + " EUR")
-                                .snapshot(toJson(report))
-                                .notes(notes)
-                                .build());
-                        count++;
-                    }
+                    // El registro del 303 no se inventa desde un rango de trimestres: sale
+                    // de los pagos a la AEAT anotados en los gastos, que es lo único que
+                    // acredita lo que se presentó de verdad (Modelo303RegisterService).
+                    log.info("Ignorando el rango de Modelos 303 de seed-data.json: el registro se reconstruye desde los pagos a la AEAT.");
                 }
                 case MODELO_184 -> {
                     List<Owner> entities = specOwner != null ? List.of(specOwner)
@@ -775,6 +757,16 @@ public class DataSeeder implements CommandLineRunner {
                         (f.getQuarter() != null ? f.getQuarter() + "T " : "") + f.getYear() + (f.getOwnerName() != null ? " · " + f.getOwnerName() : ""));
                 taxFilingRepository.delete(f);
             }
+        }
+
+        // El registro del 303 lo mandan los pagos a la AEAT, y se reconstruye una
+        // sola vez: cuando no hay ninguna declaración registrada. A partir de ahí
+        // es un histórico y no se vuelve a tocar; los datos de los que sale siguen
+        // cambiando (cobros que se corrigen), así que regenerarlo sólo podría
+        // estropearlo. La diferencia con lo que se calcula hoy se ve en la pantalla.
+        boolean anyModelo303 = taxFilingRepository.findAll().stream().anyMatch(f -> f.getModel() == TaxModel.MODELO_303);
+        if (!anyModelo303) {
+            count += modelo303Register.rebuildFromPayments().registered();
         }
         return count;
     }

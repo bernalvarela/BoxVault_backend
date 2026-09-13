@@ -7,6 +7,8 @@ import com.storagemanager.storage_management.dto.Modelo303DTO;
 import com.storagemanager.storage_management.dto.OwnerDTO;
 import com.storagemanager.storage_management.dto.TaxFilingDTO;
 import com.storagemanager.storage_management.dto.TaxFilingRequest;
+import com.storagemanager.storage_management.model.Expense;
+import com.storagemanager.storage_management.model.enums.ExpenseCategory;
 import com.storagemanager.storage_management.model.enums.OwnerType;
 import com.storagemanager.storage_management.model.enums.TaxModel;
 import org.junit.jupiter.api.Test;
@@ -184,20 +186,45 @@ class TaxControllerTest {
                 .toList();
     }
 
+    /**
+     * El registro del 303 no se inventa: cada declaración sale de un pago a la AEAT
+     * de los gastos, con su fecha y su importe, y lleva al lado lo que la aplicación
+     * calcula hoy para ese trimestre (que no tiene por qué coincidir).
+     */
     @Test
-    void seededModelo303FilingsCoverEveryQuarterUpTo2T2026() {
-        java.util.Set<String> quarters = new java.util.HashSet<>();
-        for (TaxFilingDTO f : seededFilings(TaxModel.MODELO_303)) {
-            quarters.add(f.getYear() + "-" + f.getQuarter());
+    void modelo303FilingsComeFromThePaymentsToTheAeat() {
+        Expense[] expenses = restTemplate.getForEntity("/api/expenses", Expense[].class).getBody();
+        assertNotNull(expenses);
+        List<Expense> aeatPayments = Arrays.stream(expenses)
+                .filter(e -> e.getCategory() == ExpenseCategory.IMPUESTOS)
+                .filter(e -> e.getDescription() != null && e.getDescription().contains("AEAT"))
+                .toList();
+        assertFalse(aeatPayments.isEmpty(), "the statements have AEAT tax payments");
+
+        ResponseEntity<TaxFilingDTO[]> response =
+                restTemplate.getForEntity("/api/taxes/filings?model=MODELO_303", TaxFilingDTO[].class);
+        assertEquals(200, response.getStatusCode().value());
+        List<TaxFilingDTO> filings = Arrays.asList(response.getBody());
+        assertEquals(aeatPayments.size(), filings.size(), "one filing per payment to the AEAT");
+
+        for (TaxFilingDTO f : filings) {
+            Expense payment = aeatPayments.stream()
+                    .filter(e -> e.getId().equals(f.getExpenseId()))
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError("Filing " + f.getQuarter() + "T " + f.getYear()
+                            + " is not linked to any AEAT payment"));
+            // Lo registrado es lo que se ingresó de verdad, con la fecha del cargo
+            assertEquals(payment.getExpenseDate(), f.getFiledDate());
+            assertEquals(0, payment.getAmount().compareTo(f.getAmount()), f.getDescription());
             assertNotNull(f.getSnapshot());
             assertTrue(f.getSnapshot().contains("\"quarters\""));
-            assertEquals(DataSeeder.modelo303Deadline(f.getYear(), f.getQuarter()), f.getFiledDate());
-        }
-        for (int year = 2024; year <= 2026; year++) {
-            for (int quarter = 1; quarter <= 4; quarter++) {
-                boolean expected = year < 2026 || quarter <= 2;
-                assertEquals(expected, quarters.contains(year + "-" + quarter), year + "-" + quarter);
-            }
+            // Y al lado, lo que la aplicación calcula hoy para ese trimestre
+            assertNotNull(f.getComputedAmount(), f.getDescription());
+            assertEquals(0, f.getAmount().subtract(f.getComputedAmount()).compareTo(f.getDifference()));
+            // El cargo se hace en el trimestre siguiente al que declara
+            int paymentMonth = payment.getExpenseDate().getMonthValue();
+            int declaredIn = paymentMonth <= 2 ? 4 : (paymentMonth - 3) / 3 + 1;
+            assertEquals(declaredIn, f.getQuarter().intValue(), payment.getDescription());
         }
     }
 

@@ -52,9 +52,21 @@ public class TaxFiling {
     @Column(nullable = false)
     private LocalDate filedDate;
 
-    /** Main figure declared (base imponible, cuota, rendimiento...). */
+    /**
+     * Cifra principal de la declaración: para el Modelo 303 reconstruido desde los
+     * pagos, lo que se ingresó de verdad en la AEAT; para el resto, la cifra
+     * declarada (base imponible, cuota, rendimiento...).
+     */
     @Column(precision = 12, scale = 2)
     private BigDecimal amount;
+
+    /**
+     * El gasto que acredita el pago de esta declaración (el cargo de la AEAT con su
+     * NRC), cuando lo hay. Se guarda el id y no una relación: el registro tiene que
+     * sobrevivir a que se borre el gasto, aunque entonces pierda el rastro.
+     */
+    @Column(name = "expense_id")
+    private Long expenseId;
 
     @Column(length = 255)
     private String description;

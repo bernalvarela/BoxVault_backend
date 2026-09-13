@@ -44,4 +44,10 @@ CREATE TABLE IF NOT EXISTS tax_filing_documents (
 -- del almacén. Un borrado directo en la base de datos debe fallar.
 CREATE INDEX IF NOT EXISTS idx_tax_filing_documents_filing ON tax_filing_documents (tax_filing_id);
 
+-- 3. El gasto que acredita el pago de una declaración: el cargo de la AEAT con su
+--    NRC. Lo rellena Modelo303RegisterService al reconstruir el registro del 303
+--    desde los pagos. Sin FK, igual que owner_id: el registro de lo presentado
+--    tiene que sobrevivir a que se borre el gasto.
+ALTER TABLE tax_filings ADD COLUMN IF NOT EXISTS expense_id BIGINT;
+
 COMMIT;

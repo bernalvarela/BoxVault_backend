@@ -309,6 +309,10 @@ CREATE TABLE tax_filings (
     description VARCHAR(255),
     snapshot    TEXT,
     notes       TEXT,
+    -- El gasto que acredita el pago de la declaración (el cargo de la AEAT con su
+    -- NRC). Sin FK, por lo mismo que owner_id: el registro tiene que sobrevivir a
+    -- que se borre el gasto.
+    expense_id  BIGINT,
     created_at  TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP
 );
 -- No FK on owner_id on purpose: a filing must survive the deletion of the owner

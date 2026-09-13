@@ -6705,14 +6705,6 @@
   ],
   "taxFilings": [
     {
-      "model": "MODELO_303",
-      "fromYear": 2024,
-      "fromQuarter": 1,
-      "toYear": 2026,
-      "toQuarter": 2,
-      "notes": "Presentado. Fecha aproximada (plazo de presentación); registrado automáticamente desde seed-data.json."
-    },
-    {
       "model": "MODELO_184",
       "fromYear": 2024,
       "toYear": 2025,

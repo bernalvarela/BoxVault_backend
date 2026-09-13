@@ -28,4 +28,15 @@ public class TaxFilingDTO {
     private String snapshot;
     private String notes;
     private LocalDateTime createdAt;
+
+    /** El gasto que acredita el pago (el cargo de la AEAT), cuando se conoce. */
+    private Long expenseId;
+    /**
+     * Lo que la aplicación calcula hoy para ese periodo (la cuota del trimestre en
+     * el Modelo 303); null en los modelos que no se recalculan. Sirve para ver si
+     * lo que se ingresó sigue cuadrando con los datos.
+     */
+    private BigDecimal computedAmount;
+    /** {@link #amount} − {@link #computedAmount}: positivo, se pagó de más. */
+    private BigDecimal difference;
 }
