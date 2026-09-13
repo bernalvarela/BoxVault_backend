@@ -21,7 +21,12 @@ import java.util.List;
  * <p>
  * De cualquiera de los dos:
  * FOTO: fotografía del cliente o de la unidad en el momento de la entrega.
- * JUSTIFICANTE: recibo, transferencia o cualquier otro justificante.
+ * JUSTIFICANTE: recibo, transferencia o cualquier otro justificante; en una
+ *   declaración presentada, el acuse con el CSV que devuelve la Sede electrónica.
+ * <p>
+ * De una declaración presentada:
+ * DECLARACION: la declaración en sí, tal como se presentó (el PDF del modelo).
+ * <p>
  * OTRO: lo que no encaja en las anteriores.
  */
 public enum DocumentType {
@@ -32,6 +37,7 @@ public enum DocumentType {
     CONTRATO_ALQUILER,
     ANEXO,
     JUSTIFICANTE,
+    DECLARACION,
     OTRO;
 
     private static final List<DocumentType> FOR_CLIENT =
@@ -40,7 +46,7 @@ public enum DocumentType {
     private static final List<DocumentType> FOR_RENTAL =
             List.of(CONTRATO_ALQUILER, ANEXO, FOTO, JUSTIFICANTE, OTRO);
 
-    private static final List<DocumentType> FOR_TAX_FILING = List.of(JUSTIFICANTE, OTRO);
+    private static final List<DocumentType> FOR_TAX_FILING = List.of(JUSTIFICANTE, DECLARACION, OTRO);
 
     /**
      * Lo que se puede archivar en la ficha de un cliente. CONTRATO_ALQUILER no
@@ -59,8 +65,8 @@ public enum DocumentType {
 
     /**
      * Lo que se puede archivar en una declaración presentada: el justificante que
-     * devuelve la Sede electrónica (lo normal) y poco más —el PDF de la
-     * declaración o el fichero que se importó— bajo OTRO.
+     * devuelve la Sede electrónica al presentar, la declaración en sí y lo que no
+     * sea ninguna de las dos (el fichero que se importó, un cálculo de apoyo).
      */
     public static List<DocumentType> forTaxFiling() {
         return FOR_TAX_FILING;
