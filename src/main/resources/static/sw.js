@@ -31,7 +31,9 @@
 
 // Al cambiar este número se tira toda la caché anterior. Hay que subirlo cuando
 // cambie este fichero; los ficheros con hash no lo necesitan.
-const VERSION = 'v1';
+// v2: el index.html cambió (la etiqueta viewport) y la copia guardada mandaría
+// sobre la nueva mientras siguiera en caché.
+const VERSION = 'v2';
 const SHELL = `boxvault-shell-${VERSION}`;
 const ASSETS = `boxvault-assets-${VERSION}`;
 const RUNTIME = `boxvault-runtime-${VERSION}`;
