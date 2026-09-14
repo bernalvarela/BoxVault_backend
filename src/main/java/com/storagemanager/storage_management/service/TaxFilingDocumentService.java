@@ -61,6 +61,27 @@ public class TaxFilingDocumentService {
         }
     }
 
+    /**
+     * Archiva en la declaración un fichero que ha generado la aplicación: el .303
+     * que se lleva a la Sede. Así lo presentado y lo que se subió quedan juntos.
+     */
+    @Transactional
+    public TaxFilingDocumentDTO attach(Long filingId, String fileName, String contentType, byte[] content,
+                                       DocumentType type, String description) {
+        TaxFiling filing = requireFiling(filingId);
+        Document document = documents.store("tax-filings/" + filingId, fileName, contentType, content,
+                requireFilingType(type), description);
+        try {
+            return TaxFilingDocumentDTO.of(filingDocumentRepository.save(TaxFilingDocument.builder()
+                    .taxFiling(filing)
+                    .document(document)
+                    .build()));
+        } catch (RuntimeException e) {
+            documents.delete(document);
+            throw e;
+        }
+    }
+
     public DocumentService.Content download(Long filingId, Long documentId) {
         return documents.open(requireLink(filingId, documentId).getDocument());
     }

@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.util.Locale;
@@ -53,6 +54,21 @@ public class DocumentFiles {
             throw new UncheckedIOException("No se pudo leer el fichero subido", e);
         }
         return new Stored(key, fileName, file.getContentType(), file.getSize());
+    }
+
+    /**
+     * Lo mismo para un fichero que genera la propia aplicación (el .303 del IVA):
+     * no viene de un formulario, así que no hay nada que validar salvo que tenga
+     * contenido.
+     */
+    public Stored store(String keyPrefix, String fileName, String contentType, byte[] content) {
+        if (content == null || content.length == 0) {
+            throw new BadRequestException("No hay contenido que archivar");
+        }
+        String name = cleanFileName(fileName);
+        String key = keyPrefix + "/" + UUID.randomUUID() + extensionOf(name);
+        fileStorage.put(key, contentType, content.length, new ByteArrayInputStream(content));
+        return new Stored(key, name, contentType, (long) content.length);
     }
 
     public InputStream open(String key) {

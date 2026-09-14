@@ -58,6 +58,26 @@ public class DocumentService {
         }
     }
 
+    /** Igual, para un fichero que genera la aplicación en vez de recibirlo subido. */
+    @Transactional
+    public Document store(String keyPrefix, String fileName, String contentType, byte[] content,
+                          DocumentType type, String description) {
+        DocumentFiles.Stored stored = files.store(keyPrefix, fileName, contentType, content);
+        try {
+            return documentRepository.save(Document.builder()
+                    .documentType(type != null ? type : DocumentType.OTRO)
+                    .fileName(stored.fileName())
+                    .contentType(stored.contentType())
+                    .sizeBytes(stored.sizeBytes())
+                    .storageKey(stored.key())
+                    .description(description)
+                    .build());
+        } catch (RuntimeException e) {
+            files.safeDelete(stored.key());
+            throw e;
+        }
+    }
+
     public Content open(Document document) {
         return new Content(document, files.open(document.getStorageKey()));
     }

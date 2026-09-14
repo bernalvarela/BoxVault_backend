@@ -3,10 +3,12 @@ package com.storagemanager.storage_management.controller;
 import com.storagemanager.storage_management.dto.IrpfReportDTO;
 import com.storagemanager.storage_management.dto.Modelo184DTO;
 import com.storagemanager.storage_management.dto.Modelo303DTO;
+import com.storagemanager.storage_management.dto.Modelo303PresentationRequest;
 import com.storagemanager.storage_management.dto.TaxFilingDTO;
 import com.storagemanager.storage_management.dto.TaxFilingRequest;
 import com.storagemanager.storage_management.model.enums.TaxModel;
 import com.storagemanager.storage_management.service.Modelo303FileService;
+import com.storagemanager.storage_management.service.Modelo303PresentationService;
 import com.storagemanager.storage_management.service.TaxFilingService;
 import com.storagemanager.storage_management.service.TaxService;
 import jakarta.validation.Valid;
@@ -37,6 +39,7 @@ public class TaxController {
     private final TaxService taxService;
     private final TaxFilingService taxFilingService;
     private final Modelo303FileService modelo303FileService;
+    private final Modelo303PresentationService modelo303PresentationService;
 
     private static int yearOrCurrent(Integer year) {
         return year != null ? year : Year.now().getValue();
@@ -128,6 +131,18 @@ public class TaxController {
     @PostMapping("/filings")
     public ResponseEntity<TaxFilingDTO> createFiling(@Valid @RequestBody TaxFilingRequest request) {
         return new ResponseEntity<>(taxFilingService.createFiling(request), HttpStatus.CREATED);
+    }
+
+    /**
+     * Presenta el Modelo 303 de un trimestre: genera el fichero para la Sede,
+     * registra la declaración con las cifras de ahora y le archiva el fichero.
+     * Devuelve las dos cosas; el fichero se baja por la url del documento.
+     */
+    @PreAuthorize("@access.can('IMPUESTOS','ESCRIBIR')")
+    @PostMapping("/filings/modelo-303")
+    public ResponseEntity<Modelo303PresentationService.Presentation> presentModelo303(
+            @Valid @RequestBody Modelo303PresentationRequest request) {
+        return new ResponseEntity<>(modelo303PresentationService.present(request), HttpStatus.CREATED);
     }
 
     @PreAuthorize("@access.can('IMPUESTOS','ADMINISTRAR')")

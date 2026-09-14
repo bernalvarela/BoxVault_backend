@@ -96,8 +96,20 @@ public class Modelo303FileService {
         }
     }
 
-    /** Fichero generado: el nombre sugerido y su contenido (ISO-8859-1 al descargarlo). */
-    public record Modelo303File(String fileName, String content) {}
+    /**
+     * Fichero generado: el nombre sugerido y su contenido (ISO-8859-1 al
+     * descargarlo), más con qué se generó, que es lo que necesita quien además
+     * quiera registrar la presentación.
+     *
+     * @param declarantId   la comunidad de bienes que lo presenta
+     * @param base          base imponible declarada [07]
+     * @param vat           IVA devengado [09]
+     * @param deductibleVat IVA soportado deducido [45]
+     * @param result        resultado de la declaración [71]: lo que se ingresa
+     */
+    public record Modelo303File(String fileName, String content,
+                                Long declarantId, String declarantName,
+                                BigDecimal base, BigDecimal vat, BigDecimal deductibleVat, BigDecimal result) {}
 
     public Modelo303File generate(int year, int quarter, Long ownerId, Options options) {
         if (quarter < 1 || quarter > 4) {
@@ -169,7 +181,8 @@ public class Modelo303FileService {
                 + "</T3030" + year + period + "0000>";
 
         String name = "303-" + year + "-" + period + (rectification != null ? "-rectificativa" : "") + ".303";
-        return new Modelo303File(name, content);
+        return new Modelo303File(name, content, declarant.getId(), declarant.getFullName(),
+                base, vat, deductibleVat, result71);
     }
 
     /**
