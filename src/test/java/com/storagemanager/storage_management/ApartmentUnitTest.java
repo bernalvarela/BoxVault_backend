@@ -195,7 +195,8 @@ class ApartmentUnitTest {
         assertNotNull(all.getBody());
         assertTrue(all.getBody().getMonthlyPotentialVatAmount().compareTo(BigDecimal.ZERO) > 0);
         assertTrue(all.getBody().getApartmentCount() >= 1);
-        assertEquals(all.getBody().getTotalUnits(), all.getBody().getStorageUnitCount() + all.getBody().getApartmentCount());
+        assertEquals(all.getBody().getTotalUnits(),
+                all.getBody().getStorageUnitCount() + all.getBody().getApartmentCount() + all.getBody().getPremisesCount());
     }
 
     @Test

@@ -55,9 +55,12 @@ class TaxControllerTest {
         assertNotNull(report);
         assertEquals(YEAR, report.getYear());
         assertEquals(4, report.getQuarters().size());
-        // Only VAT-bearing rentable units: the trasteros, not the flats nor the locales
-        assertTrue(report.getUnitNumbers().stream().allMatch(n -> n.matches("[1-9]")), report.getUnitNumbers().toString());
-        assertEquals(9, report.getUnitCount());
+        // Lo que se alquila con IVA: los nueve trasteros y el bajo trasero, que está
+        // vacío y se alquila entero. El bajo delantero no, porque agrupa a los trasteros;
+        // los pisos tampoco, que están exentos.
+        assertTrue(report.getUnitNumbers().stream().allMatch(n -> n.matches("[1-9]|BT")), report.getUnitNumbers().toString());
+        assertTrue(report.getUnitNumbers().contains("BT"));
+        assertEquals(10, report.getUnitCount());
         assertTrue(report.getCollectedBase().compareTo(BigDecimal.ZERO) > 0);
 
         BigDecimal quarters = BigDecimal.ZERO;
@@ -77,7 +80,7 @@ class TaxControllerTest {
         Modelo303DTO scoped = restTemplate.getForEntity("/api/taxes/modelo-303?year=" + YEAR + "&ownerId=" + entity.getId(), Modelo303DTO.class).getBody();
         assertNotNull(scoped);
         assertEquals(entity.getId(), scoped.getOwnerId());
-        assertEquals(9, scoped.getUnitCount());
+        assertEquals(10, scoped.getUnitCount());
         assertEquals(0, report.getCollectedBase().compareTo(scoped.getCollectedBase()));
         Modelo303DTO marta = restTemplate.getForEntity("/api/taxes/modelo-303?year=" + YEAR + "&ownerId=" + ownerNamed("Marta").getId(), Modelo303DTO.class).getBody();
         assertNotNull(marta);
@@ -91,8 +94,8 @@ class TaxControllerTest {
         Modelo184DTO report = response.getBody();
         assertNotNull(report);
         assertEquals(DataSeeder.ENTITY_NAME, report.getEntityName());
-        // Los 9 trasteros, que son los que dan renta, más los dos locales: no se
-        // alquilan, pero soportan los gastos (IBI, luz, seguro) y por eso cuentan
+        // Los 9 trasteros, que son los que dan renta, más los dos bajos, que soportan
+        // los gastos (IBI, luz, seguro) y por eso cuentan aunque no den ingresos
         assertEquals(11, report.getUnitCount(), "The 9 trasteros plus the two locales that carry the expenses");
         assertTrue(report.getUnits().stream().filter(u -> !u.isInherited())
                 .allMatch(u -> u.getUnitNumber().startsWith("B")), "sólo los bajos son propiedad directa");
