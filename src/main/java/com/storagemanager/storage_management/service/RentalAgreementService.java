@@ -76,11 +76,13 @@ public class RentalAgreementService {
         // Alquilar una unidad que no es tuya, no.
         unitScope.requireAccessible(unit);
 
-        if (unit.getStatus() == UnitStatus.OCCUPIED) {
-            throw new BadRequestException("Storage unit " + unit.getUnitNumber() + " is already occupied");
-        }
-        if (unit.getStatus() == UnitStatus.MAINTENANCE) {
-            throw new BadRequestException("Storage unit " + unit.getUnitNumber() + " is currently under maintenance");
+        // Un contrato que ya terminó se registra igual: lo que no puede es pisarse
+        // con otro de la misma unidad, y de eso se encarga requireNoOverlap. Mirar
+        // el estado de hoy impediría dar de alta el histórico de una unidad que
+        // ahora está alquilada, que es justo lo que se quiere poder hacer.
+        boolean inForce = request.getEndDate() == null || !request.getEndDate().isBefore(LocalDate.now());
+        if (inForce && unit.getStatus() == UnitStatus.MAINTENANCE) {
+            throw new BadRequestException("La unidad " + unit.getUnitNumber() + " está en mantenimiento");
         }
 
         Client client = clientRepository.findById(request.getClientId())
@@ -101,14 +103,18 @@ public class RentalAgreementService {
                 .monthlyRent(request.getMonthlyRent())
                 .securityDeposit(request.getSecurityDeposit())
                 .depositPaid(request.getDepositPaid() != null ? request.getDepositPaid() : false)
-                .status(RentalStatus.ACTIVE)
+                // Con una fecha de fin ya pasada, el contrato nace terminado: es
+                // histórico que se está registrando, no un alquiler que empieza.
+                .status(inForce ? RentalStatus.ACTIVE : RentalStatus.TERMINATED)
                 .autoRenew(request.getAutoRenew() != null ? request.getAutoRenew() : true)
                 .notes(request.getNotes())
                 .build();
 
-        // Mark unit as occupied
-        unit.setStatus(UnitStatus.OCCUPIED);
-        storageUnitRepository.save(unit);
+        // Y por lo mismo, sólo ocupa la unidad el que está en vigor.
+        if (inForce) {
+            unit.setStatus(UnitStatus.OCCUPIED);
+            storageUnitRepository.save(unit);
+        }
 
         return rentalAgreementRepository.save(agreement);
     }

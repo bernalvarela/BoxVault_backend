@@ -13,6 +13,7 @@ import com.storagemanager.storage_management.dto.UnitOccupancyDTO;
 import com.storagemanager.storage_management.dto.UnitRevenueDTO;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.StorageUnit;
+import com.storagemanager.storage_management.model.Units;
 import com.storagemanager.storage_management.model.enums.RentalStatus;
 import com.storagemanager.storage_management.model.enums.UnitKind;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
@@ -85,14 +86,15 @@ public class StatisticsService {
     }
 
     /**
-     * Rentable units (locales are containers, not rented units, so they are left out
-     * of the occupancy figures) under the given roots; null = every root.
+     * Las unidades que se alquilan bajo esos inmuebles (null = todos): quedan
+     * fuera de la ocupación las que contienen a otras, no los locales por serlo
+     * —uno vacío se alquila igual que un trastero—.
      */
     private List<StorageUnit> unitsIn(Set<Long> rootIds) {
         // El ámbito manda sobre el filtro de inmuebles: las unidades que el
         // usuario no ve no cuentan para su ocupación ni para sus totales.
-        return unitScope.filterByUnit(storageUnitRepository.findAll(), unit -> unit).stream()
-                .filter(u -> !u.isContainer())
+        List<StorageUnit> visibles = unitScope.filterByUnit(storageUnitRepository.findAll(), unit -> unit);
+        return Units.rentable(visibles).stream()
                 .filter(u -> unitInRoots(u, rootIds))
                 .toList();
     }
@@ -262,6 +264,8 @@ public class StatisticsService {
         long totalUnits = units.size();
         long storageUnitCount = units.stream().filter(u -> u.getKind() == UnitKind.STORAGE_UNIT).count();
         long apartmentCount = units.stream().filter(u -> u.getKind() == UnitKind.APARTMENT).count();
+        // Los locales que llegan hasta aquí son los que no agrupan nada: se alquilan enteros.
+        long premisesCount = units.stream().filter(u -> u.getKind() == UnitKind.PREMISES).count();
         long occupiedUnits = units.stream().filter(u -> u.getStatus() == UnitStatus.OCCUPIED).count();
         long availableUnits = units.stream().filter(u -> u.getStatus() == UnitStatus.AVAILABLE).count();
         long maintenanceUnits = units.stream().filter(u -> u.getStatus() == UnitStatus.MAINTENANCE).count();
@@ -303,6 +307,7 @@ public class StatisticsService {
                 .totalUnits(totalUnits)
                 .storageUnitCount(storageUnitCount)
                 .apartmentCount(apartmentCount)
+                .premisesCount(premisesCount)
                 .occupiedUnits(occupiedUnits)
                 .availableUnits(availableUnits)
                 .maintenanceUnits(maintenanceUnits)

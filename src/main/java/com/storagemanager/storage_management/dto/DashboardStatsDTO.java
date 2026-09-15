@@ -13,10 +13,13 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class DashboardStatsDTO {
-    // Storage metrics (totalUnits = storageUnitCount + apartmentCount)
+    // Inventario que se alquila (totalUnits = storageUnitCount + apartmentCount
+    // + premisesCount). Un local cuenta cuando no agrupa otras unidades: el que
+    // tiene trasteros dentro no se alquila entero, el vacío sí.
     private long totalUnits;
     private long storageUnitCount;
     private long apartmentCount;
+    private long premisesCount;
     private long occupiedUnits;
     private long availableUnits;
     private long maintenanceUnits;

@@ -14,6 +14,7 @@ import com.storagemanager.storage_management.model.Ownership;
 import com.storagemanager.storage_management.model.Payment;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.StorageUnit;
+import com.storagemanager.storage_management.model.Units;
 import com.storagemanager.storage_management.model.enums.ExpenseCategory;
 import com.storagemanager.storage_management.model.enums.OwnerType;
 import com.storagemanager.storage_management.model.enums.PaymentStatus;
@@ -125,9 +126,12 @@ public class TaxService {
                 .toList();
     }
 
-    /** Units that can be rented (locales are containers, not rented units). */
+    /**
+     * Las unidades que se alquilan: todas menos las que contienen a otras. Un
+     * local vacío se alquila como cualquier unidad; el que agrupa trasteros, no.
+     */
     private List<StorageUnit> rentableUnits() {
-        return allUnits().stream().filter(u -> !u.isContainer()).toList();
+        return Units.rentable(allUnits());
     }
 
     private static Set<Long> idsOf(List<StorageUnit> units) {

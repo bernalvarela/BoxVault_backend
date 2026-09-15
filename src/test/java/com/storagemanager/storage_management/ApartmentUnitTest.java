@@ -71,16 +71,21 @@ class ApartmentUnitTest {
             }
         }
 
-        // The two locales are containers and not part of the occupancy figures
+        // Los dos bajos son locales; sólo el que agrupa trasteros queda fuera del inventario
         ResponseEntity<StorageUnit[]> locales = restTemplate.getForEntity("/api/storages?kind=PREMISES", StorageUnit[].class);
         assertNotNull(locales.getBody());
         assertEquals(2, Arrays.stream(locales.getBody()).filter(u -> u.getUnitNumber().matches("B[DT]")).count());
-        assertTrue(Arrays.stream(locales.getBody()).allMatch(StorageUnit::isContainer));
+        assertTrue(Arrays.stream(locales.getBody()).allMatch(StorageUnit::isPremises));
 
         ResponseEntity<DashboardStatsDTO> all = restTemplate.getForEntity("/api/statistics/dashboard", DashboardStatsDTO.class);
         assertNotNull(all.getBody());
-        assertEquals(all.getBody().getTotalUnits(), all.getBody().getStorageUnitCount() + all.getBody().getApartmentCount());
-        assertTrue(all.getBody().getUnitsSummary().stream().noneMatch(u -> u.getKind() == UnitKind.PREMISES));
+        assertEquals(all.getBody().getTotalUnits(),
+                all.getBody().getStorageUnitCount() + all.getBody().getApartmentCount() + all.getBody().getPremisesCount());
+        // El bajo trasero está vacío: se alquila como una unidad más y cuenta.
+        // El delantero agrupa los nueve trasteros, así que no.
+        assertEquals(1, all.getBody().getPremisesCount());
+        assertTrue(all.getBody().getUnitsSummary().stream().anyMatch(u -> "BT".equals(u.getUnitNumber())));
+        assertTrue(all.getBody().getUnitsSummary().stream().noneMatch(u -> DataSeeder.STORAGE_PREMISES_NUMBER.equals(u.getUnitNumber())));
 
         // Filtering by the local covers its 9 trasteros
         StorageUnit local = unitNumbered(DataSeeder.STORAGE_PREMISES_NUMBER);

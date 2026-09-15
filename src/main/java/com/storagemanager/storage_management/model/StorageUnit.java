@@ -98,9 +98,17 @@ public class StorageUnit {
         return getKind().isVatApplicable();
     }
 
-    /** A local that groups other units rather than being rented itself. Serialised as {@code container}. */
-    @JsonProperty("container")
-    public boolean isContainer() {
+    /**
+     * Un local, con o sin unidades dentro. Serializado como {@code premises}.
+     * <p>
+     * No dice si se alquila o no: eso depende de si algo cuelga de él, y una
+     * unidad suelta no lo sabe. Un local con trasteros dentro (el bajo
+     * delantero) no se alquila entero; uno vacío (el bajo trasero) se alquila
+     * como cualquier otra unidad. Quien necesite esa distinción tiene que mirar
+     * el inventario: {@code Units.containerIds(...)}.
+     */
+    @JsonProperty("premises")
+    public boolean isPremises() {
         return getKind() == UnitKind.PREMISES;
     }
 
