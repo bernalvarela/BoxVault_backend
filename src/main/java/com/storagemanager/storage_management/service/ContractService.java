@@ -31,6 +31,7 @@ public class ContractService {
     private final RentalDocumentService rentalDocuments;
     private final DocumentService documents;
     private final ContractPdfService pdf;
+    private final InvoiceIssuer issuers;
 
     /** Genera el contrato y lo abre, que es lo que necesita quien lo descarga. */
     public DocumentService.Content generateAndOpen(Long rentalId) {
@@ -41,7 +42,7 @@ public class ContractService {
     @Transactional
     public Document generate(Long rentalId) {
         RentalAgreement rental = rentals.getAgreementById(rentalId);
-        byte[] content = pdf.render(rental);
+        byte[] content = pdf.render(rental, issuers.forUnit(rental.getStorageUnit()));
 
         LocalDate today = LocalDate.now();
         String name = "contrato-" + slug(rental.getAgreementNumber()) + "-" + today + ".pdf";

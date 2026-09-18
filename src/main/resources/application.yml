@@ -46,10 +46,11 @@ boxvault:
     local-path: ${BOXVAULT_FILES_PATH:data/files}
     max-file-size: 10MB
 
-  # Quién emite las facturas y los contratos: la comunidad de bienes propietaria
-  # de los bajos. El NIF, la dirección y el IBAN llegan por entorno (.env del
-  # servidor) porque no son cosa de dejarlos escritos en el repositorio; lo que
-  # falte sale en el PDF como un hueco visible, que se ve al mirarlo.
+  # Facturas y contratos. Quién emite sale de la ficha del PROPIETARIO de la
+  # unidad (pantalla de Propietarios): su nombre, su NIF, su domicilio y su IBAN.
+  # Lo de aquí es sólo el respaldo para lo que esa ficha no tenga, más la serie
+  # de facturación y la plantilla del contrato. Lo que falte sale en el PDF como
+  # un hueco visible, que se ve al mirarlo.
   invoicing:
     issuer-name: ${BOXVAULT_ISSUER_NAME:Comunidad de bienes Pasaxe 29}
     issuer-tax-id: ${BOXVAULT_ISSUER_TAX_ID:}

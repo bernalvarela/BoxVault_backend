@@ -9,14 +9,13 @@ import org.openpdf.text.Phrase;
 import org.openpdf.text.pdf.PdfPCell;
 import org.openpdf.text.pdf.PdfPTable;
 import org.openpdf.text.pdf.PdfWriter;
-import com.storagemanager.storage_management.config.InvoicingProperties;
+import com.storagemanager.storage_management.service.InvoiceIssuer;
 import com.storagemanager.storage_management.config.VatUtils;
 import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.model.Payment;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.StorageUnit;
 import com.storagemanager.storage_management.model.enums.PaymentMethod;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
@@ -39,13 +38,10 @@ import static com.storagemanager.storage_management.config.InvoicingProperties.o
  * imprimir un 0 % que no explica nada.
  */
 @Service
-@RequiredArgsConstructor
 public class InvoicePdfService {
 
-    private final InvoicingProperties issuer;
-
     /** Composición de la factura de un cobro. El número ya viene asignado. */
-    public byte[] render(Payment payment, String invoiceNumber, LocalDate issuedOn) {
+    public byte[] render(Payment payment, String invoiceNumber, LocalDate issuedOn, InvoiceIssuer.Issuer issuer) {
         RentalAgreement rental = payment.getRentalAgreement();
         StorageUnit unit = payment.getStorageUnit();
         Client client = payment.getClient();
@@ -61,16 +57,16 @@ public class InvoicePdfService {
             pdf.addCreator("BoxVault");
             pdf.open();
 
-            pdf.add(header(invoiceNumber, issuedOn, payment));
+            pdf.add(header(invoiceNumber, issuedOn, payment, issuer));
             pdf.add(Pdfs.gap(18));
             pdf.add(parties(client));
             pdf.add(Pdfs.gap(18));
             pdf.add(lines(payment, unit, rental, amounts, vatApplicable));
             pdf.add(totals(amounts, vatApplicable));
             pdf.add(Pdfs.gap(18));
-            pdf.add(collection(payment));
+            pdf.add(collection(payment, issuer));
             pdf.add(Pdfs.gap(24));
-            pdf.add(footer(vatApplicable));
+            pdf.add(footer(vatApplicable, issuer));
         } catch (DocumentException e) {
             throw new IllegalStateException("No se pudo componer la factura " + invoiceNumber, e);
         } finally {
@@ -80,16 +76,20 @@ public class InvoicePdfService {
     }
 
     /** Emisor a la izquierda, identificación de la factura a la derecha. */
-    private PdfPTable header(String number, LocalDate issuedOn, Payment payment) {
+    private PdfPTable header(String number, LocalDate issuedOn, Payment payment, InvoiceIssuer.Issuer issuer) {
         PdfPTable table = new PdfPTable(new float[]{3, 2});
         table.setWidthPercentage(100);
 
         Paragraph emitter = new Paragraph();
-        emitter.add(new Phrase(orMissing(issuer.getIssuerName()) + "\n", Pdfs.H2));
-        emitter.add(new Phrase("NIF " + orMissing(issuer.getIssuerTaxId()) + "\n", Pdfs.BODY));
-        emitter.add(new Phrase(orMissing(issuer.getIssuerAddress()) + "\n", Pdfs.BODY));
-        emitter.add(new Phrase(orMissing(issuer.getIssuerCity()) + "\n", Pdfs.BODY));
-        String contact = contactLine();
+        emitter.add(new Phrase(orMissing(issuer.name()) + "\n", Pdfs.H2));
+        emitter.add(new Phrase("NIF " + orMissing(issuer.taxId()) + "\n", Pdfs.BODY));
+        emitter.add(new Phrase(orMissing(issuer.address()) + "\n", Pdfs.BODY));
+        // El municipio sólo si se lleva aparte: el domicilio del propietario ya
+        // suele traerlo, y una línea de puntos de más no ayuda a nadie.
+        if (issuer.city() != null && !issuer.city().isBlank()) {
+            emitter.add(new Phrase(issuer.city().trim() + "\n", Pdfs.BODY));
+        }
+        String contact = contactLine(issuer);
         if (!contact.isEmpty()) emitter.add(new Phrase(contact, Pdfs.SMALL));
 
         Paragraph identification = new Paragraph();
@@ -105,14 +105,14 @@ public class InvoicePdfService {
         return table;
     }
 
-    private String contactLine() {
+    private String contactLine(InvoiceIssuer.Issuer issuer) {
         StringBuilder line = new StringBuilder();
-        if (issuer.getIssuerEmail() != null && !issuer.getIssuerEmail().isBlank()) {
-            line.append(issuer.getIssuerEmail().trim());
+        if (issuer.email() != null && !issuer.email().isBlank()) {
+            line.append(issuer.email().trim());
         }
-        if (issuer.getIssuerPhone() != null && !issuer.getIssuerPhone().isBlank()) {
+        if (issuer.phone() != null && !issuer.phone().isBlank()) {
             if (line.length() > 0) line.append(" · ");
-            line.append(issuer.getIssuerPhone().trim());
+            line.append(issuer.phone().trim());
         }
         return line.toString();
     }
@@ -220,7 +220,7 @@ public class InvoicePdfService {
     }
 
     /** Cómo y cuándo se cobró; si aún no se ha cobrado, cómo hay que pagarlo. */
-    private Paragraph collection(Payment payment) {
+    private Paragraph collection(Payment payment, InvoiceIssuer.Issuer issuer) {
         BigDecimal paid = payment.getAmountPaid() == null ? BigDecimal.ZERO : payment.getAmountPaid();
         Paragraph paragraph = new Paragraph();
         paragraph.add(new Phrase("FORMA DE COBRO\n", Pdfs.LABEL));
@@ -232,8 +232,8 @@ public class InvoicePdfService {
             paragraph.add(new Phrase("Pendiente de cobro. Vencimiento: "
                     + Pdfs.day(payment.getDueDate()) + ".", Pdfs.BODY));
         }
-        if (issuer.getIssuerIban() != null && !issuer.getIssuerIban().isBlank()) {
-            paragraph.add(new Phrase("\nCuenta: " + issuer.getIssuerIban().trim(), Pdfs.BODY));
+        if (issuer.iban() != null && !issuer.iban().isBlank()) {
+            paragraph.add(new Phrase("\nCuenta: " + issuer.iban().trim(), Pdfs.BODY));
         }
         if (payment.getTransactionReference() != null && !payment.getTransactionReference().isBlank()) {
             paragraph.add(new Phrase("\nReferencia: " + payment.getTransactionReference().trim(), Pdfs.SMALL));
@@ -254,13 +254,13 @@ public class InvoicePdfService {
     }
 
     /** El pie: la exención cuando toca, y de dónde sale el documento. */
-    private Paragraph footer(boolean vatApplicable) {
+    private Paragraph footer(boolean vatApplicable, InvoiceIssuer.Issuer issuer) {
         Paragraph paragraph = new Paragraph();
         if (!vatApplicable) {
             paragraph.add(new Phrase("Operación exenta del Impuesto sobre el Valor Añadido, "
                     + "artículo 20.Uno.23º de la Ley 37/1992 (arrendamiento de vivienda).\n", Pdfs.SMALL));
         }
-        paragraph.add(new Phrase("Factura expedida por " + orMissing(issuer.getIssuerName())
+        paragraph.add(new Phrase("Factura expedida por " + orMissing(issuer.name())
                 + ", entidad en régimen de atribución de rentas. "
                 + "Documento generado por BoxVault; conserve esta factura a efectos fiscales.", Pdfs.SMALL));
         return paragraph;

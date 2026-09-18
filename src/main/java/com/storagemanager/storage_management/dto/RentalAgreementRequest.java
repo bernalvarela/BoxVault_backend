@@ -35,5 +35,11 @@ public class RentalAgreementRequest {
 
     private Boolean autoRenew = true;
 
+    /**
+     * Si de este contrato se emiten facturas al cobrar. Sólo vale en unidades con
+     * IVA: el alquiler de vivienda está exento y no se factura.
+     */
+    private Boolean generatesInvoices;
+
     private String notes;
 }

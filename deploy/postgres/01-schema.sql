@@ -103,6 +103,9 @@ CREATE TABLE rental_agreements (
     deposit_paid         BOOLEAN,
     status               VARCHAR(30) NOT NULL,
     auto_renew           BOOLEAN,
+    -- Si de este contrato sale factura al cobrar. NULL = no; sólo se puede
+    -- marcar en unidades con IVA (una vivienda está exenta y no factura).
+    generates_invoices   BOOLEAN,
     notes                TEXT,
     created_at           TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
     updated_at           TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
@@ -244,6 +247,8 @@ CREATE TABLE owners (
     document_id  VARCHAR(50),
     email        VARCHAR(150),
     phone        VARCHAR(50),
+    -- Domicilio fiscal: sale en las facturas y los contratos que emite.
+    address      VARCHAR(255),
     bank_account VARCHAR(50),
     notes        TEXT,
     created_at   TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,

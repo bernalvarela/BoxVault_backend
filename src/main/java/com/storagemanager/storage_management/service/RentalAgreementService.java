@@ -92,6 +92,7 @@ public class RentalAgreementService {
 
         String agreementNumber = "RNT-" + LocalDate.now().getYear() + "-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
 
+        // Facturar sólo donde hay IVA que repercutir (ver invoicingAllowed).
         RentalAgreement agreement = RentalAgreement.builder()
                 .agreementNumber(agreementNumber)
                 .storageUnit(unit)
@@ -107,6 +108,7 @@ public class RentalAgreementService {
                 // histórico que se está registrando, no un alquiler que empieza.
                 .status(inForce ? RentalStatus.ACTIVE : RentalStatus.TERMINATED)
                 .autoRenew(request.getAutoRenew() != null ? request.getAutoRenew() : true)
+                .generatesInvoices(invoicingAllowed(unit, request.getGeneratesInvoices()))
                 .notes(request.getNotes())
                 .build();
 
@@ -152,6 +154,9 @@ public class RentalAgreementService {
         agreement.setSecurityDeposit(request.getSecurityDeposit());
         if (request.getDepositPaid() != null) {
             agreement.setDepositPaid(request.getDepositPaid());
+        }
+        if (request.getGeneratesInvoices() != null) {
+            agreement.setGeneratesInvoices(invoicingAllowed(agreement.getStorageUnit(), request.getGeneratesInvoices()));
         }
         if (request.getAutoRenew() != null) {
             agreement.setAutoRenew(request.getAutoRenew());
@@ -331,5 +336,20 @@ public class RentalAgreementService {
         storageUnitRepository.save(unit);
 
         return rentalAgreementRepository.save(agreement);
+    }
+
+    /**
+     * Si este contrato puede facturar. Sólo donde hay IVA que repercutir: el
+     * alquiler de vivienda está exento (artículo 20.Uno.23º de la Ley 37/1992) y
+     * de él no se emiten facturas, así que marcarlo se rechaza en vez de aceptar
+     * una casilla que luego no haría nada.
+     */
+    private boolean invoicingAllowed(StorageUnit unit, Boolean requested) {
+        if (!Boolean.TRUE.equals(requested)) return false;
+        if (unit != null && !unit.isVatApplicable()) {
+            throw new BadRequestException("El alquiler de " + unit.getName()
+                    + " está exento de IVA: de este contrato no se pueden emitir facturas");
+        }
+        return true;
     }
 }

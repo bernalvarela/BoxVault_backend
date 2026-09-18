@@ -5,14 +5,15 @@ import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Quién emite las facturas y los contratos ({@code boxvault.invoicing.*}).
+ * Lo que hace falta para emitir facturas y contratos y no es de nadie en
+ * concreto ({@code boxvault.invoicing.*}): la serie de facturación, la plantilla
+ * del contrato y unos datos de emisor de respaldo.
  * <p>
- * Son los datos de la comunidad de bienes propietaria de los bajos: su nombre,
- * su NIF, su dirección y la cuenta donde se domicilian los recibos. Van en la
- * configuración y no en la base de datos porque no cambian nunca y porque hacen
- * falta antes de que haya nada que consultar; el NIF y el IBAN, además, llegan
- * por variable de entorno en el servidor, que no es cosa de dejarlos escritos en
- * el repositorio.
+ * Quién emite NO se configura aquí: es el propietario de la unidad, y sus datos
+ * —nombre, NIF, domicilio, IBAN— salen de su ficha, que es donde ya están y
+ * donde los mantiene quien lleva la casa (ver {@code InvoiceIssuer}). Los
+ * {@code issuer-*} de aquí sólo rellenan lo que falte en esa ficha, para una
+ * instalación que todavía no tenga propietarios cargados.
  * <p>
  * Lo que falte sale en el PDF como un hueco visible ({@code ...}) en vez de
  * desaparecer sin más: una factura sin NIF no vale, y es mejor que se vea al

@@ -185,6 +185,7 @@ public class OwnerService {
         owner.setDocumentId(trimToNull(request.getDocumentId()));
         owner.setEmail(trimToNull(request.getEmail()));
         owner.setPhone(trimToNull(request.getPhone()));
+        owner.setAddress(trimToNull(request.getAddress()));
         owner.setBankAccount(trimToNull(request.getBankAccount()));
         owner.setNotes(trimToNull(request.getNotes()));
     }
@@ -219,6 +220,7 @@ public class OwnerService {
                 .documentId(owner.getDocumentId())
                 .email(owner.getEmail())
                 .phone(owner.getPhone())
+                .address(owner.getAddress())
                 .bankAccount(owner.getBankAccount())
                 .notes(owner.getNotes())
                 .createdAt(owner.getCreatedAt())

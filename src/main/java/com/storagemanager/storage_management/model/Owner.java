@@ -49,6 +49,14 @@ public class Owner {
     @Column(length = 50)
     private String phone;
 
+    /**
+     * Domicilio fiscal, en una línea. Sale en las facturas y en los contratos
+     * que emite la comunidad, así que va con ella y no en la configuración del
+     * servidor: lo mantiene quien lleva la casa, desde la propia aplicación.
+     */
+    @Column(length = 255)
+    private String address;
+
     /** IBAN where this owner's share of the profits is transferred. */
     @Column(length = 50)
     private String bankAccount;

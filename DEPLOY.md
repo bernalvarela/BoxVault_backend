@@ -127,10 +127,18 @@ docker compose pull && docker compose up -d
   To turn it off again, drop the `ports:` block from the `rustfs` service and set
   `RUSTFS_CONSOLE_ENABLE: "false"`.
 - **Invoices and contracts** — the PDFs the app issues (one invoice per collected
-  month, the contract from its template) carry the issuer's fiscal data, and that
-  comes from `.env`. A missing value is printed as a visible gap (`..........`)
-  rather than silently dropped, so an invoice with no NIF looks wrong instead of
-  passing for good:
+  month, the contract from its template) are headed by the **owner of the unit**,
+  and its data comes from the *Propietarios* screen: name, NIF, fiscal address
+  and IBAN of the comunidad de bienes. That is where it already lives and where
+  whoever runs the place maintains it — nothing to redeploy to change a phone
+  number. Between several owners the comunidad de bienes wins (it is the one with
+  a NIF of its own); a unit with no shares of its own inherits its local's, the
+  same rule the tax reports use.
+
+  The `.env` values below are only a **fallback** for whatever that owner record
+  leaves empty — useful on an install with no owners loaded yet. A missing value
+  is printed as a visible gap (`..........`) rather than silently dropped, so an
+  invoice with no NIF looks wrong instead of passing for good:
 
   | Variable | What it is |
   | --- | --- |
@@ -144,6 +152,9 @@ docker compose pull && docker compose up -d
 
   Invoice numbers are correlative per year and are kept on the charge once issued,
   so re-issuing hands back the same document rather than burning a new number.
+  A tenancy only invoices when its contract is ticked for it ("Emitir factura de
+  cada mensualidad"); then every collection issues one by itself. VAT-exempt
+  units (dwellings) can't be ticked and can't be invoiced at all.
   The contract text lives in `src/main/resources/plantillas/contrato-alquiler.txt`
   and is a plain-text template with `{{field}}` marks: editing a clause is a
   redeploy of the app, not a code change.

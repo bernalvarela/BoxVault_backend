@@ -15,6 +15,8 @@ import com.storagemanager.storage_management.security.UnitScope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -34,6 +36,7 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final RentalAgreementRepository rentalAgreementRepository;
     private final UnitScope unitScope;
+    private final InvoiceService invoices;
 
     /**
      * Cada cobro lleva su unidad, así que el ámbito se aplica directamente sobre
@@ -103,7 +106,7 @@ public class PaymentService {
                 .notes(request.getNotes())
                 .build();
 
-        return paymentRepository.save(payment);
+        return collected(paymentRepository.save(payment));
     }
 
     @Transactional
@@ -124,7 +127,7 @@ public class PaymentService {
         // lo que falte lo refleja el cargo del periodo (BillingService), no el estado.
         payment.setStatus(PaymentStatus.PAID);
 
-        return paymentRepository.save(payment);
+        return collected(paymentRepository.save(payment));
     }
 
     @Transactional
@@ -139,7 +142,35 @@ public class PaymentService {
         if (reference != null) {
             payment.setTransactionReference(reference);
         }
-        return paymentRepository.save(payment);
+        return collected(paymentRepository.save(payment));
+    }
+
+    /**
+     * Lo que pasa después de guardar un cobro: si el contrato está marcado para
+     * facturar, sale su factura. Va por aquí y no en cada método para que no se
+     * quede ningún camino fuera —cobro rápido, corrección a mano, alta directa—:
+     * facturar depende de que haya entrado dinero, no de por dónde se registró.
+     * <p>
+     * Se hace cuando la transacción del cobro ya ha confirmado, y no dentro de
+     * ella, a propósito: emitir la factura escribe en la base y en el almacén de
+     * ficheros, y si eso fallara dentro de la misma transacción se llevaría el
+     * cobro por delante —aunque el error se capture, la transacción ya estaría
+     * marcada para deshacerse—. Registrar el dinero recibido es lo que no se
+     * puede perder; la factura, si falla, se pide luego a mano.
+     */
+    private Payment collected(Payment payment) {
+        Long id = payment.getId();
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            invoices.issueIfEnabled(id);
+            return payment;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                invoices.issueIfEnabled(id);
+            }
+        });
+        return payment;
     }
 
     /**
@@ -191,7 +222,7 @@ public class PaymentService {
             payment.setDueDate(billingDate(agreement, year, month));
         }
 
-        return paymentRepository.save(payment);
+        return collected(paymentRepository.save(payment));
     }
 
     /**

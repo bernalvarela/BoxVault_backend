@@ -24,6 +24,8 @@ public class OwnerDTO {
     private String documentId;
     private String email;
     private String phone;
+    /** Domicilio fiscal, en una línea; sale en las facturas y los contratos. */
+    private String address;
     private String bankAccount;
     private String notes;
     private LocalDateTime createdAt;

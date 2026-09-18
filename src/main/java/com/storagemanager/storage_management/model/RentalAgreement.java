@@ -69,6 +69,24 @@ public class RentalAgreement {
     @Builder.Default
     private Boolean autoRenew = true;
 
+    /**
+     * Si de este contrato se emiten facturas: al registrar un cobro sale sola la
+     * factura de esa mensualidad, con su número de serie.
+     * <p>
+     * Se decide por contrato y no por unidad porque no depende del trastero sino
+     * de quién lo alquila: una empresa necesita la factura para deducirse el IVA
+     * y un particular no la pide nunca. Por defecto no: una factura emitida
+     * consume un número de la serie y ya no se puede deshacer, así que se marca
+     * a conciencia. En un alquiler de vivienda no se puede marcar: está exento.
+     */
+    @Builder.Default
+    private Boolean generatesInvoices = false;
+
+    /** Nunca null: un contrato sin marcar no factura. */
+    public boolean invoices() {
+        return Boolean.TRUE.equals(generatesInvoices);
+    }
+
     @Column(columnDefinition = "TEXT")
     private String notes;
 

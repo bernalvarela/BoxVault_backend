@@ -10,6 +10,7 @@ import org.openpdf.text.pdf.PdfPCell;
 import org.openpdf.text.pdf.PdfPTable;
 import org.openpdf.text.pdf.PdfWriter;
 import com.storagemanager.storage_management.config.InvoicingProperties;
+import com.storagemanager.storage_management.service.InvoiceIssuer;
 import com.storagemanager.storage_management.config.VatUtils;
 import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.model.RentalAgreement;
@@ -55,11 +56,11 @@ public class ContractPdfService {
 
     private static final Pattern FIELD = Pattern.compile("\\{\\{([a-z_]+)}}");
 
-    private final InvoicingProperties issuer;
+    private final InvoicingProperties properties;
 
-    public byte[] render(RentalAgreement rental) {
+    public byte[] render(RentalAgreement rental, InvoiceIssuer.Issuer issuer) {
         String template = loadTemplate();
-        Map<String, String> values = values(rental);
+        Map<String, String> values = values(rental, issuer);
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         Document pdf = new Document(PageSize.A4, 56, 56, 56, 56);
@@ -83,12 +84,12 @@ public class ContractPdfService {
     // --- La plantilla ------------------------------------------------------
 
     private String loadTemplate() {
-        ClassPathResource resource = new ClassPathResource(issuer.getContractTemplate());
+        ClassPathResource resource = new ClassPathResource(properties.getContractTemplate());
         try (InputStream in = resource.getInputStream()) {
             return new String(in.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new UncheckedIOException(
-                    "No se pudo leer la plantilla del contrato: " + issuer.getContractTemplate(), e);
+                    "No se pudo leer la plantilla del contrato: " + properties.getContractTemplate(), e);
         }
     }
 
@@ -207,7 +208,7 @@ public class ContractPdfService {
 
     // --- Los datos ---------------------------------------------------------
 
-    private Map<String, String> values(RentalAgreement rental) {
+    private Map<String, String> values(RentalAgreement rental, InvoiceIssuer.Issuer issuer) {
         StorageUnit unit = rental.getStorageUnit();
         Client client = rental.getClient();
         boolean vatApplicable = unit != null && unit.isVatApplicable();
@@ -216,15 +217,15 @@ public class ContractPdfService {
 
         Map<String, String> values = new HashMap<>();
         values.put("fecha_larga", Pdfs.longDay(rental.getStartDate() == null ? LocalDate.now() : rental.getStartDate()));
-        values.put("lugar", orMissing(issuer.getIssuerCity()));
+        values.put("lugar", orMissing(issuer.city()));
 
-        values.put("arrendador_nombre", orMissing(issuer.getIssuerName()));
-        values.put("arrendador_nif", orMissing(issuer.getIssuerTaxId()));
-        values.put("arrendador_direccion", orMissing(issuer.getIssuerAddress()));
-        values.put("arrendador_ciudad", orMissing(issuer.getIssuerCity()));
-        values.put("arrendador_email", orMissing(issuer.getIssuerEmail()));
-        values.put("arrendador_telefono", orMissing(issuer.getIssuerPhone()));
-        values.put("arrendador_iban", orMissing(issuer.getIssuerIban()));
+        values.put("arrendador_nombre", orMissing(issuer.name()));
+        values.put("arrendador_nif", orMissing(issuer.taxId()));
+        values.put("arrendador_direccion", orMissing(issuer.address()));
+        values.put("arrendador_ciudad", orMissing(issuer.city()));
+        values.put("arrendador_email", orMissing(issuer.email()));
+        values.put("arrendador_telefono", orMissing(issuer.phone()));
+        values.put("arrendador_iban", orMissing(issuer.iban()));
 
         values.put("arrendatario_nombre", client == null ? orMissing(null) : client.getFullName());
         values.put("arrendatario_nif", client == null ? orMissing(null) : orMissing(client.getDocumentId()));
