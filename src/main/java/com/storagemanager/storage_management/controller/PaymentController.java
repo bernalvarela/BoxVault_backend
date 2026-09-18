@@ -149,4 +149,20 @@ public class PaymentController {
     public ResponseEntity<Resource> getInvoice(@PathVariable Long id) {
         return DocumentDownload.respond(invoiceService.open(id));
     }
+
+    /**
+     * Vuelve a componer el PDF de la factura, con su mismo número y su misma
+     * fecha, y sustituye el archivado. Es para cuando lo que estaba mal era el
+     * papel; si lo que está mal es el importe o el cliente, lo que procede es una
+     * rectificativa y no esto.
+     * <p>
+     * Pide ADMINISTRAR y no ESCRIBIR porque reescribe un documento ya entregado:
+     * es una corrección, no la operación de cada día.
+     */
+    @PreAuthorize("@access.can('PAGOS','ADMINISTRAR')")
+    @PostMapping("/{id}/invoice/regenerate")
+    public ResponseEntity<Resource> regenerateInvoice(@PathVariable Long id) {
+        invoiceService.regenerate(id);
+        return DocumentDownload.respond(invoiceService.open(id));
+    }
 }

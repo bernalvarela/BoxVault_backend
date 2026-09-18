@@ -155,6 +155,13 @@ docker compose pull && docker compose up -d
   A tenancy only invoices when its contract is ticked for it ("Emitir factura de
   cada mensualidad"); then every collection issues one by itself. VAT-exempt
   units (dwellings) can't be ticked and can't be invoiced at all.
+
+  An invoice whose **paper** came out wrong — a missing issuer NIF, say — can be
+  redone from the charge (needs ADMINISTRAR on PAGOS): same number, same issue
+  date, new PDF replacing the archived one. That is not a new invoice, it is the
+  same one printed again. When the **operation** is wrong (amount, tenant,
+  period) the delivered invoice stands and what applies is a *factura
+  rectificativa* — not implemented yet.
   The contract text lives in `src/main/resources/plantillas/contrato-alquiler.txt`
   and is a plain-text template with `{{field}}` marks: editing a clause is a
   redeploy of the app, not a code change.

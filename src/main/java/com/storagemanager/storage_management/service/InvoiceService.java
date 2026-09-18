@@ -119,6 +119,54 @@ public class InvoiceService {
         }
     }
 
+    /**
+     * Vuelve a componer el PDF de una factura ya emitida, **con su mismo número y
+     * su misma fecha**, y sustituye el archivado.
+     * <p>
+     * Esto no emite una factura nueva: es la misma, vuelta a imprimir. Sirve para
+     * cuando lo que estaba mal era el papel y no la operación —faltaba el NIF del
+     * emisor, el mes salía en inglés—, y por eso el PDF anterior se borra: no era
+     * más que un dibujo de los mismos datos.
+     * <p>
+     * Lo que NO sirve es para corregir la operación. Si lo que está mal es el
+     * importe, el cliente o el periodo, la factura entregada sigue existiendo y
+     * lo que procede es una rectificativa (artículo 15 del Reglamento de
+     * facturación): un documento nuevo, con su número, que dice qué corrige.
+     * Volver a imprimir ésta con otras cifras deja al inquilino con un papel y a
+     * la contabilidad con otro, los dos con el mismo número.
+     */
+    @Transactional
+    public Invoice regenerate(Long paymentId) {
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found with id: " + paymentId));
+        unitScope.requireAccessible(payment.getStorageUnit());
+
+        if (payment.getInvoiceNumber() == null || payment.getInvoiceDocument() == null) {
+            throw new BadRequestException("El cobro " + paymentId + " no tiene ninguna factura que rehacer");
+        }
+        String number = payment.getInvoiceNumber();
+        LocalDate issuedOn = payment.getInvoicedAt() != null ? payment.getInvoicedAt() : LocalDate.now();
+        Document previous = payment.getInvoiceDocument();
+        Long rentalId = payment.getRentalAgreement().getId();
+
+        byte[] content = pdf.render(payment, number, issuedOn, issuers.forUnit(payment.getStorageUnit()));
+        String period = Pdfs.monthOf(payment.getBillingPeriodYear(), payment.getBillingPeriodMonth());
+
+        // El nuevo primero y el viejo después: si algo falla por el camino, el
+        // cobro nunca queda apuntando a un documento que ya no está.
+        Document document = rentalDocuments.attach(rentalId,
+                "factura-" + number.replace('/', '-') + ".pdf",
+                "application/pdf", content, DocumentType.FACTURA,
+                "Factura " + number + " · " + period);
+        payment.setInvoiceDocument(document);
+        paymentRepository.save(payment);
+        rentalDocuments.delete(rentalId, previous.getId());
+
+        log.info("Rehecha la factura {} del cobro {}: mismo número y misma fecha ({})",
+                number, paymentId, Pdfs.day(issuedOn));
+        return new Invoice(number, document);
+    }
+
     /** El PDF de una factura ya emitida, para descargarlo. */
     public DocumentService.Content open(Long paymentId) {
         Payment payment = paymentRepository.findById(paymentId)
