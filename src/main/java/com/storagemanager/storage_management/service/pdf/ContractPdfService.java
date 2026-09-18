@@ -3,43 +3,30 @@ package com.storagemanager.storage_management.service.pdf;
 import org.openpdf.text.Document;
 import org.openpdf.text.DocumentException;
 import org.openpdf.text.Element;
+import org.openpdf.text.Image;
 import org.openpdf.text.PageSize;
 import org.openpdf.text.Paragraph;
 import org.openpdf.text.Phrase;
 import org.openpdf.text.pdf.PdfPCell;
 import org.openpdf.text.pdf.PdfPTable;
 import org.openpdf.text.pdf.PdfWriter;
-import com.storagemanager.storage_management.config.InvoicingProperties;
-import com.storagemanager.storage_management.service.InvoiceIssuer;
-import com.storagemanager.storage_management.config.VatUtils;
-import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.model.RentalAgreement;
-import com.storagemanager.storage_management.model.StorageUnit;
-import lombok.RequiredArgsConstructor;
+import com.storagemanager.storage_management.service.InvoiceIssuer;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UncheckedIOException;
-import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
-import java.time.LocalDate;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static com.storagemanager.storage_management.config.InvoicingProperties.orMissing;
-
 /**
- * El contrato de alquiler en PDF, a partir de la plantilla de texto
- * ({@code plantillas/contrato-alquiler.txt}).
+ * El contrato de alquiler en PDF, a partir de una plantilla de texto.
  * <p>
  * El texto legal vive en la plantilla y no aquí: cambiar una cláusula, añadir
- * una cuenta nueva o corregir una errata no debería obligar a recompilar nada.
+ * una cuenta nueva o corregir una errata se hace desde la pantalla de plantillas,
+ * sin recompilar ni desplegar nada.
  * Este servicio sólo hace dos cosas —sustituir los {@code {{campos}}} por los
  * datos del contrato y componer el resultado en un PDF— y entiende la marca
  * mínima que hace falta para que un contrato se lea: títulos, párrafos,
@@ -51,16 +38,43 @@ import static com.storagemanager.storage_management.config.InvoicingProperties.o
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ContractPdfService {
 
     private static final Pattern FIELD = Pattern.compile("\\{\\{([a-z_]+)}}");
 
-    private final InvoicingProperties properties;
+    /** [[imagen:logo]] o [[imagen:logo|40]], donde 40 es el ancho en % de la caja de texto. */
+    private static final Pattern IMAGE = Pattern.compile("\\[\\[imagen:([^|\\]]+)(?:\\|\\s*(\\d{1,3})\\s*)?]]");
 
-    public byte[] render(RentalAgreement rental, InvoiceIssuer.Issuer issuer) {
-        String template = loadTemplate();
-        Map<String, String> values = values(rental, issuer);
+    /** Un punto de una lista numerada: "1. ", "2) ". El número lo pone el compositor. */
+    private static final Pattern NUMBERED = Pattern.compile("^\\d{1,3}[.)]\\s+(.*)$");
+
+    /**
+     * Los atributos que puede llevar un bloque delante: [centro], [pequeño]...
+     * Se admiten varios seguidos. Un corchete simple no choca ni con {{campo}} ni
+     * con [[marca]], así que no hay que escapar nada.
+     */
+    private static final Pattern ATTRIBUTE = Pattern.compile("^\\[([a-záéíóúñ-]+)]\\s*");
+
+    /**
+     * Los tramos con formato dentro de un párrafo. El orden importa: la negrita
+     * se busca antes que la cursiva, o "**algo**" se leería como una cursiva que
+     * empieza y acaba en asterisco.
+     */
+    private static final Pattern INLINE = Pattern.compile("\\*\\*(.+?)\\*\\*|\\*(.+?)\\*|__(.+?)__");
+
+
+    public byte[] render(RentalAgreement rental, InvoiceIssuer.Issuer issuer, String template) {
+        return render(rental, issuer, template, name -> null);
+    }
+
+    /**
+     * Igual, pero sabiendo de dónde sacar las imágenes que la plantilla pida por
+     * su nombre ({@code [[imagen:logo]]}). Quien llama decide de dónde salen; el
+     * compositor sólo las coloca.
+     */
+    public byte[] render(RentalAgreement rental, InvoiceIssuer.Issuer issuer, String template,
+                         Function<String, byte[]> images) {
+        Map<String, String> values = ContractFields.of(rental, issuer);
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         Document pdf = new Document(PageSize.A4, 56, 56, 56, 56);
@@ -69,8 +83,18 @@ public class ContractPdfService {
             pdf.addTitle("Contrato de arrendamiento " + rental.getAgreementNumber());
             pdf.addCreator("BoxVault");
             pdf.open();
+            // El número de los puntos de una lista lo lleva el compositor y no la
+            // plantilla: así reordenar dos cláusulas no obliga a renumerarlas a
+            // mano, que es donde siempre se cuela un "3." repetido.
+            int ordinal = 0;
             for (String block : blocks(template)) {
-                pdf.add(compose(fill(block, values)));
+                String text = fill(block, values);
+                ordinal = NUMBERED.matcher(stripAttributes(text).text()).matches() ? ordinal + 1 : 0;
+                if (text.trim().equals("[[pagina]]")) {
+                    pdf.newPage();
+                    continue;
+                }
+                pdf.add(compose(text, images, ordinal));
             }
         } catch (DocumentException e) {
             throw new IllegalStateException(
@@ -82,16 +106,6 @@ public class ContractPdfService {
     }
 
     // --- La plantilla ------------------------------------------------------
-
-    private String loadTemplate() {
-        ClassPathResource resource = new ClassPathResource(properties.getContractTemplate());
-        try (InputStream in = resource.getInputStream()) {
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new UncheckedIOException(
-                    "No se pudo leer la plantilla del contrato: " + properties.getContractTemplate(), e);
-        }
-    }
 
     /**
      * Parte la plantilla en bloques: los comentarios se caen, una línea en
@@ -112,7 +126,12 @@ public class ContractPdfService {
             }
             // Los títulos y las viñetas son bloques por sí mismos: no se pegan al
             // párrafo anterior aunque no haya una línea en blanco por medio.
-            boolean ownBlock = line.startsWith("#") || line.startsWith("- ") || line.startsWith("[[");
+            // Un bloque propio no se pega al párrafo anterior aunque no haya una
+            // línea en blanco por medio: títulos, puntos de lista, marcas y
+            // cualquier línea que traiga atributos delante.
+            String bare = stripAttributes(line.trim()).text();
+            boolean ownBlock = line.startsWith("#") || bare.startsWith("- ") || line.startsWith("[[")
+                    || line.startsWith("[") || NUMBERED.matcher(bare).matches();
             if (ownBlock && current.length() > 0) {
                 blocks.add(current.toString());
                 current.setLength(0);
@@ -146,45 +165,179 @@ public class ContractPdfService {
 
     // --- La composición ----------------------------------------------------
 
-    private Element compose(String block) {
-        if (block.equals("[[firmas]]")) return signatures();
+    private Element compose(String block, Function<String, byte[]> images, int ordinal) {
+        Styled styled = stripAttributes(block);
+        String text = styled.text();
 
-        if (block.startsWith("## ")) {
-            Paragraph heading = new Paragraph(block.substring(3), Pdfs.H2);
-            heading.setSpacingBefore(14);
-            heading.setSpacingAfter(4);
-            return heading;
+        if (text.equals("[[firmas]]")) return signatures();
+
+        Matcher image = IMAGE.matcher(text);
+        if (image.matches()) return image(image.group(1).trim(), image.group(2), images);
+
+        if (text.startsWith("### ")) {
+            return heading(text.substring(4), styled.size(11.5f), 10, 3, styled.alignment(Element.ALIGN_LEFT));
         }
-        if (block.startsWith("# ")) {
-            Paragraph title = new Paragraph(block.substring(2), Pdfs.TITLE);
-            title.setAlignment(Element.ALIGN_CENTER);
-            title.setSpacingAfter(16);
-            return title;
+        if (text.startsWith("## ")) {
+            return heading(text.substring(3), styled.size(11f), 14, 4, styled.alignment(Element.ALIGN_LEFT));
         }
-        if (block.startsWith("- ")) {
-            Paragraph bullet = rich("•   " + block.substring(2));
-            bullet.setIndentationLeft(14);
-            bullet.setSpacingAfter(3);
-            return bullet;
+        if (text.startsWith("# ")) {
+            return heading(text.substring(2), styled.size(18f), 0, 16, styled.alignment(Element.ALIGN_CENTER));
         }
-        Paragraph paragraph = rich(block);
-        paragraph.setAlignment(Element.ALIGN_JUSTIFIED);
+
+        // Los puntos de una lista: la viñeta o el número, y el texto sangrado a la
+        // misma altura, de modo que la segunda línea no se mete debajo del punto.
+        Matcher numbered = NUMBERED.matcher(text);
+        if (numbered.matches()) {
+            return item(ordinal + ".", numbered.group(1), styled);
+        }
+        if (text.startsWith("- ")) {
+            return item("•", text.substring(2), styled);
+        }
+
+        Paragraph paragraph = rich(text, styled.size(10f));
+        paragraph.setAlignment(styled.alignment(Element.ALIGN_JUSTIFIED));
         paragraph.setSpacingAfter(8);
         return paragraph;
     }
 
-    /** Un párrafo con los tramos entre ** en negrita. */
-    private Paragraph rich(String text) {
+    /** Un título de cualquiera de los tres niveles. */
+    private Paragraph heading(String text, float size, float before, float after, int alignment) {
+        Paragraph heading = new Paragraph(text, Pdfs.font(size, org.openpdf.text.Font.BOLD, Pdfs.INK));
+        heading.setAlignment(alignment);
+        heading.setSpacingBefore(before);
+        heading.setSpacingAfter(after);
+        return heading;
+    }
+
+    /** Un punto de lista: su marca y el texto, con sangría francesa. */
+    private Paragraph item(String bullet, String text, Styled styled) {
+        float size = styled.size(10f);
+        Paragraph paragraph = rich(bullet + "   " + text, size);
+        paragraph.setIndentationLeft(14 + size);
+        // La sangría francesa: la primera línea sale hacia la izquierda, así que
+        // la marca queda fuera y el texto alineado consigo mismo.
+        paragraph.setFirstLineIndent(-(size + 6));
+        paragraph.setAlignment(styled.alignment(Element.ALIGN_LEFT));
+        paragraph.setSpacingAfter(3);
+        return paragraph;
+    }
+
+    /**
+     * Lo que un bloque trae delante entre corchetes —[centro], [pequeño]— y lo
+     * que queda después de quitarlo.
+     *
+     * @param alignment alineación pedida, o -1 si el bloque no dijo nada
+     * @param size      tamaño de letra pedido, o -1
+     */
+    private record Styled(String text, int alignment, float size) {
+        int alignment(int byDefault) { return alignment < 0 ? byDefault : alignment; }
+        float size(float byDefault) { return size < 0 ? byDefault : size; }
+    }
+
+    /** Separa los atributos del texto. Un atributo que no se conozca se deja pasar tal cual. */
+    private Styled stripAttributes(String block) {
+        String text = block;
+        int alignment = -1;
+        float size = -1f;
+
+        Matcher matcher = ATTRIBUTE.matcher(text);
+        while (matcher.find()) {
+            String name = matcher.group(1);
+            Integer align = switch (name) {
+                case "izquierda" -> Element.ALIGN_LEFT;
+                case "centro" -> Element.ALIGN_CENTER;
+                case "derecha" -> Element.ALIGN_RIGHT;
+                case "justificado" -> Element.ALIGN_JUSTIFIED;
+                default -> null;
+            };
+            Float points = switch (name) {
+                case "diminuto" -> 7f;
+                case "pequeño" -> 8.5f;
+                case "normal" -> 10f;
+                case "grande" -> 13f;
+                case "enorme" -> 16f;
+                default -> null;
+            };
+            if (align == null && points == null) break; // no es un atributo: es texto
+            if (align != null) alignment = align;
+            if (points != null) size = points;
+            text = text.substring(matcher.end());
+            matcher = ATTRIBUTE.matcher(text);
+        }
+        return new Styled(text, alignment, size);
+    }
+
+    /**
+     * Un párrafo con sus tramos resaltados: {@code **negrita**}, {@code *cursiva*}
+     * y {@code __subrayado__}. Lo que queda fuera va en redonda.
+     */
+    private Paragraph rich(String text, float size) {
         Paragraph paragraph = new Paragraph();
-        paragraph.setLeading(14);
-        boolean bold = false;
-        for (String piece : text.split("\\*\\*", -1)) {
-            if (!piece.isEmpty()) {
-                paragraph.add(new Phrase(piece, bold ? Pdfs.BODY_BOLD : Pdfs.BODY));
+        // El interlineado sigue al tamaño: con 1,4 el texto respira igual sea
+        // cual sea la letra, que es lo que se pierde al fijarlo en 14 puntos.
+        paragraph.setLeading(size * 1.4f);
+
+        Matcher matcher = INLINE.matcher(text);
+        int at = 0;
+        while (matcher.find()) {
+            if (matcher.start() > at) {
+                paragraph.add(new Phrase(text.substring(at, matcher.start()), body(size, org.openpdf.text.Font.NORMAL)));
             }
-            bold = !bold;
+            if (matcher.group(1) != null) {
+                paragraph.add(new Phrase(matcher.group(1), body(size, org.openpdf.text.Font.BOLD)));
+            } else if (matcher.group(2) != null) {
+                paragraph.add(new Phrase(matcher.group(2), body(size, org.openpdf.text.Font.ITALIC)));
+            } else {
+                paragraph.add(new Phrase(matcher.group(3), body(size, org.openpdf.text.Font.UNDERLINE)));
+            }
+            at = matcher.end();
+        }
+        if (at < text.length()) {
+            paragraph.add(new Phrase(text.substring(at), body(size, org.openpdf.text.Font.NORMAL)));
         }
         return paragraph;
+    }
+
+    private static org.openpdf.text.Font body(float size, int style) {
+        return Pdfs.font(size, style, Pdfs.INK);
+    }
+
+    /**
+     * Una imagen de la plantilla, centrada y a lo ancho que se le pida (en % de
+     * la caja de texto; por defecto la mitad).
+     * <p>
+     * Si la imagen no está —se borró, o el nombre está mal escrito— no revienta
+     * el contrato: deja dicho en su sitio qué falta, igual que un campo que no
+     * existe. Un contrato al que le falta el logotipo se firma igual; uno que no
+     * se puede generar, no.
+     */
+    private Element image(String name, String widthPercent, Function<String, byte[]> images) {
+        byte[] bytes = images == null ? null : images.apply(name);
+        if (bytes == null || bytes.length == 0) {
+            Paragraph missing = new Paragraph("[falta la imagen \"" + name + "\"]", Pdfs.SMALL);
+            missing.setAlignment(Element.ALIGN_CENTER);
+            return missing;
+        }
+        try {
+            Image image = Image.getInstance(bytes);
+            float percent = widthPercent == null ? 50f : Math.min(100f, Math.max(5f, Float.parseFloat(widthPercent)));
+            // scaleToFit sobre el ancho de la caja de texto de un A4 con los
+            // márgenes de este documento; el alto se deja libre y se ajusta solo.
+            float boxWidth = PageSize.A4.getWidth() - 112f;
+            image.scaleToFit(boxWidth * percent / 100f, PageSize.A4.getHeight());
+            image.setAlignment(Element.ALIGN_CENTER);
+            Paragraph holder = new Paragraph();
+            holder.add(image);
+            holder.setAlignment(Element.ALIGN_CENTER);
+            holder.setSpacingBefore(6);
+            holder.setSpacingAfter(6);
+            return holder;
+        } catch (Exception e) {
+            log.warn("No se pudo colocar la imagen {} de la plantilla: {}", name, e.getMessage());
+            Paragraph broken = new Paragraph("[no se pudo leer la imagen \"" + name + "\"]", Pdfs.SMALL);
+            broken.setAlignment(Element.ALIGN_CENTER);
+            return broken;
+        }
     }
 
     /** Las dos columnas de firmas, al final. */
@@ -206,75 +359,4 @@ public class ContractPdfService {
         return cell;
     }
 
-    // --- Los datos ---------------------------------------------------------
-
-    private Map<String, String> values(RentalAgreement rental, InvoiceIssuer.Issuer issuer) {
-        StorageUnit unit = rental.getStorageUnit();
-        Client client = rental.getClient();
-        boolean vatApplicable = unit != null && unit.isVatApplicable();
-        VatUtils.Breakdown rent = VatUtils.breakdown(rental.getMonthlyRent(), vatApplicable);
-        BigDecimal deposit = rental.getSecurityDeposit();
-
-        Map<String, String> values = new HashMap<>();
-        values.put("fecha_larga", Pdfs.longDay(rental.getStartDate() == null ? LocalDate.now() : rental.getStartDate()));
-        values.put("lugar", orMissing(issuer.city()));
-
-        values.put("arrendador_nombre", orMissing(issuer.name()));
-        values.put("arrendador_nif", orMissing(issuer.taxId()));
-        values.put("arrendador_direccion", orMissing(issuer.address()));
-        values.put("arrendador_ciudad", orMissing(issuer.city()));
-        values.put("arrendador_email", orMissing(issuer.email()));
-        values.put("arrendador_telefono", orMissing(issuer.phone()));
-        values.put("arrendador_iban", orMissing(issuer.iban()));
-
-        values.put("arrendatario_nombre", client == null ? orMissing(null) : client.getFullName());
-        values.put("arrendatario_nif", client == null ? orMissing(null) : orMissing(client.getDocumentId()));
-        values.put("arrendatario_direccion", client == null ? orMissing(null) : orMissing(client.getAddress()));
-        values.put("arrendatario_email", client == null ? orMissing(null) : orMissing(client.getEmail()));
-        values.put("arrendatario_telefono", client == null ? orMissing(null) : orMissing(client.getPhone()));
-        values.put("coarrendatario", coTenant(rental.getCoClient()));
-
-        values.put("unidad_numero", unit == null ? orMissing(null) : unit.getUnitNumber());
-        values.put("unidad_nombre", unit == null ? orMissing(null) : unit.getName());
-        values.put("unidad_metros", unit == null || unit.getSizeSquareMeters() == null
-                ? orMissing(null) : trimZeros(unit.getSizeSquareMeters()));
-        values.put("unidad_direccion", unit == null ? orMissing(null) : orMissing(unit.getLocation()));
-
-        values.put("contrato_numero", orMissing(rental.getAgreementNumber()));
-        values.put("fecha_inicio", Pdfs.day(rental.getStartDate()));
-        values.put("fecha_fin", Pdfs.day(rental.getEndDate()));
-        values.put("duracion", rental.getEndDate() == null
-                ? "se prorrogará por periodos mensuales mientras ninguna de las partes lo denuncie"
-                : "termina el " + Pdfs.day(rental.getEndDate()));
-
-        values.put("renta_base", Pdfs.euros(rent.base()));
-        values.put("renta_iva", vatApplicable ? Pdfs.euros(rent.vat()) : Pdfs.euros(BigDecimal.ZERO));
-        values.put("renta_total", Pdfs.euros(rent.total()));
-        values.put("iva_texto", vatApplicable
-                ? "21 %, tipo general vigente"
-                : "operación exenta, artículo 20.Uno.23º de la Ley 37/1992");
-        values.put("dia_cobro", String.valueOf(rental.getBillingDayOfMonth()));
-
-        values.put("fianza", deposit == null ? Pdfs.euros(BigDecimal.ZERO) : Pdfs.euros(deposit));
-        values.put("fianza_texto", deposit == null || deposit.signum() == 0
-                ? "No se establece fianza."
-                : "EL ARRENDATARIO entrega a EL ARRENDADOR la cantidad de " + Pdfs.euros(deposit)
-                  + " en concepto de fianza.");
-        return values;
-    }
-
-    /** El párrafo del segundo titular, o nada cuando el contrato es de uno solo. */
-    private String coTenant(Client coClient) {
-        if (coClient == null) return "";
-        return "Y de otra parte, **" + coClient.getFullName() + "**, con NIF "
-               + orMissing(coClient.getDocumentId())
-               + ", que interviene igualmente como ARRENDATARIO y responde solidariamente "
-               + "de las obligaciones de este contrato.";
-    }
-
-    /** 5.0 m² queda raro en un contrato; 5 m², no. */
-    private String trimZeros(Double size) {
-        if (size == size.longValue()) return String.valueOf(size.longValue());
-        return String.valueOf(size);
-    }
 }

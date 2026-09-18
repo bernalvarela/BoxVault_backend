@@ -46,8 +46,22 @@ public class InvoiceIssuer {
 
     public Issuer forUnit(StorageUnit unit) {
         Owner owner = ownerOf(unit);
-        if (owner == null) return fromProperties();
+        return owner == null ? fromProperties() : from(owner);
+    }
 
+    /**
+     * El emisor para una vista previa, que no va de ninguna unidad concreta: la
+     * comunidad de bienes si la hay, y si no el primer propietario que conste.
+     * Con los datos de verdad, que es de lo que sirve una vista previa.
+     */
+    public Issuer any() {
+        List<Ownership> shares = ownershipRepository.findAll();
+        Owner owner = shares.stream().map(Ownership::getOwner).filter(Owner::isEntity).findFirst()
+                .orElseGet(() -> shares.stream().map(Ownership::getOwner).findFirst().orElse(null));
+        return owner == null ? fromProperties() : from(owner);
+    }
+
+    private Issuer from(Owner owner) {
         return new Issuer(
                 pick(owner.getFullName(), fallback.getIssuerName()),
                 pick(owner.getDocumentId(), fallback.getIssuerTaxId()),

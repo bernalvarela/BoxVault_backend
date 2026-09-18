@@ -3,7 +3,9 @@ package com.storagemanager.storage_management.repository;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.enums.RentalStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -25,4 +27,15 @@ public interface RentalAgreementRepository extends JpaRepository<RentalAgreement
 
     @Query("SELECT COUNT(DISTINCT r.client.id) FROM RentalAgreement r WHERE r.status = 'ACTIVE'")
     long countDistinctActiveClients();
+
+    /** Cuántos contratos tienen elegida esa plantilla. */
+    long countByContractTemplateId(Long templateId);
+
+    /**
+     * Suelta la plantilla de los contratos que la tuvieran elegida: pasan a usar
+     * la de por defecto en vez de quedarse apuntando a una que ya no existe.
+     */
+    @Modifying
+    @Query("UPDATE RentalAgreement r SET r.contractTemplate = NULL WHERE r.contractTemplate.id = :templateId")
+    void clearContractTemplate(@Param("templateId") Long templateId);
 }

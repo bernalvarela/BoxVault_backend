@@ -39,6 +39,9 @@ public final class Pdfs {
     public static final Font LABEL = font(8, Font.BOLD, MUTED);
     public static final Font BODY = font(10, Font.NORMAL, INK);
     public static final Font BODY_BOLD = font(10, Font.BOLD, INK);
+    public static final Font BODY_ITALIC = font(10, Font.ITALIC, INK);
+    public static final Font BODY_BOLD_ITALIC = font(10, Font.BOLDITALIC, INK);
+    public static final Font BODY_UNDERLINE = font(10, Font.UNDERLINE, INK);
     public static final Font SMALL = font(8, Font.NORMAL, MUTED);
     public static final Font TOTAL = font(13, Font.BOLD, INK);
 

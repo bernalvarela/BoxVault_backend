@@ -182,9 +182,14 @@ docker compose pull && docker compose up -d
   same one printed again. When the **operation** is wrong (amount, tenant,
   period) the delivered invoice stands and what applies is a *factura
   rectificativa* — not implemented yet.
-  The contract text lives in `src/main/resources/plantillas/contrato-alquiler.txt`
-  and is a plain-text template with `{{field}}` marks: editing a clause is a
-  redeploy of the app, not a code change.
+  The contract text is no longer inside the app: contract **templates** are data
+  now, managed from the *Plantillas* screen and stored in the object store next
+  to the attachments. Each tenancy can pick one; the one marked as default is
+  used when it does not. The editor lists the `{{fields}}` a template may use —
+  straight from the server, so the list cannot drift from what the generator
+  actually substitutes — and previews the PDF with made-up data before saving.
+  On a fresh install the app seeds the first template from the one it ships
+  with, so generating a contract works before anyone has written one.
 
 - **Automatic backups** — the `backup` service in the compose file. It is a
   `postgres:18.6-alpine` (the same image as the server, so `pg_dump` can never

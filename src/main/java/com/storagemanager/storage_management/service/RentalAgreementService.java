@@ -7,12 +7,14 @@ import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.model.Payment;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.RentalDocument;
+import com.storagemanager.storage_management.model.ContractTemplate;
 import com.storagemanager.storage_management.model.StorageUnit;
 import com.storagemanager.storage_management.model.enums.RentalStatus;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
 import com.storagemanager.storage_management.repository.ClientRepository;
 import com.storagemanager.storage_management.repository.PaymentRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
+import com.storagemanager.storage_management.repository.ContractTemplateRepository;
 import com.storagemanager.storage_management.repository.RentalDocumentRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
 import com.storagemanager.storage_management.security.UnitScope;
@@ -38,6 +40,7 @@ public class RentalAgreementService {
     private final ClientRepository clientRepository;
     private final PaymentRepository paymentRepository;
     private final RentalDocumentRepository rentalDocumentRepository;
+    private final ContractTemplateRepository contractTemplateRepository;
     private final UnitScope unitScope;
 
     /** Un contrato es de la unidad que alquila: se ve si esa unidad es del usuario. */
@@ -109,6 +112,7 @@ public class RentalAgreementService {
                 .status(inForce ? RentalStatus.ACTIVE : RentalStatus.TERMINATED)
                 .autoRenew(request.getAutoRenew() != null ? request.getAutoRenew() : true)
                 .generatesInvoices(invoicingAllowed(unit, request.getGeneratesInvoices()))
+                .contractTemplate(templateOf(request.getContractTemplateId()))
                 .notes(request.getNotes())
                 .build();
 
@@ -155,6 +159,7 @@ public class RentalAgreementService {
         if (request.getDepositPaid() != null) {
             agreement.setDepositPaid(request.getDepositPaid());
         }
+        agreement.setContractTemplate(templateOf(request.getContractTemplateId()));
         if (request.getGeneratesInvoices() != null) {
             agreement.setGeneratesInvoices(invoicingAllowed(agreement.getStorageUnit(), request.getGeneratesInvoices()));
         }
@@ -344,6 +349,13 @@ public class RentalAgreementService {
      * de él no se emiten facturas, así que marcarlo se rechaza en vez de aceptar
      * una casilla que luego no haría nada.
      */
+    /** La plantilla elegida, si se eligió alguna; nulo = la de por defecto. */
+    private ContractTemplate templateOf(Long templateId) {
+        if (templateId == null) return null;
+        return contractTemplateRepository.findById(templateId)
+                .orElseThrow(() -> new ResourceNotFoundException("Contract template not found with id: " + templateId));
+    }
+
     private boolean invoicingAllowed(StorageUnit unit, Boolean requested) {
         if (!Boolean.TRUE.equals(requested)) return false;
         if (unit != null && !unit.isVatApplicable()) {

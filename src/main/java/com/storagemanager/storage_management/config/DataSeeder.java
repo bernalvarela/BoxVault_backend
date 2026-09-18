@@ -23,6 +23,7 @@ import com.storagemanager.storage_management.repository.RentalAgreementRepositor
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
 import com.storagemanager.storage_management.repository.TaxFilingRepository;
 import com.storagemanager.storage_management.repository.UnitPriceHistoryRepository;
+import com.storagemanager.storage_management.service.ContractTemplateService;
 import com.storagemanager.storage_management.service.Modelo303RegisterService;
 import com.storagemanager.storage_management.service.TaxService;
 import lombok.RequiredArgsConstructor;
@@ -117,10 +118,17 @@ public class DataSeeder implements CommandLineRunner {
     private final TaxFilingRepository taxFilingRepository;
     private final TaxService taxService;
     private final Modelo303RegisterService modelo303Register;
+    private final ContractTemplateService contractTemplates;
     private final ObjectMapper objectMapper;
 
     @Override
     public void run(String... args) throws Exception {
+        // La primera plantilla de contrato: la que trae la aplicación, para que
+        // nadie se quede sin poder generar un contrato por no haber creado
+        // todavía la suya. Va aparte del resto del sembrado porque no depende de
+        // seed-data.json ni de que haya unidades.
+        contractTemplates.seedIfEmpty();
+
         if (storageUnitRepository.count() > 0) {
             boolean legacyDemoData = storageUnitRepository.findAll().stream()
                     .anyMatch(u -> "A-101".equals(u.getUnitNumber()));

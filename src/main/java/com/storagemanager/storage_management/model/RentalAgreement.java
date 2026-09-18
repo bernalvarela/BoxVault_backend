@@ -82,6 +82,15 @@ public class RentalAgreement {
     @Builder.Default
     private Boolean generatesInvoices = false;
 
+    /**
+     * Con qué plantilla se compone su contrato en PDF. Nulo = la que esté marcada
+     * por defecto, que es lo normal; se elige otra cuando ese alquiler necesita
+     * un texto distinto (un local, un trastero sin fianza...).
+     */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "contract_template_id")
+    private ContractTemplate contractTemplate;
+
     /** Nunca null: un contrato sin marcar no factura. */
     public boolean invoices() {
         return Boolean.TRUE.equals(generatesInvoices);

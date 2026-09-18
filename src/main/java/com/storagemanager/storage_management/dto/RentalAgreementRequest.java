@@ -41,5 +41,8 @@ public class RentalAgreementRequest {
      */
     private Boolean generatesInvoices;
 
+    /** Plantilla con la que se compone su contrato; nulo = la de por defecto. */
+    private Long contractTemplateId;
+
     private String notes;
 }

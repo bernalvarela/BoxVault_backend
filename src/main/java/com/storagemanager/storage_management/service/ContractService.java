@@ -32,6 +32,8 @@ public class ContractService {
     private final DocumentService documents;
     private final ContractPdfService pdf;
     private final InvoiceIssuer issuers;
+    private final ContractTemplateService templates;
+    private final TemplateImageService images;
 
     /** Genera el contrato y lo abre, que es lo que necesita quien lo descarga. */
     public DocumentService.Content generateAndOpen(Long rentalId) {
@@ -42,7 +44,9 @@ public class ContractService {
     @Transactional
     public Document generate(Long rentalId) {
         RentalAgreement rental = rentals.getAgreementById(rentalId);
-        byte[] content = pdf.render(rental, issuers.forUnit(rental.getStorageUnit()));
+        // La plantilla que diga el contrato; si no dice ninguna, la de por defecto.
+        String template = templates.textFor(rental.getContractTemplate());
+        byte[] content = pdf.render(rental, issuers.forUnit(rental.getStorageUnit()), template, images::bytesOf);
 
         // El nombre dice qué es sin abrirlo: contrato, de qué unidad y de cuándo.
         LocalDate today = LocalDate.now();
