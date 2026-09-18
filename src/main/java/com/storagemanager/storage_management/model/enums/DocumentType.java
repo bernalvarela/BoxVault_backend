@@ -18,6 +18,9 @@ import java.util.List;
  *   alquiler, no del cliente: es de una unidad y unas fechas concretas. Las
  *   fichas de clientes anteriores a ese cambio pueden llevarlo todavía.
  * ANEXO: anexo o adenda al contrato (subida de precio, cambio de unidad...).
+ * FACTURA: la factura de una mensualidad, con su número de serie y el desglose
+ *   del IVA. La genera la propia aplicación y se archiva en el alquiler, que es
+ *   donde están la unidad y el periodo a los que corresponde.
  * <p>
  * De cualquiera de los dos:
  * FOTO: fotografía del cliente o de la unidad en el momento de la entrega.
@@ -36,6 +39,7 @@ public enum DocumentType {
     FOTO,
     CONTRATO_ALQUILER,
     ANEXO,
+    FACTURA,
     JUSTIFICANTE,
     DECLARACION,
     OTRO;
@@ -44,7 +48,7 @@ public enum DocumentType {
             List.of(DNI, CONTRATO_TRABAJO, NOMINA, FOTO, JUSTIFICANTE, OTRO);
 
     private static final List<DocumentType> FOR_RENTAL =
-            List.of(CONTRATO_ALQUILER, ANEXO, FOTO, JUSTIFICANTE, OTRO);
+            List.of(CONTRATO_ALQUILER, ANEXO, FACTURA, FOTO, JUSTIFICANTE, OTRO);
 
     private static final List<DocumentType> FOR_TAX_FILING = List.of(JUSTIFICANTE, DECLARACION, OTRO);
 

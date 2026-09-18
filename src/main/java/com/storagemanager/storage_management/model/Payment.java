@@ -1,5 +1,7 @@
 package com.storagemanager.storage_management.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.storagemanager.storage_management.model.enums.PaymentMethod;
 import com.storagemanager.storage_management.model.enums.PaymentStatus;
 import jakarta.persistence.*;
@@ -72,6 +74,33 @@ public class Payment {
 
     @Column(columnDefinition = "TEXT")
     private String notes;
+
+    /**
+     * Número de la factura emitida por esta mensualidad ({@code A2026/0007}) y
+     * el día en que se expidió; nulos mientras no se haya emitido ninguna.
+     * <p>
+     * Se guardan aquí, y no se calculan al vuelo, porque una vez entregada la
+     * factura su número ya no puede cambiar: es lo que la hace correlativa.
+     */
+    @Column(length = 30, unique = true)
+    private String invoiceNumber;
+
+    private LocalDate invoicedAt;
+
+    /**
+     * El PDF archivado de esa factura. Tenerlo apuntado evita emitir dos veces
+     * lo mismo: si ya está, se devuelve el que se entregó, no uno nuevo.
+     */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "invoice_document_id")
+    @JsonIgnore
+    private Document invoiceDocument;
+
+    /** Id del documento de la factura, para que el frontend pueda abrirlo. */
+    @JsonProperty("invoiceDocumentId")
+    public Long getInvoiceDocumentId() {
+        return invoiceDocument == null ? null : invoiceDocument.getId();
+    }
 
     @CreationTimestamp
     @Column(updatable = false)

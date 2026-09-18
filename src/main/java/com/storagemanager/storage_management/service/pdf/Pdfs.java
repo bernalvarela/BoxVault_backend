@@ -1,0 +1,126 @@
+package com.storagemanager.storage_management.service.pdf;
+
+import org.openpdf.text.Element;
+import org.openpdf.text.Font;
+import org.openpdf.text.FontFactory;
+import org.openpdf.text.Paragraph;
+import org.openpdf.text.Phrase;
+import org.openpdf.text.pdf.PdfPCell;
+
+import java.awt.Color;
+import java.math.BigDecimal;
+import java.text.NumberFormat;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
+
+/**
+ * Lo que comparten la factura y el contrato: los tipos de letra, los colores y
+ * el formato español de importes y fechas. Nada de esto es específico de un
+ * documento; tenerlo junto evita que cada PDF invente su propia tipografía.
+ * <p>
+ * Se usan las fuentes base de PDF (Helvetica), que van dentro del propio
+ * formato: no hay que empaquetar ningún .ttf ni depender de las fuentes del
+ * sistema, que en una imagen nativa sobre Alpine no existen.
+ */
+public final class Pdfs {
+
+    /** Español de España: 1.234,56 y los meses en su idioma. */
+    public static final Locale ES = Locale.forLanguageTag("es-ES");
+
+    public static final Color INK = new Color(0x1E, 0x29, 0x3B);
+    public static final Color MUTED = new Color(0x64, 0x74, 0x8B);
+    public static final Color LINE = new Color(0xCB, 0xD5, 0xE1);
+    public static final Color BAND = new Color(0xF1, 0xF5, 0xF9);
+
+    public static final Font TITLE = font(18, Font.BOLD, INK);
+    public static final Font H2 = font(11, Font.BOLD, INK);
+    public static final Font LABEL = font(8, Font.BOLD, MUTED);
+    public static final Font BODY = font(10, Font.NORMAL, INK);
+    public static final Font BODY_BOLD = font(10, Font.BOLD, INK);
+    public static final Font SMALL = font(8, Font.NORMAL, MUTED);
+    public static final Font TOTAL = font(13, Font.BOLD, INK);
+
+    private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final DateTimeFormatter LONG_DAY =
+            DateTimeFormatter.ofPattern("d 'de' MMMM 'de' yyyy", ES);
+    private static final DateTimeFormatter MONTH_YEAR = DateTimeFormatter.ofPattern("MMMM 'de' yyyy", ES);
+
+    private Pdfs() {}
+
+    public static Font font(float size, int style, Color color) {
+        return FontFactory.getFont(FontFactory.HELVETICA, size, style, color);
+    }
+
+    /** 1.234,56 € — con el espacio antes del símbolo, como se escribe en español. */
+    public static String euros(BigDecimal amount) {
+        NumberFormat format = NumberFormat.getNumberInstance(ES);
+        format.setMinimumFractionDigits(2);
+        format.setMaximumFractionDigits(2);
+        return format.format(amount == null ? BigDecimal.ZERO : amount) + " €";
+    }
+
+    /** 17/09/2026; un guion cuando no hay fecha. */
+    public static String day(LocalDate date) {
+        return date == null ? "—" : DAY.format(date);
+    }
+
+    /** 17 de septiembre de 2026. */
+    public static String longDay(LocalDate date) {
+        return date == null ? "—" : LONG_DAY.format(date);
+    }
+
+    /** Septiembre de 2026, con la inicial en mayúscula. */
+    public static String monthOf(int year, int month) {
+        return capitalize(MONTH_YEAR.format(LocalDate.of(year, month, 1)));
+    }
+
+    public static String capitalize(String text) {
+        if (text == null || text.isEmpty()) return text;
+        return text.substring(0, 1).toUpperCase(ES) + text.substring(1);
+    }
+
+    /**
+     * Celda sin bordes, para las tablas que sólo sirven para colocar cosas.
+     * <p>
+     * El contenido se añade con {@code addElement} y no por el constructor: así
+     * la celda queda en modo compuesto y respeta la alineación y el interlineado
+     * del párrafo. Por el constructor, la celda impone los suyos, y el bloque
+     * que debía ir a la derecha aparece a la izquierda.
+     */
+    public static PdfPCell plain(Element content) {
+        PdfPCell cell = new PdfPCell();
+        cell.setBorder(org.openpdf.text.Rectangle.NO_BORDER);
+        cell.setPadding(0);
+        cell.addElement(content);
+        return cell;
+    }
+
+    /** Una celda de las filas de la tabla de conceptos. */
+    public static PdfPCell cell(String text, Font font, int alignment) {
+        PdfPCell cell = new PdfPCell(new Phrase(text, font));
+        cell.setBorder(org.openpdf.text.Rectangle.BOTTOM);
+        cell.setBorderColor(LINE);
+        cell.setHorizontalAlignment(alignment);
+        cell.setPaddingTop(6);
+        cell.setPaddingBottom(6);
+        return cell;
+    }
+
+    /** Cabecera de la tabla de conceptos: fondo gris y letra pequeña. */
+    public static PdfPCell head(String text, int alignment) {
+        PdfPCell cell = new PdfPCell(new Phrase(text.toUpperCase(ES), LABEL));
+        cell.setBorder(org.openpdf.text.Rectangle.NO_BORDER);
+        cell.setBackgroundColor(BAND);
+        cell.setHorizontalAlignment(alignment);
+        cell.setPadding(6);
+        return cell;
+    }
+
+    /** Espacio vertical entre bloques. */
+    public static Paragraph gap(float height) {
+        Paragraph paragraph = new Paragraph(" ");
+        paragraph.setLeading(height);
+        return paragraph;
+    }
+}

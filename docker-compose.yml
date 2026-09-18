@@ -140,6 +140,16 @@ services:
       BOXVAULT_JWT_SECRET: ${BOXVAULT_JWT_SECRET:?set BOXVAULT_JWT_SECRET in .env}
       BOXVAULT_ADMIN_USER: ${BOXVAULT_ADMIN_USER:-admin}
       BOXVAULT_ADMIN_PASSWORD: ${BOXVAULT_ADMIN_PASSWORD:?set BOXVAULT_ADMIN_PASSWORD in .env}
+      # Quién emite las facturas y los contratos: la comunidad de bienes. Sin el
+      # NIF, la dirección y el IBAN los PDF salen con huecos visibles (....), que
+      # es mejor que salir en blanco pero no vale para entregar.
+      BOXVAULT_ISSUER_NAME: ${BOXVAULT_ISSUER_NAME:-Comunidad de bienes Pasaxe 29}
+      BOXVAULT_ISSUER_TAX_ID: ${BOXVAULT_ISSUER_TAX_ID:-}
+      BOXVAULT_ISSUER_ADDRESS: ${BOXVAULT_ISSUER_ADDRESS:-}
+      BOXVAULT_ISSUER_CITY: ${BOXVAULT_ISSUER_CITY:-}
+      BOXVAULT_ISSUER_EMAIL: ${BOXVAULT_ISSUER_EMAIL:-}
+      BOXVAULT_ISSUER_PHONE: ${BOXVAULT_ISSUER_PHONE:-}
+      BOXVAULT_ISSUER_IBAN: ${BOXVAULT_ISSUER_IBAN:-}
       # Native images accept the usual heap flags; far less is needed than on the JVM
       JAVA_OPTS: "-Xmx512m"
       TZ: Europe/Madrid
@@ -170,6 +180,46 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
+
+  # Copias de seguridad automáticas: cada noche, un volcado de la base de datos y
+  # un tar de los ficheros adjuntos en ${BOXVAULT_BACKUP_DIR}, borrando los de
+  # más de ${BACKUP_KEEP_DAYS} días. Sustituye al pg_dump a mano de DEPLOY.md,
+  # que sólo protegía si alguien se acordaba de lanzarlo.
+  #
+  # Va sobre la misma imagen de PostgreSQL que el servidor: pg_dump tiene que ser
+  # de la misma versión o más nueva que la base que vuelca, y así no hay que
+  # acordarse de subirlo por separado. Trae busybox, o sea cron y tar, que es
+  # todo lo que necesita.
+  #
+  # El volumen de los adjuntos se monta de SÓLO LECTURA: este contenedor no puede
+  # estropear nada de lo que copia.
+  backup:
+    image: postgres:18.6-alpine
+    container_name: boxvault-backup
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-boxvault}
+      POSTGRES_USER: ${POSTGRES_USER:-boxvault}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      # Cuándo se hace (formato cron) y cuántos días se guardan.
+      BACKUP_CRON: ${BACKUP_CRON:-30 3 * * *}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      # A "true" hace una copia nada más arrancar: útil la primera vez, para no
+      # descubrir a las 3:30 que la carpeta no estaba bien montada.
+      BACKUP_ON_START: ${BACKUP_ON_START:-false}
+      TZ: Europe/Madrid
+    volumes:
+      - ./deploy/backup:/opt/backup:ro
+      - boxvault-files:/data:ro
+      # Dónde se guardan. Por defecto ./backups junto al compose; apunta esto a
+      # un disco distinto del de los datos, o a un recurso de red, si puedes.
+      - ${BOXVAULT_BACKUP_DIR:-./backups}:/backups
+    entrypoint: ["sh", "/opt/backup/entrypoint.sh"]
+    restart: unless-stopped
+    networks: [boxvault-net]
 
   # Auto-update (CD). --label-enable means only the containers carrying
   # com.centurylinklabs.watchtower.enable=true are touched: the app, never the

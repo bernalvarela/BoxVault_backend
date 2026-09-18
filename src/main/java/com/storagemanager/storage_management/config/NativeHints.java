@@ -27,6 +27,17 @@ public class NativeHints implements RuntimeHintsRegistrar {
     public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
         hints.resources().registerPattern("seed-data.json");
 
+        // La plantilla del contrato, que se lee igual que el seed: por classpath.
+        hints.resources().registerPattern("plantillas/*.txt");
+
+        // Las fuentes base de OpenPDF. Las catorce fuentes estándar del formato
+        // PDF no se empaquetan en el documento, pero sus métricas (.afm) sí hacen
+        // falta para colocar el texto, y viajan como recursos dentro del jar.
+        // En la imagen nativa, un recurso que nadie declara no se copia: sin esto
+        // el primer PDF revienta con un "Helvetica not found" que no se entiende.
+        hints.resources().registerPattern("org/openpdf/text/pdf/fonts/*");
+        hints.resources().registerPattern("org/openpdf/text/error_messages/*");
+
         // El dialecto de PostgreSQL, por su constructor vacío.
         //
         // Normalmente Hibernate lo deduce preguntándole a la conexión y no hace

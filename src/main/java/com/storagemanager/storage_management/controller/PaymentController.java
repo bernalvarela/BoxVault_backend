@@ -8,9 +8,11 @@ import com.storagemanager.storage_management.model.Payment;
 import com.storagemanager.storage_management.model.enums.PaymentMethod;
 import com.storagemanager.storage_management.model.enums.PaymentStatus;
 import com.storagemanager.storage_management.service.BillingService;
+import com.storagemanager.storage_management.service.InvoiceService;
 import com.storagemanager.storage_management.service.PaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +29,7 @@ public class PaymentController {
 
     private final PaymentService paymentService;
     private final BillingService billingService;
+    private final InvoiceService invoiceService;
 
     /**
      * Lo que cada contrato debe mes a mes, cobrado o no. Sin parámetros devuelve
@@ -126,5 +129,24 @@ public class PaymentController {
     public ResponseEntity<Void> deletePayment(@PathVariable Long id) {
         paymentService.deletePayment(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Emite la factura de la mensualidad y la devuelve en PDF. Si ya estaba
+     * emitida devuelve esa misma: el número de una factura entregada no cambia.
+     * Escribe (asigna el número y archiva el PDF), de ahí el POST.
+     */
+    @PreAuthorize("@access.can('PAGOS','ESCRIBIR')")
+    @PostMapping("/{id}/invoice")
+    public ResponseEntity<Resource> issueInvoice(@PathVariable Long id) {
+        invoiceService.issue(id);
+        return DocumentDownload.respond(invoiceService.open(id));
+    }
+
+    /** La factura ya emitida de una mensualidad. */
+    @PreAuthorize("@access.can('PAGOS','LEER')")
+    @GetMapping("/{id}/invoice")
+    public ResponseEntity<Resource> getInvoice(@PathVariable Long id) {
+        return DocumentDownload.respond(invoiceService.open(id));
     }
 }

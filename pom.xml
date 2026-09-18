@@ -107,6 +107,22 @@
 			<artifactId>url-connection-client</artifactId>
 		</dependency>
 
+		<!--
+		  PDF de las facturas y de los contratos. OpenPDF es el iText 4 libre (LGPL/MPL),
+		  sin las restricciones de licencia de iText 5+, y compone lo que hace falta aquí:
+		  texto, tablas y las fuentes base del propio formato PDF, sin ningún .ttf del
+		  sistema —que en la imagen nativa sobre musl no existe—. Las métricas de esas
+		  fuentes van en el jar como recursos, así que NativeHints los registra.
+
+		  Desde la versión 3 el paquete es org.openpdf.text (antes com.lowagie.text, la
+		  herencia de iText); si algún ejemplo de por ahí no compila, suele ser eso.
+		-->
+		<dependency>
+			<groupId>com.github.librepdf</groupId>
+			<artifactId>openpdf</artifactId>
+			<version>3.0.5</version>
+		</dependency>
+
 		<dependency>
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>

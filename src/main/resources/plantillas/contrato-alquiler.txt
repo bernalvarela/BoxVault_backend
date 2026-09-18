@@ -1,0 +1,82 @@
+« Plantilla del contrato de alquiler de trastero.
+«
+« Esto es texto plano y se puede cambiar sin tocar el código: lo lee
+« ContractPdfService y lo compone en un PDF. Las reglas son cuatro:
+«
+«   - una línea que empieza por « es un comentario y no sale en el PDF;
+«   - "# " es el título, "## " un encabezado de apartado;
+«   - una línea en blanco separa párrafos; "- " es una viñeta;
+«   - {{campo}} se sustituye por el dato; los campos que hay están al final
+«     de este comentario. Un campo desconocido se deja como está, para que se
+«     vea la errata en vez de quedarse un hueco silencioso.
+«   - "[[firmas]]" pone el pie de firmas de las dos partes.
+«
+« Campos: fecha_larga, lugar,
+«   arrendador_nombre, arrendador_nif, arrendador_direccion, arrendador_ciudad,
+«   arrendador_email, arrendador_telefono, arrendador_iban,
+«   arrendatario_nombre, arrendatario_nif, arrendatario_direccion,
+«   arrendatario_email, arrendatario_telefono,
+«   coarrendatario (línea entera, vacía si no hay),
+«   unidad_numero, unidad_nombre, unidad_metros, unidad_direccion,
+«   contrato_numero, fecha_inicio, fecha_fin, duracion,
+«   renta_base, renta_iva, renta_total, iva_texto, dia_cobro,
+«   fianza, fianza_texto
+
+# CONTRATO DE ARRENDAMIENTO DE TRASTERO
+
+En {{lugar}}, a {{fecha_larga}}.
+
+## Reunidos
+
+De una parte, **{{arrendador_nombre}}**, con NIF {{arrendador_nif}} y domicilio en {{arrendador_direccion}}, {{arrendador_ciudad}}, en adelante EL ARRENDADOR.
+
+De otra parte, **{{arrendatario_nombre}}**, con NIF {{arrendatario_nif}} y domicilio en {{arrendatario_direccion}}, en adelante EL ARRENDATARIO.
+
+{{coarrendatario}}
+
+Ambas partes se reconocen capacidad legal suficiente para contratar y obligarse, y a tal efecto
+
+## Exponen
+
+I. Que EL ARRENDADOR es propietario del local sito en {{unidad_direccion}}, dentro del cual se encuentra el trastero número {{unidad_numero}} ({{unidad_nombre}}), de aproximadamente {{unidad_metros}} m².
+
+II. Que EL ARRENDATARIO está interesado en arrendar dicho trastero para su uso como almacenaje de enseres propios.
+
+III. Que ambas partes acuerdan formalizar el presente contrato de arrendamiento para uso distinto del de vivienda, que se regirá por lo dispuesto en el Título III de la Ley 29/1994, de 24 de noviembre, de Arrendamientos Urbanos, por lo libremente pactado en las siguientes
+
+## Cláusulas
+
+**Primera. Objeto.** EL ARRENDADOR cede en arrendamiento a EL ARRENDATARIO el trastero número {{unidad_numero}}, de aproximadamente {{unidad_metros}} m², situado en {{unidad_direccion}}. El trastero se destinará exclusivamente al almacenamiento de bienes propios del arrendatario, sin que pueda dársele ningún otro uso.
+
+**Segunda. Duración.** El contrato comienza el {{fecha_inicio}} y {{duracion}}. Cualquiera de las partes podrá ponerle fin comunicándolo a la otra por escrito con al menos treinta días de antelación.
+
+**Tercera. Renta.** La renta mensual es de {{renta_base}} más {{renta_iva}} en concepto de IVA ({{iva_texto}}), lo que hace un total de **{{renta_total}} al mes**. La renta se abonará por meses anticipados, dentro de los primeros días de cada mes y en todo caso no más tarde del día {{dia_cobro}}, mediante domiciliación bancaria o transferencia a la cuenta {{arrendador_iban}}.
+
+**Cuarta. Actualización.** La renta podrá actualizarse anualmente, en la fecha en que se cumpla cada año de vigencia del contrato, aplicando la variación del Índice de Precios de Consumo (IPC) publicado por el INE en los doce meses anteriores. La actualización se comunicará por escrito y surtirá efecto al mes siguiente.
+
+**Quinta. Fianza.** {{fianza_texto}} La fianza se devolverá al terminar el contrato, una vez comprobado el estado del trastero y descontado, si procede, el importe de los desperfectos o de las cantidades pendientes de pago.
+
+**Sexta. Uso y conservación.** EL ARRENDATARIO se obliga a:
+
+- destinar el trastero únicamente al uso pactado, manteniéndolo en buen estado de conservación y limpieza;
+- no almacenar en él materias inflamables, explosivas, perecederas, malolientes, animales, ni ninguna sustancia u objeto cuya tenencia esté prohibida o requiera autorización administrativa;
+- no realizar obras ni instalaciones fijas sin autorización escrita del arrendador;
+- no ceder, subarrendar ni traspasar el trastero, ni total ni parcialmente, sin consentimiento escrito del arrendador;
+- respetar las normas de la comunidad y el horario de acceso al inmueble;
+- devolver el trastero vacío y en el mismo estado en que lo recibió al terminar el contrato.
+
+**Séptima. Responsabilidad y seguro.** EL ARRENDADOR no responde de los daños, pérdidas o sustracciones que puedan sufrir los bienes depositados, cualquiera que sea su causa, salvo que medie culpa por su parte. EL ARRENDATARIO es responsable de asegurar los bienes que almacene si lo considera oportuno, y responderá de los daños que cause al inmueble o a terceros.
+
+**Octava. Acceso.** EL ARRENDADOR podrá acceder al trastero, previo aviso al arrendatario, para comprobar su estado o realizar reparaciones necesarias. En caso de urgencia —incendio, inundación, olores, riesgo para el inmueble o para terceros— podrá hacerlo sin aviso previo, informando después al arrendatario a la mayor brevedad.
+
+**Novena. Impago.** La falta de pago de una sola mensualidad faculta a EL ARRENDADOR para resolver el contrato y exigir el desalojo del trastero, sin perjuicio de reclamar las cantidades pendientes y los daños causados.
+
+**Décima. Resolución.** Serán causa de resolución del contrato el incumplimiento de cualquiera de las obligaciones pactadas, el uso del trastero para un fin distinto del acordado y el almacenamiento de objetos prohibidos en la cláusula sexta.
+
+**Undécima. Protección de datos.** Los datos personales de EL ARRENDATARIO se tratan por EL ARRENDADOR con la única finalidad de gestionar este contrato y cumplir sus obligaciones legales y fiscales, y se conservarán mientras dure la relación y durante los plazos de prescripción aplicables. Pueden ejercerse los derechos de acceso, rectificación, supresión, oposición, limitación y portabilidad dirigiéndose a {{arrendador_email}}.
+
+**Duodécima. Fuero.** Para cualquier controversia derivada de este contrato, las partes se someten a los juzgados y tribunales del lugar donde radica el inmueble, renunciando a cualquier otro fuero que pudiera corresponderles.
+
+Y en prueba de conformidad, ambas partes firman el presente contrato por duplicado y a un solo efecto, en el lugar y fecha indicados en el encabezamiento.
+
+[[firmas]]

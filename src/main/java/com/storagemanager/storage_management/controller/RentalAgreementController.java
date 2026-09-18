@@ -3,9 +3,11 @@ package com.storagemanager.storage_management.controller;
 import com.storagemanager.storage_management.dto.RentalAgreementRequest;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.enums.RentalStatus;
+import com.storagemanager.storage_management.service.ContractService;
 import com.storagemanager.storage_management.service.RentalAgreementService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
@@ -22,6 +24,7 @@ import java.util.List;
 public class RentalAgreementController {
 
     private final RentalAgreementService rentalAgreementService;
+    private final ContractService contractService;
 
     @PreAuthorize("@access.can('ALQUILERES','LEER')")
     @GetMapping
@@ -79,5 +82,17 @@ public class RentalAgreementController {
             @PathVariable Long id,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate terminationDate) {
         return ResponseEntity.ok(rentalAgreementService.terminateAgreement(id, terminationDate));
+    }
+
+    /**
+     * Compone el contrato desde la plantilla, lo archiva como documento del
+     * alquiler y lo devuelve en PDF para imprimirlo y firmarlo. Se puede volver
+     * a generar cuando cambien los datos: es un borrador, no un documento
+     * emitido.
+     */
+    @PreAuthorize("@access.can('ALQUILERES','ESCRIBIR')")
+    @PostMapping("/{id}/contract")
+    public ResponseEntity<Resource> generateContract(@PathVariable Long id) {
+        return DocumentDownload.respond(contractService.generateAndOpen(id));
     }
 }

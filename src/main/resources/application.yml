@@ -46,6 +46,21 @@ boxvault:
     local-path: ${BOXVAULT_FILES_PATH:data/files}
     max-file-size: 10MB
 
+  # Quién emite las facturas y los contratos: la comunidad de bienes propietaria
+  # de los bajos. El NIF, la dirección y el IBAN llegan por entorno (.env del
+  # servidor) porque no son cosa de dejarlos escritos en el repositorio; lo que
+  # falte sale en el PDF como un hueco visible, que se ve al mirarlo.
+  invoicing:
+    issuer-name: ${BOXVAULT_ISSUER_NAME:Comunidad de bienes Pasaxe 29}
+    issuer-tax-id: ${BOXVAULT_ISSUER_TAX_ID:}
+    issuer-address: ${BOXVAULT_ISSUER_ADDRESS:Avenida del Pasaje (A Pasaxe) 29}
+    issuer-city: ${BOXVAULT_ISSUER_CITY:}
+    issuer-email: ${BOXVAULT_ISSUER_EMAIL:}
+    issuer-phone: ${BOXVAULT_ISSUER_PHONE:}
+    issuer-iban: ${BOXVAULT_ISSUER_IBAN:}
+    # Serie de facturación; el número queda A2026/0001, correlativo por año.
+    invoice-series: ${BOXVAULT_INVOICE_SERIES:A}
+
 ---
 # ---------------------------------------------------------------------
 # dev — embedded H2 database, kept in memory, seeded by DataSeeder from

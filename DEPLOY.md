@@ -70,11 +70,13 @@ The push to `master` triggers the image build.
 Docker + the compose plugin are the only requirements.
 
 ```bash
-mkdir -p ~/boxvault/deploy/postgres && cd ~/boxvault
+mkdir -p ~/boxvault/deploy/postgres ~/boxvault/deploy/backup && cd ~/boxvault
 BASE=https://raw.githubusercontent.com/bernalvarela/BoxVault_backend/master
 curl -O $BASE/docker-compose.yml
 curl -o deploy/postgres/01-schema.sql    $BASE/deploy/postgres/01-schema.sql
 curl -o deploy/postgres/02-seed-data.sql $BASE/deploy/postgres/02-seed-data.sql
+curl -o deploy/backup/backup.sh          $BASE/deploy/backup/backup.sh
+curl -o deploy/backup/entrypoint.sh      $BASE/deploy/backup/entrypoint.sh
 
 cat > .env <<EOF
 DOCKER_IMAGE=<docker-hub-user>/boxvault-backend:latest
@@ -124,15 +126,91 @@ docker compose pull && docker compose up -d
   `.env`. It is for inspecting buckets and objects; the app is the normal way in.
   To turn it off again, drop the `ports:` block from the `rustfs` service and set
   `RUSTFS_CONSOLE_ENABLE: "false"`.
-- Backup / restore — **both** the database and the file store:
-  ```bash
-  docker compose exec -T postgres pg_dump -U boxvault -Fc boxvault > boxvault-$(date +%F).dump
-  docker compose exec -T postgres pg_restore -U boxvault -d boxvault --clean < boxvault-2026-09-03.dump
+- **Invoices and contracts** — the PDFs the app issues (one invoice per collected
+  month, the contract from its template) carry the issuer's fiscal data, and that
+  comes from `.env`. A missing value is printed as a visible gap (`..........`)
+  rather than silently dropped, so an invoice with no NIF looks wrong instead of
+  passing for good:
 
-  # the attached files (the dump above does not contain them)
-  docker run --rm -v boxvault-files:/data -v "$PWD":/backup alpine \
-    tar czf /backup/boxvault-files-$(date +%F).tar.gz -C /data .
+  | Variable | What it is |
+  | --- | --- |
+  | `BOXVAULT_ISSUER_NAME` | Fiscal name (defaults to `Comunidad de bienes Pasaxe 29`) |
+  | `BOXVAULT_ISSUER_TAX_ID` | NIF of the comunidad — **required on an invoice** |
+  | `BOXVAULT_ISSUER_ADDRESS` | Fiscal address, one line |
+  | `BOXVAULT_ISSUER_CITY` | Postal code and municipality |
+  | `BOXVAULT_ISSUER_EMAIL` / `BOXVAULT_ISSUER_PHONE` | Contact printed on the invoice |
+  | `BOXVAULT_ISSUER_IBAN` | Account the rent is collected into |
+  | `BOXVAULT_INVOICE_SERIES` | Invoice series letter (default `A`, giving `A2026/0001`) |
+
+  Invoice numbers are correlative per year and are kept on the charge once issued,
+  so re-issuing hands back the same document rather than burning a new number.
+  The contract text lives in `src/main/resources/plantillas/contrato-alquiler.txt`
+  and is a plain-text template with `{{field}}` marks: editing a clause is a
+  redeploy of the app, not a code change.
+
+- **Automatic backups** — the `backup` service in the compose file. It is a
+  `postgres:18.6-alpine` (the same image as the server, so `pg_dump` can never
+  disagree with the database version) running nothing but `crond`: every night it
+  dumps the database **and** tars the attached files into dated names, and
+  deletes the ones that got too old. Both halves are needed — the dump holds
+  tenants, contracts, charges, expenses and tax returns; the attachments (scanned
+  DNIs, signed contracts, AEAT receipts) live in RustFS and are not in it.
+
+  The two scripts it runs are mounted from `deploy/backup/`, not baked into the
+  image, so an existing install has to fetch them once (the `curl` lines above)
+  before `docker compose up -d backup` has anything to run.
+
+  It is configured from `.env`, and everything has a default:
+
+  | Variable | Default | What it does |
+  | --- | --- | --- |
+  | `BOXVAULT_BACKUP_DIR` | `./backups` | Where the copies are written **on the server** |
+  | `BACKUP_CRON` | `30 3 * * *` | When it runs (cron format, in the compose `TZ`) |
+  | `BACKUP_KEEP_DAYS` | `14` | Days kept before a copy is deleted |
+  | `BACKUP_ON_START` | `false` | `true` takes one copy as soon as the service starts |
+
+  To check it works without waiting until the small hours:
+  ```bash
+  docker compose up -d backup
+  docker compose logs backup                            # the "Copias programadas: 30 3 * * *" line
+  docker compose exec backup sh /opt/backup/backup.sh   # a backup right now
+  ls -lh backups/
   ```
+  Each night leaves two files: `boxvault-db-2026-09-17_0330.dump` (PostgreSQL
+  `custom` format) and `boxvault-files-2026-09-17_0330.tar.gz`. They are written
+  with a `.parcial` extension and only renamed once they finish, so a half
+  written copy — the disk filled up, the container was stopped — is never
+  mistaken for a good one; and the old ones are pruned only after both of
+  today's succeeded, so a failure piles copies up instead of leaving you with
+  none.
+
+  Three things worth knowing:
+  - The container runs as **root**, so the files in `backups/` are owned by root.
+    To read them as yourself: `sudo chown -R $USER backups/`.
+  - The dump and the tar are **not atomic with each other**: a file uploaded
+    between the two can end up in one copy and not the other. It is a gap of
+    seconds, and the alternative — stopping the application every night — costs
+    more than it fixes.
+  - `backups/` sits on the same disk as the volumes, so it does not protect you
+    from that disk dying. Point `BOXVAULT_BACKUP_DIR` at another disk or a
+    network share (`/mnt/nas/boxvault`) and the copy starts covering what it is
+    really for.
+
+- **Restore** — the database and the files go separately:
+  ```bash
+  # 1. the database (--clean drops what is there and recreates it)
+  docker compose cp backups/boxvault-db-2026-09-17_0330.dump postgres:/tmp/bv.dump
+  docker compose exec postgres pg_restore -U boxvault -d boxvault --clean /tmp/bv.dump
+
+  # 2. the attached files, with the application stopped
+  docker compose stop boxvault rustfs
+  docker run --rm -v boxvault-files:/data -v "$PWD/backups":/backup alpine \
+    sh -c 'rm -rf /data/* && tar xzf /backup/boxvault-files-2026-09-17_0330.tar.gz -C /data'
+  docker compose start rustfs boxvault
+  ```
+  A backup that has never been restored is not known to work: it is worth trying
+  the `pg_restore` once against a scratch database (`createdb boxvault_test`,
+  then `pg_restore -d boxvault_test`).
 - Upgrade: `docker compose pull && docker compose up -d`.
 - Logs: `docker compose logs -f boxvault` (add `postgres` for the database).
 - `psql` on the server: `docker compose exec postgres psql -U boxvault -d boxvault`.

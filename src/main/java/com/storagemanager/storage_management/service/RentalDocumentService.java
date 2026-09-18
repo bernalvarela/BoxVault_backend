@@ -60,6 +60,30 @@ public class RentalDocumentService {
         }
     }
 
+    /**
+     * Archiva en el alquiler un fichero que ha generado la aplicación: la
+     * factura de una mensualidad o el contrato compuesto desde la plantilla.
+     * Devuelve el documento en vez del DTO porque quien lo llama necesita
+     * guardarse la referencia (el cobro apunta a su factura).
+     */
+    @Transactional
+    public Document attach(Long rentalId, String fileName, String contentType, byte[] content,
+                           DocumentType type, String description) {
+        RentalAgreement rental = requireRental(rentalId);
+        Document document = documents.store("rentals/" + rentalId, fileName, contentType, content,
+                requireRentalType(type), description);
+        try {
+            rentalDocumentRepository.save(RentalDocument.builder()
+                    .rentalAgreement(rental)
+                    .document(document)
+                    .build());
+            return document;
+        } catch (RuntimeException e) {
+            documents.delete(document);
+            throw e;
+        }
+    }
+
     public DocumentService.Content download(Long rentalId, Long documentId) {
         return documents.open(requireLink(rentalId, documentId).getDocument());
     }
