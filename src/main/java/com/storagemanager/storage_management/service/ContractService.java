@@ -44,8 +44,11 @@ public class ContractService {
         RentalAgreement rental = rentals.getAgreementById(rentalId);
         byte[] content = pdf.render(rental, issuers.forUnit(rental.getStorageUnit()));
 
+        // El nombre dice qué es sin abrirlo: contrato, de qué unidad y de cuándo.
         LocalDate today = LocalDate.now();
-        String name = "contrato-" + slug(rental.getAgreementNumber()) + "-" + today + ".pdf";
+        String unit = rental.getStorageUnit() == null ? "" : Pdfs.slug(rental.getStorageUnit().getName());
+        String name = "contrato-" + slug(rental.getAgreementNumber())
+                + (unit.isEmpty() ? "" : "-" + unit) + "-" + today + ".pdf";
         Document document = rentalDocuments.attach(rentalId, name, "application/pdf", content,
                 DocumentType.CONTRATO_ALQUILER,
                 "Contrato generado el " + Pdfs.day(today) + " (sin firmar)");
@@ -56,7 +59,7 @@ public class ContractService {
 
     /** El número de contrato en el nombre del fichero, sin barras ni espacios. */
     private String slug(String agreementNumber) {
-        if (agreementNumber == null || agreementNumber.isBlank()) return "sin-numero";
-        return agreementNumber.trim().toLowerCase(Pdfs.ES).replaceAll("[^a-z0-9]+", "-");
+        String slug = Pdfs.slug(agreementNumber);
+        return slug.isEmpty() ? "sin-numero" : slug;
     }
 }

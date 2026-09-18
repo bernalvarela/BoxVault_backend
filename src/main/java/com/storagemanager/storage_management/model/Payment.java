@@ -76,16 +76,38 @@ public class Payment {
     private String notes;
 
     /**
-     * Número de la factura emitida por esta mensualidad ({@code A2026/0007}) y
-     * el día en que se expidió; nulos mientras no se haya emitido ninguna.
+     * La factura en vigor de esta mensualidad: su número ({@code A2026/0007} o,
+     * si se ha rectificado, {@code R2026/0001}) y el día en que se expidió.
+     * Nulos mientras no se haya emitido ninguna.
      * <p>
-     * Se guardan aquí, y no se calculan al vuelo, porque una vez entregada la
-     * factura su número ya no puede cambiar: es lo que la hace correlativa.
+     * El histórico completo —la ordinaria y todas sus rectificativas— está en
+     * {@link Invoice}; esto es sólo cuál manda ahora, para no tener que ir a
+     * buscarlo en cada renglón de la lista.
      */
     @Column(length = 30, unique = true)
     private String invoiceNumber;
 
     private LocalDate invoicedAt;
+
+    /**
+     * El total tal como se facturó. Sirve para ver, sin abrir nada, que el cobro
+     * ya no coincide con su factura: si cambia el importe de la mensualidad, lo
+     * facturado se queda como estaba y la diferencia canta.
+     */
+    @Column(precision = 10, scale = 2)
+    private BigDecimal invoicedTotal;
+
+    /**
+     * Si lo facturado ya no se corresponde con la mensualidad. Cuando esto es
+     * cierto, la factura entregada dice una cosa y el cobro otra, y lo que
+     * procede es una rectificativa (no reescribir la que hay).
+     */
+    @JsonProperty("invoiceOutdated")
+    public boolean isInvoiceOutdated() {
+        if (invoiceNumber == null || invoicedTotal == null) return false;
+        BigDecimal due = amountDue == null ? BigDecimal.ZERO : amountDue;
+        return due.compareTo(invoicedTotal) != 0;
+    }
 
     /**
      * El PDF archivado de esa factura. Tenerlo apuntado evita emitir dos veces

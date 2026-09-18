@@ -34,9 +34,15 @@ public class InvoiceIssuer {
     private final OwnershipRepository ownershipRepository;
     private final InvoicingProperties fallback;
 
-    /** Los datos con los que se encabeza una factura o un contrato. */
+    /**
+     * Los datos con los que se encabeza una factura o un contrato.
+     *
+     * @param entity si quien emite es una comunidad de bienes; de ello depende
+     *               la coletilla del pie de la factura ("entidad en régimen de
+     *               atribución de rentas"), que de una persona sería falsa.
+     */
     public record Issuer(String name, String taxId, String address, String city,
-                         String email, String phone, String iban) {}
+                         String email, String phone, String iban, boolean entity) {}
 
     public Issuer forUnit(StorageUnit unit) {
         Owner owner = ownerOf(unit);
@@ -51,14 +57,17 @@ public class InvoiceIssuer {
                 fallback.getIssuerCity(),
                 pick(owner.getEmail(), fallback.getIssuerEmail()),
                 pick(owner.getPhone(), fallback.getIssuerPhone()),
-                pick(owner.getBankAccount(), fallback.getIssuerIban()));
+                pick(owner.getBankAccount(), fallback.getIssuerIban()),
+                owner.isEntity());
     }
 
     private Issuer fromProperties() {
         return new Issuer(
                 fallback.getIssuerName(), fallback.getIssuerTaxId(), fallback.getIssuerAddress(),
                 fallback.getIssuerCity(), fallback.getIssuerEmail(), fallback.getIssuerPhone(),
-                fallback.getIssuerIban());
+                fallback.getIssuerIban(),
+                // Sin propietario que mirar no se afirma lo que no consta.
+                false);
     }
 
     /** El propietario que factura esta unidad, o null si no consta ninguno. */

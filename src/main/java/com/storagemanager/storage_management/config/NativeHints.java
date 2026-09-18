@@ -30,6 +30,11 @@ public class NativeHints implements RuntimeHintsRegistrar {
         // La plantilla del contrato, que se lee igual que el seed: por classpath.
         hints.resources().registerPattern("plantillas/*.txt");
 
+        // Las migraciones de Flyway. Van dentro del jar como recursos y en la
+        // imagen nativa no se copia lo que nadie declara: sin esto, el servidor
+        // arrancaría sin aplicar ninguna y diría que la base ya está al día.
+        hints.resources().registerPattern("db/migration/*.sql");
+
         // Las fuentes base de OpenPDF. Las catorce fuentes estándar del formato
         // PDF no se empaquetan en el documento, pero sus métricas (.afm) sí hacen
         // falta para colocar el texto, y viajan como recursos dentro del jar.

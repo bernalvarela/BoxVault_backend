@@ -12,6 +12,7 @@ import org.openpdf.text.pdf.PdfWriter;
 import com.storagemanager.storage_management.service.InvoiceIssuer;
 import com.storagemanager.storage_management.config.VatUtils;
 import com.storagemanager.storage_management.model.Client;
+import com.storagemanager.storage_management.model.Invoice;
 import com.storagemanager.storage_management.model.Payment;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.StorageUnit;
@@ -40,14 +41,19 @@ import static com.storagemanager.storage_management.config.InvoicingProperties.o
 @Service
 public class InvoicePdfService {
 
-    /** Composición de la factura de un cobro. El número ya viene asignado. */
-    public byte[] render(Payment payment, String invoiceNumber, LocalDate issuedOn, InvoiceIssuer.Issuer issuer) {
+    /**
+     * Composición de una factura ya emitida. Las cifras salen de ella y no del
+     * cobro: una factura dice lo que decía el día que se emitió, aunque la
+     * mensualidad haya cambiado después. Para eso están congeladas.
+     */
+    public byte[] render(Invoice invoice, InvoiceIssuer.Issuer issuer) {
+        Payment payment = invoice.getPayment();
+        String invoiceNumber = invoice.getNumber();
+        LocalDate issuedOn = invoice.getIssuedOn();
         RentalAgreement rental = payment.getRentalAgreement();
         StorageUnit unit = payment.getStorageUnit();
-        Client client = payment.getClient();
 
-        boolean vatApplicable = unit != null && unit.isVatApplicable();
-        VatUtils.Breakdown amounts = VatUtils.breakdown(payment.getAmountDue(), vatApplicable);
+        boolean vatApplicable = invoice.getVatRate() != null && invoice.getVatRate().signum() > 0;
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         Document pdf = new Document(PageSize.A4, 48, 48, 48, 48);
@@ -57,12 +63,16 @@ public class InvoicePdfService {
             pdf.addCreator("BoxVault");
             pdf.open();
 
-            pdf.add(header(invoiceNumber, issuedOn, payment, issuer));
+            pdf.add(header(invoice, issuer));
             pdf.add(Pdfs.gap(18));
-            pdf.add(parties(client));
+            pdf.add(parties(invoice));
+            if (invoice.isRectificativa()) {
+                pdf.add(Pdfs.gap(12));
+                pdf.add(rectification(invoice));
+            }
             pdf.add(Pdfs.gap(18));
-            pdf.add(lines(payment, unit, rental, amounts, vatApplicable));
-            pdf.add(totals(amounts, vatApplicable));
+            pdf.add(lines(invoice, payment, unit, rental, vatApplicable));
+            pdf.add(totals(invoice, vatApplicable));
             pdf.add(Pdfs.gap(18));
             pdf.add(collection(payment, issuer));
             pdf.add(Pdfs.gap(24));
@@ -76,7 +86,8 @@ public class InvoicePdfService {
     }
 
     /** Emisor a la izquierda, identificación de la factura a la derecha. */
-    private PdfPTable header(String number, LocalDate issuedOn, Payment payment, InvoiceIssuer.Issuer issuer) {
+    private PdfPTable header(Invoice invoice, InvoiceIssuer.Issuer issuer) {
+        Payment payment = invoice.getPayment();
         PdfPTable table = new PdfPTable(new float[]{3, 2});
         table.setWidthPercentage(100);
 
@@ -93,9 +104,10 @@ public class InvoicePdfService {
         if (!contact.isEmpty()) emitter.add(new Phrase(contact, Pdfs.SMALL));
 
         Paragraph identification = new Paragraph();
-        identification.add(new Phrase("FACTURA\n", Pdfs.TITLE));
-        identification.add(new Phrase("Nº " + number + "\n", Pdfs.BODY_BOLD));
-        identification.add(new Phrase("Fecha de expedición: " + Pdfs.day(issuedOn) + "\n", Pdfs.BODY));
+        identification.add(new Phrase(
+                invoice.isRectificativa() ? "FACTURA\nRECTIFICATIVA\n" : "FACTURA\n", Pdfs.TITLE));
+        identification.add(new Phrase("Nº " + invoice.getNumber() + "\n", Pdfs.BODY_BOLD));
+        identification.add(new Phrase("Fecha de expedición: " + Pdfs.day(invoice.getIssuedOn()) + "\n", Pdfs.BODY));
         identification.add(new Phrase("Periodo: "
                 + Pdfs.monthOf(payment.getBillingPeriodYear(), payment.getBillingPeriodMonth()), Pdfs.BODY));
         identification.setAlignment(Element.ALIGN_RIGHT);
@@ -117,19 +129,21 @@ public class InvoicePdfService {
         return line.toString();
     }
 
-    /** A quién se factura. */
-    private PdfPTable parties(Client client) {
+    /** A quién se factura, tal como se facturó. */
+    private PdfPTable parties(Invoice invoice) {
+        Client client = invoice.getPayment().getClient();
         PdfPTable table = new PdfPTable(1);
         table.setWidthPercentage(100);
 
         Paragraph to = new Paragraph();
         to.add(new Phrase("FACTURAR A\n", Pdfs.LABEL));
-        to.add(new Phrase((client == null ? "—" : client.getFullName()) + "\n", Pdfs.BODY_BOLD));
-        if (client != null) {
-            to.add(new Phrase("NIF " + orMissing(client.getDocumentId()) + "\n", Pdfs.BODY));
-            if (client.getAddress() != null && !client.getAddress().isBlank()) {
-                to.add(new Phrase(client.getAddress(), Pdfs.BODY));
-            }
+        // El nombre y el NIF salen de la factura, no de la ficha del cliente: si
+        // mañana se corrige su NIF, lo que se entregó sigue diciendo lo que decía.
+        // El domicilio sí es el de hoy: no identifica la operación.
+        to.add(new Phrase(orMissing(invoice.getClientName()) + "\n", Pdfs.BODY_BOLD));
+        to.add(new Phrase("NIF " + orMissing(invoice.getClientTaxId()) + "\n", Pdfs.BODY));
+        if (client != null && client.getAddress() != null && !client.getAddress().isBlank()) {
+            to.add(new Phrase(client.getAddress(), Pdfs.BODY));
         }
         PdfPCell cell = Pdfs.plain(to);
         cell.setBackgroundColor(Pdfs.BAND);
@@ -139,8 +153,8 @@ public class InvoicePdfService {
     }
 
     /** El concepto facturado: una sola línea, la mensualidad. */
-    private PdfPTable lines(Payment payment, StorageUnit unit, RentalAgreement rental,
-                            VatUtils.Breakdown amounts, boolean vatApplicable) {
+    private PdfPTable lines(Invoice invoice, Payment payment, StorageUnit unit, RentalAgreement rental,
+                            boolean vatApplicable) {
         PdfPTable table = new PdfPTable(new float[]{6, 2, 1.4f, 2, 2});
         table.setWidthPercentage(100);
 
@@ -158,11 +172,38 @@ public class InvoicePdfService {
         }
 
         table.addCell(Pdfs.cell(what, Pdfs.BODY, Element.ALIGN_LEFT));
-        table.addCell(Pdfs.cell(Pdfs.euros(amounts.base()), Pdfs.BODY, Element.ALIGN_RIGHT));
-        table.addCell(Pdfs.cell(vatApplicable ? "21 %" : "Exento", Pdfs.BODY, Element.ALIGN_RIGHT));
-        table.addCell(Pdfs.cell(vatApplicable ? Pdfs.euros(amounts.vat()) : "—", Pdfs.BODY, Element.ALIGN_RIGHT));
-        table.addCell(Pdfs.cell(Pdfs.euros(amounts.total()), Pdfs.BODY, Element.ALIGN_RIGHT));
+        table.addCell(Pdfs.cell(Pdfs.euros(invoice.getBase()), Pdfs.BODY, Element.ALIGN_RIGHT));
+        table.addCell(Pdfs.cell(vatApplicable ? rate(invoice) : "Exento", Pdfs.BODY, Element.ALIGN_RIGHT));
+        table.addCell(Pdfs.cell(vatApplicable ? Pdfs.euros(invoice.getVat()) : "—", Pdfs.BODY, Element.ALIGN_RIGHT));
+        table.addCell(Pdfs.cell(Pdfs.euros(invoice.getTotal()), Pdfs.BODY, Element.ALIGN_RIGHT));
         return table;
+    }
+
+    /** El tipo con el que se emitió: "21 %". Va guardado, no supuesto, por si cambia. */
+    private String rate(Invoice invoice) {
+        return invoice.getVatRate().stripTrailingZeros().toPlainString() + " %";
+    }
+
+    /**
+     * Qué factura se rectifica y por qué. Sin esto una rectificativa no vale: el
+     * artículo 15 del Reglamento de facturación exige identificar la rectificada
+     * y declarar la causa.
+     */
+    private Paragraph rectification(Invoice invoice) {
+        Invoice original = invoice.getRectifies();
+        Paragraph paragraph = new Paragraph();
+        paragraph.add(new Phrase("RECTIFICACIÓN\n", Pdfs.LABEL));
+        if (original != null) {
+            paragraph.add(new Phrase("Rectifica a la factura " + original.getNumber()
+                    + ", de fecha " + Pdfs.day(original.getIssuedOn())
+                    + ", por importe de " + Pdfs.euros(original.getTotal()) + ".\n", Pdfs.BODY));
+        }
+        if (invoice.getReason() != null && !invoice.getReason().isBlank()) {
+            paragraph.add(new Phrase("Causa: " + invoice.getReason().trim() + "\n", Pdfs.BODY));
+        }
+        paragraph.add(new Phrase(
+                "Los importes de esta factura sustituyen a los de la factura rectificada.", Pdfs.SMALL));
+        return paragraph;
     }
 
     /** "trastero 3 (Trastero 3)" queda tonto: se dice el número y, si aporta, el nombre. */
@@ -181,7 +222,7 @@ public class InvoicePdfService {
     }
 
     /** Los totales, alineados a la derecha bajo la tabla. */
-    private PdfPTable totals(VatUtils.Breakdown amounts, boolean vatApplicable) {
+    private PdfPTable totals(Invoice invoice, boolean vatApplicable) {
         PdfPTable table = new PdfPTable(new float[]{6, 4});
         table.setWidthPercentage(100);
         table.setSpacingBefore(10);
@@ -191,13 +232,13 @@ public class InvoicePdfService {
         PdfPTable box = new PdfPTable(new float[]{3, 2});
         box.setWidthPercentage(100);
         box.addCell(amountLabel("Base imponible"));
-        box.addCell(amountValue(Pdfs.euros(amounts.base()), Pdfs.BODY));
+        box.addCell(amountValue(Pdfs.euros(invoice.getBase()), Pdfs.BODY));
         if (vatApplicable) {
-            box.addCell(amountLabel("IVA 21 %"));
-            box.addCell(amountValue(Pdfs.euros(amounts.vat()), Pdfs.BODY));
+            box.addCell(amountLabel("IVA " + rate(invoice)));
+            box.addCell(amountValue(Pdfs.euros(invoice.getVat()), Pdfs.BODY));
         }
         box.addCell(amountLabel("TOTAL FACTURA"));
-        box.addCell(amountValue(Pdfs.euros(amounts.total()), Pdfs.TOTAL));
+        box.addCell(amountValue(Pdfs.euros(invoice.getTotal()), Pdfs.TOTAL));
 
         table.addCell(Pdfs.plain(box));
         return table;
@@ -260,9 +301,11 @@ public class InvoicePdfService {
             paragraph.add(new Phrase("Operación exenta del Impuesto sobre el Valor Añadido, "
                     + "artículo 20.Uno.23º de la Ley 37/1992 (arrendamiento de vivienda).\n", Pdfs.SMALL));
         }
+        // "Entidad en régimen de atribución de rentas" sólo cuando lo es: una
+        // comunidad de bienes. Si quien factura es una persona, sobra.
         paragraph.add(new Phrase("Factura expedida por " + orMissing(issuer.name())
-                + ", entidad en régimen de atribución de rentas. "
-                + "Documento generado por BoxVault; conserve esta factura a efectos fiscales.", Pdfs.SMALL));
+                + (issuer.entity() ? ", entidad en régimen de atribución de rentas" : "")
+                + ". Conserve esta factura a efectos fiscales.", Pdfs.SMALL));
         return paragraph;
     }
 }

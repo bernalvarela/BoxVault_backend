@@ -108,6 +108,26 @@
 		</dependency>
 
 		<!--
+		  Migraciones de la base de datos. Las lanza la propia aplicación al arrancar,
+		  en orden y una sola vez, y anota en flyway_schema_history cuáles ha aplicado:
+		  así un despliegue no depende de que alguien se acuerde de pasar un .sql por
+		  psql. Sólo se activa con el perfil "pro"; en desarrollo la base es H2, se crea
+		  de cero en cada arranque y estas migraciones son de PostgreSQL.
+
+		  flyway-database-postgresql va aparte desde Flyway 10: el núcleo ya no trae
+		  dentro el soporte de cada motor.
+		-->
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-database-postgresql</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+
+		<!--
 		  PDF de las facturas y de los contratos. OpenPDF es el iText 4 libre (LGPL/MPL),
 		  sin las restricciones de licencia de iText 5+, y compone lo que hace falta aquí:
 		  texto, tablas y las fuentes base del propio formato PDF, sin ningún .ttf del

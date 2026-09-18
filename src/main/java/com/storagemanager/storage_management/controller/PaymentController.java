@@ -1,9 +1,11 @@
 package com.storagemanager.storage_management.controller;
 
 import com.storagemanager.storage_management.dto.ChargeAdjustmentRequest;
+import com.storagemanager.storage_management.dto.InvoiceDTO;
 import com.storagemanager.storage_management.dto.MonthlyChargeDTO;
 import com.storagemanager.storage_management.dto.PaymentRequest;
 import com.storagemanager.storage_management.dto.RecordPaymentRequest;
+import com.storagemanager.storage_management.dto.RectifyInvoiceRequest;
 import com.storagemanager.storage_management.model.Payment;
 import com.storagemanager.storage_management.model.enums.PaymentMethod;
 import com.storagemanager.storage_management.model.enums.PaymentStatus;
@@ -164,5 +166,28 @@ public class PaymentController {
     public ResponseEntity<Resource> regenerateInvoice(@PathVariable Long id) {
         invoiceService.regenerate(id);
         return DocumentDownload.respond(invoiceService.open(id));
+    }
+
+    /**
+     * Emite una factura rectificativa de la que está en vigor: serie aparte, las
+     * cifras de hoy en sustitución de las de entonces y la causa, que es
+     * obligatoria. La rectificada no se toca.
+     * <p>
+     * Pide ADMINISTRAR: consume un número de la serie rectificativa y eso no se
+     * deshace.
+     */
+    @PreAuthorize("@access.can('PAGOS','ADMINISTRAR')")
+    @PostMapping("/{id}/invoice/rectify")
+    public ResponseEntity<Resource> rectifyInvoice(@PathVariable Long id,
+                                                   @Valid @RequestBody RectifyInvoiceRequest request) {
+        invoiceService.rectify(id, request.getReason());
+        return DocumentDownload.respond(invoiceService.open(id));
+    }
+
+    /** Todas las facturas de una mensualidad: la ordinaria y sus rectificativas. */
+    @PreAuthorize("@access.can('PAGOS','LEER')")
+    @GetMapping("/{id}/invoices")
+    public ResponseEntity<List<InvoiceDTO>> getInvoices(@PathVariable Long id) {
+        return ResponseEntity.ok(invoiceService.history(id));
     }
 }

@@ -137,6 +137,22 @@ public final class Pdfs {
         return cell;
     }
 
+    /**
+     * Un trozo de nombre de fichero a partir de un texto: sin tildes, sin
+     * mayúsculas y con guiones. "Trastero 3" queda "trastero-3".
+     * <p>
+     * Los ficheros que genera la aplicación se acaban guardando en el disco de
+     * alguien, así que el nombre tiene que decir qué son sin abrirlos.
+     */
+    public static String slug(String text) {
+        if (text == null || text.isBlank()) return "";
+        return java.text.Normalizer.normalize(text.trim(), java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toLowerCase(ES)
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("(^-|-$)", "");
+    }
+
     /** Espacio vertical entre bloques. */
     public static Paragraph gap(float height) {
         Paragraph paragraph = new Paragraph(" ");

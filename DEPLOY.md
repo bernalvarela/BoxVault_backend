@@ -126,6 +126,26 @@ docker compose pull && docker compose up -d
   `.env`. It is for inspecting buckets and objects; the app is the normal way in.
   To turn it off again, drop the `ports:` block from the `rustfs` service and set
   `RUSTFS_CONSOLE_ENABLE: "false"`.
+- **Schema changes run themselves.** The app carries its migrations
+  (`src/main/resources/db/migration/V{n}__*.sql`) and **Flyway** applies them at
+  startup: in order, once each, recorded in `flyway_schema_history`. A deploy no
+  longer depends on someone remembering to pipe a `.sql` through `psql`.
+
+  Version 1 is not a file, it is the starting line: `01-schema.sql` creates the
+  database the first time its volume is born, and Flyway baselines at 1
+  (`baseline-on-migrate`) and carries on from V2. So a genuinely empty database,
+  with no init scripts, will not start — the initial schema is not Flyway's job.
+  Flyway is off in `dev` (H2, rebuilt from the entities on every start).
+
+  A failed migration leaves the app refusing to start, which is the right
+  outcome: better down than running against a schema the code does not expect.
+  Check what it did with `docker compose logs boxvault | grep -i flyway`, or ask
+  the database: `SELECT version, description, success FROM flyway_schema_history
+  ORDER BY installed_rank;`. A migration that has been applied is never edited —
+  Flyway checksums them and will refuse to start if one changes; corrections go
+  in a new migration. `deploy/postgres/migrations/` keeps the older ones, which
+  were applied by hand before this; see the LEEME.md in there.
+
 - **Invoices and contracts** — the PDFs the app issues (one invoice per collected
   month, the contract from its template) are headed by the **owner of the unit**,
   and its data comes from the *Propietarios* screen: name, NIF, fiscal address

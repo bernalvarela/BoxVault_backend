@@ -28,15 +28,6 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     Optional<Payment> findByRentalAgreementIdAndBillingPeriodYearAndBillingPeriodMonth(
             Long rentalAgreementId, Integer year, Integer month);
 
-    /**
-     * El último número de factura emitido con ese prefijo ({@code A2026/}). Sirve
-     * para seguir la serie: el siguiente es ese más uno. Se ordena por texto, que
-     * con el ordinal a cuatro cifras y ceros delante es el mismo orden que por
-     * número.
-     */
-    @Query("SELECT MAX(p.invoiceNumber) FROM Payment p WHERE p.invoiceNumber LIKE CONCAT(:prefix, '%')")
-    Optional<String> lastInvoiceNumber(@Param("prefix") String prefix);
-
     @Query("SELECT p.storageUnit.id, p.storageUnit.unitNumber, COALESCE(SUM(p.amountPaid), 0) " +
            "FROM Payment p GROUP BY p.storageUnit.id, p.storageUnit.unitNumber")
     List<Object[]> sumRevenueByStorageUnit();

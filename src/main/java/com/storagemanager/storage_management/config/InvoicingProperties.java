@@ -56,6 +56,13 @@ public class InvoicingProperties {
     private String invoiceSeries = "A";
 
     /**
+     * Serie de las facturas rectificativas ({@code R2026/0001}). Tiene que ser
+     * distinta de la ordinaria: lo exige el artículo 15 del Reglamento de
+     * facturación, y además así se ve de un vistazo cuáles corrigen a otra.
+     */
+    private String rectificativeSeries = "R";
+
+    /**
      * Plantilla del contrato de alquiler, en el classpath. Es texto plano con
      * marcas {@code {{campo}}}; cambiarla no obliga a tocar el código.
      */

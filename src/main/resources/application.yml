@@ -19,6 +19,12 @@ spring:
       ddl-auto: update
     show-sql: false
 
+  # Migraciones de la base: apagadas salvo en "pro". En desarrollo la base es H2,
+  # se crea de cero en cada arranque a partir de las entidades y se llena con
+  # seed-data.json; estas migraciones son SQL de PostgreSQL y ahí no pintan nada.
+  flyway:
+    enabled: false
+
   # Subida de ficheros adjuntos. El límite real lo pone
   # boxvault.storage.max-file-size (da un error legible); estos dos son la red de
   # seguridad del servidor y van algo por encima para que salte primero el nuestro.
@@ -124,6 +130,24 @@ spring:
       minimum-idle: 2
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+  # Las migraciones las aplica la aplicación al arrancar (src/main/resources/db/migration),
+  # antes de que Hibernate mire nada. Cada una se ejecuta una sola vez y queda
+  # anotada en flyway_schema_history.
+  #
+  # La versión 1 no es un fichero: es la línea de salida. El esquema inicial lo
+  # pone 01-schema.sql cuando nace el volumen de PostgreSQL, así que aquí la base
+  # nunca está vacía; baseline-on-migrate marca esa versión como aplicada y
+  # Flyway sigue desde la V2. Sin esto se negaría a tocar una base que no creó.
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 1
+    baseline-description: "esquema inicial (01-schema.sql)"
+    # Una migración que falla deja la base a medias y la aplicación sin arrancar,
+    # que es lo correcto: mejor no arrancar que arrancar contra un esquema que no
+    # es el que el código espera.
+    validate-on-migrate: true
 
 # Los adjuntos van al RustFS del compose, por la red interna: sin puerto
 # publicado, sin TLS (no sale de la red del proyecto) y con las claves por
