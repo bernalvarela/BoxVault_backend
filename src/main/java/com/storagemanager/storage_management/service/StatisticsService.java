@@ -28,7 +28,6 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.function.Function;
 
@@ -54,8 +53,18 @@ import java.util.function.Function;
 @RequiredArgsConstructor
 public class StatisticsService {
 
-    private static final DateTimeFormatter MONTH_LABEL_FORMATTER =
-            DateTimeFormatter.ofPattern("MMM yyyy", new Locale("es", "ES"));
+    /**
+     * Los meses abreviados, escritos aquí y no pedidos al JDK.
+     * <p>
+     * La imagen nativa sólo lleva los datos del idioma con el que se construye,
+     * así que {@code MMM} con la configuración española daba el mes en inglés en
+     * el servidor y en español en local. Mismo motivo que en
+     * {@code service.pdf.Pdfs}, donde están los nombres completos.
+     */
+    private static final String[] MONTH_LABELS = {
+            "ene", "feb", "mar", "abr", "may", "jun",
+            "jul", "ago", "sep", "oct", "nov", "dic"
+    };
 
     private final StorageUnitRepository storageUnitRepository;
     private final ClientRepository clientRepository;
@@ -391,7 +400,7 @@ public class StatisticsService {
     private MonthlyRevenueDTO buildMonthlyRevenue(List<MonthlyChargeDTO> monthCharges, YearMonth yearMonth, Set<Long> rootIds) {
         int year = yearMonth.getYear();
         int month = yearMonth.getMonthValue();
-        String label = yearMonth.format(MONTH_LABEL_FORMATTER);
+        String label = MONTH_LABELS[month - 1] + " " + year;
 
         PeriodTotals t = PeriodTotals.of(monthCharges);
 

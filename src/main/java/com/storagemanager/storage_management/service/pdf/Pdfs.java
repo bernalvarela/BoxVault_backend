@@ -9,7 +9,8 @@ import org.openpdf.text.pdf.PdfPCell;
 
 import java.awt.Color;
 import java.math.BigDecimal;
-import java.text.NumberFormat;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
@@ -42,9 +43,21 @@ public final class Pdfs {
     public static final Font TOTAL = font(13, Font.BOLD, INK);
 
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-    private static final DateTimeFormatter LONG_DAY =
-            DateTimeFormatter.ofPattern("d 'de' MMMM 'de' yyyy", ES);
-    private static final DateTimeFormatter MONTH_YEAR = DateTimeFormatter.ofPattern("MMMM 'de' yyyy", ES);
+
+    /**
+     * Los meses, escritos aquí y no pedidos al JDK.
+     * <p>
+     * La imagen nativa sólo lleva los datos del idioma con el que se construye,
+     * así que {@code MMMM} con la configuración española devolvía "Sep" en el
+     * servidor mientras en local salía "septiembre". Lo mismo valía para los
+     * importes: los separadores de miles y decimales salían a la inglesa. Un
+     * documento que se entrega a un inquilino o a Hacienda no puede depender de
+     * con qué banderas se compiló el binario.
+     */
+    private static final String[] MONTHS = {
+            "enero", "febrero", "marzo", "abril", "mayo", "junio",
+            "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+    };
 
     private Pdfs() {}
 
@@ -52,11 +65,16 @@ public final class Pdfs {
         return FontFactory.getFont(FontFactory.HELVETICA, size, style, color);
     }
 
-    /** 1.234,56 € — con el espacio antes del símbolo, como se escribe en español. */
+    /**
+     * 1.234,56 € — con el espacio antes del símbolo, como se escribe en español.
+     * Los separadores se ponen a mano (ver {@link #MONTHS}) en vez de pedirle el
+     * formato español al JDK, que en la imagen nativa puede no estar.
+     */
     public static String euros(BigDecimal amount) {
-        NumberFormat format = NumberFormat.getNumberInstance(ES);
-        format.setMinimumFractionDigits(2);
-        format.setMaximumFractionDigits(2);
+        DecimalFormatSymbols symbols = new DecimalFormatSymbols(Locale.ROOT);
+        symbols.setDecimalSeparator(',');
+        symbols.setGroupingSeparator('.');
+        DecimalFormat format = new DecimalFormat("#,##0.00", symbols);
         return format.format(amount == null ? BigDecimal.ZERO : amount) + " €";
     }
 
@@ -67,12 +85,14 @@ public final class Pdfs {
 
     /** 17 de septiembre de 2026. */
     public static String longDay(LocalDate date) {
-        return date == null ? "—" : LONG_DAY.format(date);
+        if (date == null) return "—";
+        return date.getDayOfMonth() + " de " + MONTHS[date.getMonthValue() - 1] + " de " + date.getYear();
     }
 
     /** Septiembre de 2026, con la inicial en mayúscula. */
     public static String monthOf(int year, int month) {
-        return capitalize(MONTH_YEAR.format(LocalDate.of(year, month, 1)));
+        if (month < 1 || month > 12) return String.valueOf(year);
+        return capitalize(MONTHS[month - 1]) + " de " + year;
     }
 
     public static String capitalize(String text) {
