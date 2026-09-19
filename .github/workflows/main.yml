@@ -64,17 +64,36 @@ jobs:
           native-image-musl: 'true'
           cache: 'maven'
 
-      # El runner tiene 8 GB y native-image pide más de 7: el pico real es de
-      # 7,6 GB. Sin este colchón el sistema mata la compilación a media faena
-      # ("exit status 137"), que es de donde venían los fallos intermitentes.
-      # /mnt es el disco grande y efímero del runner.
-      - name: Room to breathe (swap)
+      # Sitio en disco y colchón de memoria, en ese orden.
+      #
+      # El runner trae instaladas cosas que aquí no pinta nada -.NET, el SDK de
+      # Android, Haskell- y ocupan más de veinte gigas. Se tiran primero, porque
+      # lo que viene después necesita ese sitio: el fichero de intercambio, los
+      # 244 MB del binario y las capas de la imagen.
+      #
+      # El colchón: el runner tiene 8 GB y native-image pide más de 7, con un
+      # pico real de 7,6 GB. Sin él, el sistema mata la compilación a media
+      # faena ("exit status 137"), que es de donde venían los fallos
+      # intermitentes. Va en /mnt, el disco efímero grande, cuando existe como
+      # tal, y con nombre propio: el runner ya trae su /mnt/swapfile y pisarlo
+      # en caliente sería peor que no hacer nada.
+      - name: Sitio en disco y colchón de memoria
         run: |
-          sudo fallocate -l 12G /mnt/intercambio
-          sudo chmod 600 /mnt/intercambio
-          sudo mkswap /mnt/intercambio
-          sudo swapon /mnt/intercambio
+          set -euo pipefail
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/share/boost "${AGENT_TOOLSDIRECTORY:-}" || true
+          sudo docker image prune -af || true
+          df -h /
+
+          colchon=/intercambio-extra
+          if mountpoint -q /mnt; then colchon=/mnt/intercambio-extra; fi
+          sudo fallocate -l 8G "$colchon"
+          sudo chmod 600 "$colchon"
+          sudo mkswap "$colchon"
+          sudo swapon "$colchon"
           free -h
+          df -h
 
       # -Pnative-quick: "quick build" (-Ob), menos memoria y menos tiempo; ver
       # pom.xml. El límite corta una compilación encallada en vez de dejarla
