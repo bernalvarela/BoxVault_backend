@@ -72,6 +72,11 @@ CREATE TABLE storage_units (
     base_monthly_rate   NUMERIC(10,2) NOT NULL,
     status              VARCHAR(30)  NOT NULL,
     description         TEXT,
+    -- Muebles y enseres del piso, uno por línea; sale en el contrato.
+    inventory           TEXT,
+    -- Con qué plantilla se hacen sus contratos; NULL = la del local que la
+    -- contiene, y si ninguno dice nada, la marcada por defecto.
+    contract_template_id BIGINT,
     created_at          TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
     updated_at          TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_storage_units_unit_number UNIQUE (unit_number),
@@ -101,6 +106,10 @@ CREATE TABLE rental_agreements (
     monthly_rent         NUMERIC(10,2) NOT NULL,
     security_deposit     NUMERIC(10,2),
     deposit_paid         BOOLEAN,
+    -- Gastos que asume el inquilino aparte de la renta: comunidad al mes e IBI
+    -- al año. Van aquí y no en la unidad porque son una cláusula del contrato.
+    community_fee        NUMERIC(10,2),
+    property_tax         NUMERIC(10,2),
     status               VARCHAR(30) NOT NULL,
     auto_renew           BOOLEAN,
     -- Si de este contrato sale factura al cobrar. NULL = no; sólo se puede

@@ -43,4 +43,10 @@ public class StorageUnitRequest {
     private UnitStatus status;
 
     private String description;
+
+    /** Muebles y enseres del piso, uno por línea; sale en el contrato. */
+    private String inventory;
+
+    /** Plantilla con la que se hacen sus contratos; nulo = la del local o la de por defecto. */
+    private Long contractTemplateId;
 }

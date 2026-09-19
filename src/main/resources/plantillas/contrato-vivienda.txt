@@ -1,0 +1,123 @@
+« Contrato alquiler Xiao Bernal — arrendamiento de vivienda.
+«
+« Hecha a partir del contrato de la 3ª izquierda de Pasaxe 29. Lo que la
+« aplicación sabe va entre {{llaves}} y se rellena solo; lo que no sabe -el
+« inventario, los gastos de comunidad, la duración pactada- está escrito y hay
+« que revisarlo en cada contrato.
+«
+« De dónde sale cada cosa, para no buscarla:
+«   - {{inventario}} está en la ficha del PISO (Unidades → Editar);
+«   - {{gastos_comunidad}} y {{gastos_ibi}}, en el CONTRATO, porque los asume
+«     este inquilino y con otro pueden pactarse distintos;
+«   - {{arrendadores}} saca a los propietarios de la unidad con su NIF, así que
+«     la ficha de Propietarios tiene que tenerlos puestos; y {{arrendador_iban}}
+«     sale de la cuenta del propietario principal.
+
+# CONTRATO DE ARRENDAMIENTO DE VIVIENDA
+
+En A Coruña, a {{fecha_larga}}.
+
+## Reunidos
+
+De una parte, **{{arrendadores}}**, como ARRENDADORES.
+
+Y de otra parte, **{{arrendatario_nombre}}**, con D.N.I. {{arrendatario_nif}}, como ARRENDATARIA.
+
+{{coarrendatario}}
+
+## Intervienen
+
+Ambas partes actúan en su propio nombre y representación y se reconocen capacidad legal suficiente para otorgar el presente contrato, y a tal efecto
+
+## Manifiestan
+
+A) Que la parte arrendadora es propietaria de la vivienda sita en {{unidad_direccion}}, de A Coruña (Ref. Catastral {{unidad_referencia_catastral}}).
+
+B) Que habiendo convenido el arrendamiento de la vivienda mencionada en el anterior párrafo, manifestando {{arrendatario_nombre}} que lo lleven a efecto de conformidad a lo que resulta de las siguientes:
+
+## Cláusulas
+
+**PRIMERA. OBJETO.** La parte arrendadora cede en arrendamiento a la parte arrendataria la vivienda que quedó descrita en el apartado A), manifestando que el inmueble arrendado será dedicado exclusivamente a vivienda con exclusión de todo otro uso distinto.
+
+Queda expresamente prohibida la cesión o subarriendo del inmueble objeto de este contrato.
+
+**SEGUNDA. DURACIÓN.** El presente contrato se concierta por un __plazo inicial de UN (1) AÑO__, a contar desde el {{fecha_inicio}}.
+
+Llegado el vencimiento del plazo inicial, el contrato se prorrogará obligatoriamente, por períodos anuales, hasta alcanzar una duración máxima de CINCO (5) AÑOS, conforme a lo dispuesto en el artículo 9 de la Ley de Arrendamientos Urbanos, siempre que la parte arrendataria no manifieste su voluntad en contrario.
+
+La parte arrendataria podrá evitar cada una de las prórrogas anuales mediante notificación expresa a la parte arrendadora, realizada con una antelación mínima de TREINTA (30) DÍAS a la fecha de terminación del contrato o de cualquiera de sus prórrogas.
+
+Una vez alcanzada la duración máxima de cinco años, el contrato podrá prorrogarse conforme a lo previsto en el artículo 10 de la Ley de Arrendamientos Urbanos, salvo comunicación en contrario de cualquiera de las partes en los plazos legalmente establecidos.
+
+**TERCERA. RENTA.** La renta se fija en **{{renta_anual}} anuales**, pagaderos por adelantado a razón de **{{renta_total}} mensuales**, dentro de los cinco primeros días de cada mes, mediante transferencia bancaria a favor de los arrendadores en el siguiente número de cuenta:
+
+[centro]{{arrendador_iban}}
+
+El impago de la renta o de cualquiera de las cantidades asimiladas facultará a la parte arrendadora para instar la resolución del contrato conforme al artículo 27 LAU.
+
+**CUARTA. GASTOS A CARGO DE LA PARTE ARRENDATARIA.** De forma expresa y prioritaria, LA PARTE ARRENDATARIA asumirá, como gastos independientes y adicionales a la renta, los siguientes conceptos:
+
+1. **Gastos de comunidad:** la cantidad fija de {{gastos_comunidad}} mensuales.
+1. **Impuesto sobre Bienes Inmuebles (IBI):** la cantidad de {{gastos_ibi}} anuales, que se abonará prorrateada mensualmente, previa acreditación documental de su importe, cuando la parte arrendataria lo solicite de forma expresa.
+
+Ambos conceptos tendrán la consideración de gastos fijos y __no__ estarán incluidos en la renta.
+
+Asimismo, serán de cuenta y cargo de la parte arrendataria los gastos derivados del uso de la vivienda, tales como agua, electricidad, gas, teléfono, internet y cualesquiera otros suministros o servicios que puedan individualizarse mediante contadores u otros sistemas de medición.
+
+La parte arrendataria declara conocer y aceptar expresamente los importes indicados.
+
+**CUARTA BIS. SUMINISTROS.** La parte arrendataria se obliga a cambiar a su nombre, lo antes posible y en el plazo máximo de TREINTA (30) DÍAS desde la firma del presente contrato, los contratos de suministro de electricidad y agua, que en el momento de la firma se encuentran a nombre de la parte arrendadora, siendo de su exclusiva responsabilidad el pago de todos los consumos que se produzcan desde el inicio del arrendamiento.
+
+A la finalización del contrato, la parte arrendataria deberá acreditar que los suministros se encuentran al corriente de pago, quedando la parte arrendadora expresamente exonerada de cualquier deuda o responsabilidad derivada de los mismos.
+
+**QUINTA. FIANZA Y DEPÓSITO DE GARANTÍA.** La parte arrendataria entrega en este acto, mediante transferencia bancaria a favor de los arrendadores en la cuenta arriba indicada, la cantidad de **{{fianza}}**, que se desglosa de la siguiente manera:
+
+- Una mensualidad de renta en concepto de fianza, que los propietarios depositarán en el organismo correspondiente, en este caso el Instituto Galego da Vivenda e Solo.
+- Una mensualidad de renta en concepto de depósito de garantía.
+
+El total se devolverá a la finalización del contrato siempre y cuando no exista ninguna deuda por parte de la parte arrendataria y se devuelva el piso en buen estado, una vez tenido en cuenta el desgaste derivado del uso normal y adecuado de la vivienda.
+
+La fianza será devuelta en el plazo máximo de un mes desde la entrega de llaves.
+
+**SEXTA. REVISIÓN DE RENTA.** La renta pactada podrá ser revisada anualmente, a partir del primer año de vigencia del contrato, en la fecha en que éste se prorrogue, conforme a lo dispuesto en la normativa vigente en cada momento.
+
+La actualización de la renta se realizará aplicando el índice o sistema de referencia legalmente establecido, o aquel que lo sustituya, publicado por el organismo oficial competente, correspondiente a los doce (12) meses anteriores a la fecha de revisión.
+
+La renta resultante tras cada revisión, ya sea al alza o a la baja, será exigible a la parte arrendataria a partir del mes siguiente a aquel en que la parte arrendadora le notifique por escrito la actualización practicada, tomando como base para el cálculo la última renta vigente y no la inicial.
+
+**SÉPTIMA. ESTADO DE CONSERVACIÓN.** La parte arrendataria declara recibir la vivienda objeto del presente contrato, así como sus instalaciones, mobiliario y enseres, en buen estado de uso, conservación y limpieza, obligándose a mantenerla en dicho estado durante la vigencia del arrendamiento.
+
+Serán de cuenta y cargo de la parte arrendataria las pequeñas reparaciones que exija el desgaste derivado del uso ordinario de la vivienda, así como los daños producidos por uso indebido, negligente o falta de diligencia.
+
+Corresponderá a la parte arrendadora las reparaciones necesarias para conservar la vivienda en condiciones de habitabilidad, conforme a lo dispuesto en el artículo 21 de la Ley de Arrendamientos Urbanos, siempre que los deterioros no sean imputables a la parte arrendataria.
+
+La parte arrendataria se compromete a comunicar de forma inmediata a la parte arrendadora la necesidad de realizar cualquier reparación cuya atención no le corresponda, respondiendo de los daños que pudieran producirse por la falta de dicha comunicación.
+
+**OCTAVA. INVENTARIO.** Desglose de muebles y enseres que se encuentran en el inmueble objeto de este contrato y que la parte arrendataria se compromete a usar adecuadamente, comprometiéndose a dejarlos en perfecto estado a la finalización del mismo.
+
+{{inventario}}
+
+**NOVENA. OBRAS.** No podrá la parte arrendataria realizar obras de cualquier género en el inmueble arrendado, ni modificar o sustituir las instalaciones existentes sin previo permiso escrito de los arrendadores; y si éstos lo otorgasen, todas las obras que realizase quedarán en beneficio de la vivienda sin indemnización alguna por parte de los mismos.
+
+**DÉCIMA. DESISTIMIENTO.** La parte arrendataria podrá desistir del presente contrato una vez hayan transcurrido al menos SEIS (6) MESES desde su entrada en vigor, siempre que lo comunique a la parte arrendadora con una antelación mínima de TREINTA (30) DÍAS.
+
+En caso de desistimiento antes de haber transcurrido DOCE (12) MESES desde la entrada en vigor del contrato, la parte arrendataria deberá indemnizar a la parte arrendadora con una cantidad equivalente a una mensualidad de renta.
+
+No se devengará indemnización alguna cuando el desistimiento tenga lugar una vez transcurrido el primer año completo de vigencia del contrato.
+
+**UNDÉCIMA. CAUSAS DE RESOLUCIÓN DEL CONTRATO.** La parte arrendadora tendrá derecho a resolver el contrato por las siguientes causas:
+
+- La falta de pago de la renta o de cualquiera de las cantidades cuyo pago haya asumido la parte arrendataria.
+- La falta de pago de la fianza.
+- El subarriendo o cesión inconsentida.
+- La realización de daños causados a la finca u obras no consentidas por los arrendadores.
+- Cuando en la vivienda tengan lugar actividades molestas, insalubres, nocivas, peligrosas o ilícitas.
+- Cuando la vivienda deje de estar destinada de forma primordial a satisfacer la necesidad permanente de vivienda de la parte arrendataria.
+
+Y cualquier otra causa prevista legalmente en el artículo 27 de la LAU.
+
+**DUODÉCIMA. JURISDICCIÓN.** Para la discusión de cuantas cuestiones pudieran derivarse de la interpretación o desarrollo del presente contrato, ambas partes, con renuncia al fuero que debiera corresponderles, se someten de forma expresa a la jurisdicción y competencia de los Juzgados y Tribunales de A Coruña.
+
+Y en prueba de conformidad suscriben este documento por duplicados ejemplares y a un solo efecto, en el lugar y fecha del encabezamiento.
+
+[[firmas:LOS ARRENDADORES|LA ARRENDATARIA]]

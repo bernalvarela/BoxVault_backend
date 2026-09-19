@@ -6,6 +6,7 @@ import com.storagemanager.storage_management.dto.UnitHistoryDTO;
 import com.storagemanager.storage_management.exception.BadRequestException;
 import com.storagemanager.storage_management.exception.ResourceNotFoundException;
 import com.storagemanager.storage_management.model.Client;
+import com.storagemanager.storage_management.model.ContractTemplate;
 import com.storagemanager.storage_management.model.StorageUnit;
 import com.storagemanager.storage_management.model.UnitPriceHistory;
 import com.storagemanager.storage_management.model.enums.RentalStatus;
@@ -15,6 +16,7 @@ import com.storagemanager.storage_management.repository.ExpenseRepository;
 import com.storagemanager.storage_management.repository.OwnershipRepository;
 import com.storagemanager.storage_management.repository.PaymentRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
+import com.storagemanager.storage_management.repository.ContractTemplateRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
 import com.storagemanager.storage_management.repository.UnitPriceHistoryRepository;
 import com.storagemanager.storage_management.security.UnitScope;
@@ -32,6 +34,7 @@ import java.util.Optional;
 public class StorageUnitService {
 
     private final StorageUnitRepository storageUnitRepository;
+    private final ContractTemplateRepository contractTemplateRepository;
     private final RentalAgreementRepository rentalAgreementRepository;
     private final UnitPriceHistoryRepository unitPriceHistoryRepository;
     private final PaymentRepository paymentRepository;
@@ -137,6 +140,8 @@ public class StorageUnitService {
                 .dimensions(request.getDimensions())
                 .location(request.getLocation())
                 .cadastralReference(trimToNull(request.getCadastralReference()))
+                .inventory(trimToNull(request.getInventory()))
+                .contractTemplate(templateOf(request.getContractTemplateId()))
                 .baseMonthlyRate(request.getBaseMonthlyRate())
                 .status(request.getStatus() != null ? request.getStatus() : UnitStatus.AVAILABLE)
                 .description(request.getDescription())
@@ -169,6 +174,8 @@ public class StorageUnitService {
         unit.setDimensions(request.getDimensions());
         unit.setLocation(request.getLocation());
         unit.setCadastralReference(trimToNull(request.getCadastralReference()));
+        unit.setInventory(trimToNull(request.getInventory()));
+        unit.setContractTemplate(templateOf(request.getContractTemplateId()));
         unit.setBaseMonthlyRate(request.getBaseMonthlyRate());
         if (priceChanged) {
             recordPrice(unit, request.getBaseMonthlyRate(), "Cambio de precio");
@@ -280,5 +287,12 @@ public class StorageUnitService {
                 .effectiveFrom(LocalDate.now())
                 .notes(note)
                 .build());
+    }
+
+    /** La plantilla elegida para esta unidad, si se eligió alguna. */
+    private ContractTemplate templateOf(Long templateId) {
+        if (templateId == null) return null;
+        return contractTemplateRepository.findById(templateId)
+                .orElseThrow(() -> new ResourceNotFoundException("Contract template not found with id: " + templateId));
     }
 }

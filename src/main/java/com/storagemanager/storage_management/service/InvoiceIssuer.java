@@ -42,11 +42,13 @@ public class InvoiceIssuer {
      *               atribución de rentas"), que de una persona sería falsa.
      */
     public record Issuer(String name, String taxId, String address, String city,
-                         String email, String phone, String iban, boolean entity) {}
+                         String email, String phone, String iban, boolean entity,
+                         String owners) {}
 
     public Issuer forUnit(StorageUnit unit) {
-        Owner owner = ownerOf(unit);
-        return owner == null ? fromProperties() : from(owner);
+        List<Ownership> shares = sharesOf(unit);
+        Owner owner = pickOwner(shares);
+        return owner == null ? fromProperties() : from(owner, shares);
     }
 
     /**
@@ -56,12 +58,11 @@ public class InvoiceIssuer {
      */
     public Issuer any() {
         List<Ownership> shares = ownershipRepository.findAll();
-        Owner owner = shares.stream().map(Ownership::getOwner).filter(Owner::isEntity).findFirst()
-                .orElseGet(() -> shares.stream().map(Ownership::getOwner).findFirst().orElse(null));
-        return owner == null ? fromProperties() : from(owner);
+        Owner owner = pickOwner(shares);
+        return owner == null ? fromProperties() : from(owner, shares);
     }
 
-    private Issuer from(Owner owner) {
+    private Issuer from(Owner owner, List<Ownership> shares) {
         return new Issuer(
                 pick(owner.getFullName(), fallback.getIssuerName()),
                 pick(owner.getDocumentId(), fallback.getIssuerTaxId()),
@@ -72,7 +73,29 @@ public class InvoiceIssuer {
                 pick(owner.getEmail(), fallback.getIssuerEmail()),
                 pick(owner.getPhone(), fallback.getIssuerPhone()),
                 pick(owner.getBankAccount(), fallback.getIssuerIban()),
-                owner.isEntity());
+                owner.isEntity(),
+                ownersPhrase(shares));
+    }
+
+    /**
+     * Todos los propietarios de la unidad con su NIF, escrito como se escribe en
+     * un contrato: "Fulano (NIF ...) y Mengano (NIF ...)".
+     * <p>
+     * Hace falta porque un piso suele ser de dos personas y el contrato lo firman
+     * las dos; el emisor "principal" sirve para una factura, pero no para decir
+     * quién arrienda.
+     */
+    private String ownersPhrase(List<Ownership> shares) {
+        List<String> names = shares.stream()
+                .map(Ownership::getOwner)
+                .filter(owner -> !owner.isEntity() || shares.size() == 1)
+                .map(owner -> owner.getDocumentId() == null || owner.getDocumentId().isBlank()
+                        ? owner.getFullName()
+                        : owner.getFullName() + " (NIF " + owner.getDocumentId() + ")")
+                .toList();
+        if (names.isEmpty()) return InvoicingProperties.MISSING;
+        if (names.size() == 1) return names.get(0);
+        return String.join(", ", names.subList(0, names.size() - 1)) + " y " + names.get(names.size() - 1);
     }
 
     private Issuer fromProperties() {
@@ -81,27 +104,31 @@ public class InvoiceIssuer {
                 fallback.getIssuerCity(), fallback.getIssuerEmail(), fallback.getIssuerPhone(),
                 fallback.getIssuerIban(),
                 // Sin propietario que mirar no se afirma lo que no consta.
-                false);
+                false,
+                InvoicingProperties.MISSING);
     }
 
-    /** El propietario que factura esta unidad, o null si no consta ninguno. */
-    private Owner ownerOf(StorageUnit unit) {
+/** Las participaciones que mandan en esta unidad: las suyas o las del local que la contiene. */
+    private List<Ownership> sharesOf(StorageUnit unit) {
         int guard = 0;
         for (StorageUnit u = unit; u != null && guard++ < 32; u = u.getParent()) {
             List<Ownership> shares = ownershipRepository.findByStorageUnitId(u.getId());
-            if (shares.isEmpty()) continue;
-
-            return shares.stream()
-                    .map(Ownership::getOwner)
-                    .filter(Owner::isEntity)
-                    .findFirst()
-                    .orElseGet(() -> shares.stream()
-                            .max(Comparator.comparing(share -> share.getSharePercent() == null
-                                    ? BigDecimal.ZERO : share.getSharePercent()))
-                            .map(Ownership::getOwner)
-                            .orElse(null));
+            if (!shares.isEmpty()) return shares;
         }
-        return null;
+        return List.of();
+    }
+
+    /** Quién emite de entre ellas: la comunidad de bienes, y si no la que más tenga. */
+    private Owner pickOwner(List<Ownership> shares) {
+        return shares.stream()
+                .map(Ownership::getOwner)
+                .filter(Owner::isEntity)
+                .findFirst()
+                .orElseGet(() -> shares.stream()
+                        .max(Comparator.comparing(share -> share.getSharePercent() == null
+                                ? BigDecimal.ZERO : share.getSharePercent()))
+                        .map(Ownership::getOwner)
+                        .orElse(null));
     }
 
     private static String pick(String preferred, String other) {

@@ -113,6 +113,8 @@ public class RentalAgreementService {
                 .autoRenew(request.getAutoRenew() != null ? request.getAutoRenew() : true)
                 .generatesInvoices(invoicingAllowed(unit, request.getGeneratesInvoices()))
                 .contractTemplate(templateOf(request.getContractTemplateId()))
+                .communityFee(request.getCommunityFee())
+                .propertyTax(request.getPropertyTax())
                 .notes(request.getNotes())
                 .build();
 
@@ -160,6 +162,8 @@ public class RentalAgreementService {
             agreement.setDepositPaid(request.getDepositPaid());
         }
         agreement.setContractTemplate(templateOf(request.getContractTemplateId()));
+        agreement.setCommunityFee(request.getCommunityFee());
+        agreement.setPropertyTax(request.getPropertyTax());
         if (request.getGeneratesInvoices() != null) {
             agreement.setGeneratesInvoices(invoicingAllowed(agreement.getStorageUnit(), request.getGeneratesInvoices()));
         }

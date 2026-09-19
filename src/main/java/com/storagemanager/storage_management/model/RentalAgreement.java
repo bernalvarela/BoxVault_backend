@@ -58,6 +58,21 @@ public class RentalAgreement {
     @Column(precision = 10, scale = 2)
     private BigDecimal securityDeposit;
 
+    /**
+     * Gastos que este inquilino asume aparte de la renta: la cuota de comunidad
+     * (al mes) y el IBI (al año).
+     * <p>
+     * Van en el contrato y no en la unidad porque son una cláusula, no un hecho
+     * del piso: el mismo piso puede alquilarse con los gastos incluidos o con
+     * ellos aparte, y eso se pacta con cada inquilino. Nulo = no se pactó nada y
+     * el contrato no dice nada de ellos.
+     */
+    @Column(precision = 10, scale = 2)
+    private BigDecimal communityFee;
+
+    @Column(precision = 10, scale = 2)
+    private BigDecimal propertyTax;
+
     @Builder.Default
     private Boolean depositPaid = false;
 

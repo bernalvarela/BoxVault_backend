@@ -2,6 +2,7 @@ package com.storagemanager.storage_management.service.pdf;
 
 import org.openpdf.text.Document;
 import org.openpdf.text.DocumentException;
+import org.openpdf.text.Chunk;
 import org.openpdf.text.Element;
 import org.openpdf.text.Image;
 import org.openpdf.text.PageSize;
@@ -41,6 +42,13 @@ import java.util.regex.Pattern;
 public class ContractPdfService {
 
     private static final Pattern FIELD = Pattern.compile("\\{\\{([a-z_]+)}}");
+
+    /**
+     * [[firmas]] o [[firmas:LOS ARRENDADORES|LA ARRENDATARIA]], cuando quien
+     * firma no es un señor y un señor: dos propietarios, una arrendataria, una
+     * empresa. Sin nada detrás, los rótulos de siempre.
+     */
+    private static final Pattern SIGNATURES = Pattern.compile("\\[\\[firmas(?::([^|\\]]*)\\|([^\\]]*))?]]");
 
     /** [[imagen:logo]] o [[imagen:logo|40]], donde 40 es el ancho en % de la caja de texto. */
     private static final Pattern IMAGE = Pattern.compile("\\[\\[imagen:([^|\\]]+)(?:\\|\\s*(\\d{1,3})\\s*)?]]");
@@ -169,7 +177,12 @@ public class ContractPdfService {
         Styled styled = stripAttributes(block);
         String text = styled.text();
 
-        if (text.equals("[[firmas]]")) return signatures();
+        Matcher firmas = SIGNATURES.matcher(text);
+        if (firmas.matches()) {
+            return signatures(
+                    firmas.group(1) == null ? "EL ARRENDADOR" : firmas.group(1).trim(),
+                    firmas.group(2) == null ? "EL ARRENDATARIO" : firmas.group(2).trim());
+        }
 
         Matcher image = IMAGE.matcher(text);
         if (image.matches()) return image(image.group(1).trim(), image.group(2), images);
@@ -281,7 +294,7 @@ public class ContractPdfService {
         int at = 0;
         while (matcher.find()) {
             if (matcher.start() > at) {
-                paragraph.add(new Phrase(text.substring(at, matcher.start()), body(size, org.openpdf.text.Font.NORMAL)));
+                addText(paragraph, text.substring(at, matcher.start()), body(size, org.openpdf.text.Font.NORMAL));
             }
             if (matcher.group(1) != null) {
                 paragraph.add(new Phrase(matcher.group(1), body(size, org.openpdf.text.Font.BOLD)));
@@ -293,9 +306,22 @@ public class ContractPdfService {
             at = matcher.end();
         }
         if (at < text.length()) {
-            paragraph.add(new Phrase(text.substring(at), body(size, org.openpdf.text.Font.NORMAL)));
+            addText(paragraph, text.substring(at), body(size, org.openpdf.text.Font.NORMAL));
         }
         return paragraph;
+    }
+
+    /**
+     * Texto que puede traer saltos de línea dentro, como el inventario de un
+     * piso: cada línea es una línea. Sin esto, un campo con tres renglones salía
+     * todo seguido.
+     */
+    private void addText(Paragraph paragraph, String text, org.openpdf.text.Font font) {
+        String[] lines = text.split("\n", -1);
+        for (int i = 0; i < lines.length; i++) {
+            if (i > 0) paragraph.add(Chunk.NEWLINE);
+            if (!lines[i].isEmpty()) paragraph.add(new Phrase(lines[i], font));
+        }
     }
 
     private static org.openpdf.text.Font body(float size, int style) {
@@ -340,13 +366,13 @@ public class ContractPdfService {
         }
     }
 
-    /** Las dos columnas de firmas, al final. */
-    private Element signatures() {
+    /** Las dos columnas de firmas, al final, con el rótulo que pida la plantilla. */
+    private Element signatures(String left, String right) {
         PdfPTable table = new PdfPTable(2);
         table.setWidthPercentage(100);
         table.setSpacingBefore(36);
-        table.addCell(signature("EL ARRENDADOR"));
-        table.addCell(signature("EL ARRENDATARIO"));
+        table.addCell(signature(left));
+        table.addCell(signature(right));
         return table;
     }
 

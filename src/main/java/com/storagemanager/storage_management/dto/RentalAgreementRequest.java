@@ -44,5 +44,11 @@ public class RentalAgreementRequest {
     /** Plantilla con la que se compone su contrato; nulo = la de por defecto. */
     private Long contractTemplateId;
 
+    /** Cuota de comunidad mensual que asume el inquilino; nulo = no se pacta. */
+    private BigDecimal communityFee;
+
+    /** IBI anual que asume el inquilino; nulo = no se pacta. */
+    private BigDecimal propertyTax;
+
     private String notes;
 }

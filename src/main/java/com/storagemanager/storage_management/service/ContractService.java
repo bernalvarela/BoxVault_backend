@@ -44,8 +44,9 @@ public class ContractService {
     @Transactional
     public Document generate(Long rentalId) {
         RentalAgreement rental = rentals.getAgreementById(rentalId);
-        // La plantilla que diga el contrato; si no dice ninguna, la de por defecto.
-        String template = templates.textFor(rental.getContractTemplate());
+        // La plantilla que diga el contrato, la de su unidad, la del local que la
+        // contiene o la de por defecto, por ese orden.
+        String template = templates.textFor(rental);
         byte[] content = pdf.render(rental, issuers.forUnit(rental.getStorageUnit()), template, images::bytesOf);
 
         // El nombre dice qué es sin abrirlo: contrato, de qué unidad y de cuándo.

@@ -80,6 +80,28 @@ public class StorageUnit {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    /**
+     * Los muebles y enseres que hay dentro, uno por línea. Es del piso y no del
+     * contrato: el sofá sigue ahí cuando cambia el inquilino. Sale en el contrato
+     * a través de {@code {{inventario}}}.
+     */
+    @Column(columnDefinition = "TEXT")
+    private String inventory;
+
+    /**
+     * Con qué plantilla se componen los contratos de esta unidad, salvo que el
+     * contrato diga otra cosa. Nulo = la del local que la contiene, y si ninguno
+     * dice nada, la marcada por defecto.
+     * <p>
+     * Es lo que evita tener que acordarse en cada alta: los pisos se alquilan con
+     * el contrato de vivienda y los trasteros con el suyo, y eso no cambia de un
+     * inquilino a otro. Se hereda del padre igual que los propietarios, así que
+     * basta con marcarla en el local para que la lleven sus nueve trasteros.
+     */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "contract_template_id")
+    private ContractTemplate contractTemplate;
+
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;

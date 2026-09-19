@@ -48,6 +48,9 @@ public final class ContractFields {
             new Field("arrendador_email", "Arrendador", "Correo de contacto", "pasaxe29@ejemplo.es"),
             new Field("arrendador_telefono", "Arrendador", "Teléfono de contacto", "600 000 000"),
             new Field("arrendador_iban", "Arrendador", "Cuenta donde se cobra", "ES00 0000 0000 0000 0000 0000"),
+            new Field("arrendadores", "Arrendador",
+                    "Todos los propietarios de la unidad, con su NIF; para un piso de dos titulares",
+                    "Bernal Varela Gómez (NIF 46906413Y) y Xiao Varela Gómez (NIF 46906414F)"),
 
             new Field("arrendatario_nombre", "Arrendatario", "Nombre del inquilino", "Ana Gómez Pérez"),
             new Field("arrendatario_nif", "Arrendatario", "NIF del inquilino", "12345678Z"),
@@ -62,6 +65,10 @@ public final class ContractFields {
             new Field("unidad_nombre", "Unidad", "Nombre de la unidad", "Trastero 3"),
             new Field("unidad_metros", "Unidad", "Metros cuadrados", "5"),
             new Field("unidad_direccion", "Unidad", "Dónde está", "Avenida del Pasaje 29, bajo delantero"),
+            new Field("unidad_referencia_catastral", "Unidad", "Referencia catastral", "9602605NJ4090S0008KY"),
+            new Field("inventario", "Unidad",
+                    "Muebles y enseres del piso, uno por línea, tal como estén en su ficha",
+                    "Cocina: muebles, vitrocerámica y horno..."),
 
             new Field("fecha_inicio", "Fechas", "Cuándo empieza", "01/03/2026"),
             new Field("fecha_fin", "Fechas", "Cuándo termina; un guion si es indefinido", "28/02/2027"),
@@ -71,8 +78,13 @@ public final class ContractFields {
             new Field("renta_base", "Dinero", "Renta mensual sin IVA", "45,45 €"),
             new Field("renta_iva", "Dinero", "Cuota de IVA de la renta", "9,55 €"),
             new Field("renta_total", "Dinero", "Renta mensual total", "55,00 €"),
+            new Field("renta_anual", "Dinero", "Renta de un año (la mensual por doce)", "660,00 €"),
             new Field("iva_texto", "Dinero", "Explicación del IVA aplicado", "21 %, tipo general vigente"),
             new Field("dia_cobro", "Dinero", "Día de cobro pactado", "1"),
+            new Field("gastos_comunidad", "Dinero",
+                    "Cuota de comunidad mensual que asume el inquilino, si se pactó", "20,00 €"),
+            new Field("gastos_ibi", "Dinero",
+                    "IBI anual que asume el inquilino, si se pactó", "120,00 €"),
             new Field("fianza", "Dinero", "Importe de la fianza", "110,00 €"),
             new Field("fianza_texto", "Dinero", "Frase hecha con la fianza; dice que no hay si no la hay",
                     "EL ARRENDATARIO entrega a EL ARRENDADOR la cantidad de 110,00 € en concepto de fianza.")
@@ -103,6 +115,7 @@ public final class ContractFields {
         values.put("arrendador_email", orMissing(issuer.email()));
         values.put("arrendador_telefono", orMissing(issuer.phone()));
         values.put("arrendador_iban", orMissing(issuer.iban()));
+        values.put("arrendadores", orMissing(issuer.owners()));
 
         values.put("arrendatario_nombre", client == null ? orMissing(null) : client.getFullName());
         values.put("arrendatario_nif", client == null ? orMissing(null) : orMissing(client.getDocumentId()));
@@ -116,6 +129,9 @@ public final class ContractFields {
         values.put("unidad_metros", unit == null || unit.getSizeSquareMeters() == null
                 ? orMissing(null) : trimZeros(unit.getSizeSquareMeters()));
         values.put("unidad_direccion", unit == null ? orMissing(null) : orMissing(unit.getLocation()));
+        values.put("unidad_referencia_catastral",
+                unit == null ? orMissing(null) : orMissing(unit.getCadastralReference()));
+        values.put("inventario", unit == null ? orMissing(null) : orMissing(unit.getInventory()));
 
         values.put("fecha_inicio", Pdfs.day(rental.getStartDate()));
         values.put("fecha_fin", Pdfs.day(rental.getEndDate()));
@@ -126,10 +142,18 @@ public final class ContractFields {
         values.put("renta_base", Pdfs.euros(rent.base()));
         values.put("renta_iva", vatApplicable ? Pdfs.euros(rent.vat()) : Pdfs.euros(BigDecimal.ZERO));
         values.put("renta_total", Pdfs.euros(rent.total()));
+        values.put("renta_anual", Pdfs.euros(rent.total().multiply(new BigDecimal("12"))));
         values.put("iva_texto", vatApplicable
                 ? "21 %, tipo general vigente"
                 : "operación exenta, artículo 20.Uno.23º de la Ley 37/1992");
         values.put("dia_cobro", String.valueOf(rental.getBillingDayOfMonth()));
+
+        // Un gasto que no se pactó deja el hueco a la vista: en un contrato, un
+        // importe en blanco tiene que verse, no leerse como "cero euros".
+        values.put("gastos_comunidad", rental.getCommunityFee() == null
+                ? orMissing(null) : Pdfs.euros(rental.getCommunityFee()));
+        values.put("gastos_ibi", rental.getPropertyTax() == null
+                ? orMissing(null) : Pdfs.euros(rental.getPropertyTax()));
 
         values.put("fianza", deposit == null ? Pdfs.euros(BigDecimal.ZERO) : Pdfs.euros(deposit));
         values.put("fianza_texto", deposit == null || deposit.signum() == 0
@@ -156,11 +180,14 @@ public final class ContractFields {
                 .unitNumber("3").name("Trastero 3").kind(UnitKind.STORAGE_UNIT)
                 .sizeSquareMeters(5.0)
                 .location("Avenida del Pasaje (A Pasaxe) 29, bajo delantero")
+                .cadastralReference("9602605NJ4090S0008KY")
+                .inventory("Cocina: muebles, vitrocerámica y horno, nevera y lavadora.\nBaño: lavabo con espejo, WC y ducha.\nSalón: sofá, mesa de centro y mesa de comedor con cuatro sillas.")
                 .build();
         return RentalAgreement.builder()
                 .agreementNumber("CON-EJEMPLO").storageUnit(unit).client(tenant)
                 .startDate(LocalDate.now()).billingDayOfMonth(1)
                 .monthlyRent(new BigDecimal("55.00")).securityDeposit(new BigDecimal("110.00"))
+                .communityFee(new BigDecimal("20.00")).propertyTax(new BigDecimal("120.00"))
                 .build();
     }
 

@@ -24,12 +24,24 @@ class ContractMarkupTest {
     private static final InvoiceIssuer.Issuer ISSUER = new InvoiceIssuer.Issuer(
             "Comunidad de bienes Pasaxe 29", "E56424500", "Avenida del Pasaje 29",
             "Oleiros (A Coruña)", "pasaxe29@ejemplo.es", "600 000 000",
-            "ES00 0000 0000 0000 0000 0000", true);
+            "ES00 0000 0000 0000 0000 0000", true,
+            "Bernal Varela Gómez (NIF 46906413Y) y Xiao Varela Gómez (NIF 46906414F)");
 
     private final ContractPdfService pdf = new ContractPdfService();
 
     private String textOf(byte[] document, int page) throws IOException {
         return new PdfTextExtractor(new PdfReader(document)).getTextFromPage(page);
+    }
+
+    /** El documento entero: un contrato largo reparte lo que se comprueba por varias páginas. */
+    private String wholeTextOf(byte[] document) throws IOException {
+        PdfReader reader = new PdfReader(document);
+        PdfTextExtractor extractor = new PdfTextExtractor(reader);
+        StringBuilder text = new StringBuilder();
+        for (int page = 1; page <= reader.getNumberOfPages(); page++) {
+            text.append(extractor.getTextFromPage(page)).append('\n');
+        }
+        return text.toString();
     }
 
     @Test
@@ -125,6 +137,37 @@ class ContractMarkupTest {
         assertTrue(text.contains("Y esto sí."), text);
         assertTrue(text.contains("EL ARRENDADOR"), text);
         assertTrue(text.contains("EL ARRENDATARIO"), text);
+    }
+
+    @Test
+    void theHousingTemplateThatShipsWithTheAppRenders() throws IOException {
+        // La plantilla del piso de Pasaxe 29, tal como se entrega. Se comprueba
+        // entera porque es la que se va a copiar en la aplicación: un campo mal
+        // escrito aquí sale impreso en un contrato que alguien firma.
+        String template = new String(getClass().getClassLoader()
+                .getResourceAsStream("plantillas/contrato-vivienda.txt").readAllBytes(),
+                java.nio.charset.StandardCharsets.UTF_8);
+        byte[] document = render(template);
+        String text = wholeTextOf(document);
+
+        assertFalse(text.contains("{{"), "ningún campo sin sustituir: " + text);
+        assertFalse(text.contains("Hecha a partir del contrato"), "los comentarios no se imprimen");
+        assertTrue(text.contains("CONTRATO DE ARRENDAMIENTO DE VIVIENDA"), text);
+        assertTrue(text.contains("Ana Gómez Pérez"), "el inquilino: " + text);
+        assertTrue(text.contains("660,00 €"), "la renta anual, calculada: " + text);
+        assertTrue(text.contains("20,00 €"), "la comunidad, del contrato: " + text);
+        assertTrue(text.contains("120,00 €"), "el IBI, del contrato: " + text);
+        assertTrue(text.contains("lavabo con espejo"), "el inventario, de la ficha del piso: " + text);
+        assertTrue(text.contains("LOS ARRENDADORES"), "el pie de firmas a medida: " + text);
+        assertTrue(text.contains("LA ARRENDATARIA"), text);
+    }
+
+    @Test
+    void signatureLabelsCanBeChosenByTheTemplate() throws IOException {
+        String text = textOf(render("[[firmas:LA EMPRESA|EL CLIENTE]]"), 1);
+        assertTrue(text.contains("LA EMPRESA"), text);
+        assertTrue(text.contains("EL CLIENTE"), text);
+        assertFalse(text.contains("ARRENDADOR"), "no quedan los rótulos de siempre: " + text);
     }
 
     private byte[] render(String template) {

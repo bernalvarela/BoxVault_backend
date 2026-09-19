@@ -6,8 +6,11 @@ import com.storagemanager.storage_management.dto.ContractTemplateRequest;
 import com.storagemanager.storage_management.exception.BadRequestException;
 import com.storagemanager.storage_management.exception.ResourceNotFoundException;
 import com.storagemanager.storage_management.model.ContractTemplate;
+import com.storagemanager.storage_management.model.RentalAgreement;
+import com.storagemanager.storage_management.model.StorageUnit;
 import com.storagemanager.storage_management.repository.ContractTemplateRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
+import com.storagemanager.storage_management.repository.StorageUnitRepository;
 import com.storagemanager.storage_management.service.storage.FileStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +48,7 @@ public class ContractTemplateService {
 
     private final ContractTemplateRepository templates;
     private final RentalAgreementRepository rentals;
+    private final StorageUnitRepository units;
     private final FileStorage fileStorage;
     private final InvoicingProperties properties;
 
@@ -121,6 +125,7 @@ public class ContractTemplateService {
         }
         long enUso = rentals.countByContractTemplateId(id);
         rentals.clearContractTemplate(id);
+        units.clearContractTemplate(id);
         templates.delete(template);
         safeDelete(template.getStorageKey());
         log.info("Borrada la plantilla {} ({}); {} contratos pasan a la de por defecto",
@@ -145,15 +150,32 @@ public class ContractTemplateService {
     }
 
     /**
-     * El texto con el que se compone un contrato: el de su plantilla, el de la
-     * que esté por defecto, o —si todavía no hay ninguna— el que viene dentro de
-     * la aplicación.
+     * El texto con el que se compone un contrato, por orden: la plantilla que
+     * diga el contrato, la que diga su unidad, la del local que la contiene, la
+     * marcada por defecto y —si todavía no hay ninguna— la que viene dentro de la
+     * aplicación.
+     * <p>
+     * La herencia por el árbol de unidades es la misma regla que la de los
+     * propietarios: marcarla en el "Bajo delantero" vale para sus nueve
+     * trasteros, sin repetirla nueve veces ni acordarse en cada alta.
      */
-    public String textFor(ContractTemplate chosen) {
+    public String textFor(RentalAgreement rental) {
+        ContractTemplate chosen = rental.getContractTemplate() != null
+                ? rental.getContractTemplate()
+                : ofUnit(rental.getStorageUnit());
         if (chosen != null) return read(chosen);
         return templates.findFirstByDefaultTemplateIsTrue()
                 .map(this::read)
                 .orElseGet(this::bundledTemplate);
+    }
+
+    /** La plantilla de la unidad o la del local que la contiene; null si ninguna dice nada. */
+    private ContractTemplate ofUnit(StorageUnit unit) {
+        int guard = 0;
+        for (StorageUnit u = unit; u != null && guard++ < 32; u = u.getParent()) {
+            if (u.getContractTemplate() != null) return u.getContractTemplate();
+        }
+        return null;
     }
 
     /**
