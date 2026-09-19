@@ -44,6 +44,9 @@ public class RentalAgreementRequest {
     /** Plantilla con la que se compone su contrato; nulo = la de por defecto. */
     private Long contractTemplateId;
 
+    /** Fiador solidario, si lo hay; es una ficha de cliente que no alquila nada. */
+    private Long guarantorId;
+
     /** Cuota de comunidad mensual que asume el inquilino; nulo = no se pacta. */
     private BigDecimal communityFee;
 

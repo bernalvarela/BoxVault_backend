@@ -43,6 +43,18 @@ public class RentalAgreement {
     @JoinColumn(name = "co_client_id")
     private Client coClient;
 
+    /**
+     * Quien avala a los inquilinos, si el contrato lleva fiador solidario.
+     * <p>
+     * Es una ficha de cliente como las demás -tiene nombre, NIF y teléfono, y
+     * suele repetirse entre contratos- pero no alquila nada: no se le generan
+     * mensualidades ni aparece como titular. Sólo responde si los inquilinos no
+     * pagan, y por eso sale en su cláusula del contrato.
+     */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "guarantor_id")
+    private Client guarantor;
+
     @Column(nullable = false)
     private LocalDate startDate;
 

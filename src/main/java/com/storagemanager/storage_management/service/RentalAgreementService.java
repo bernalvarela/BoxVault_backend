@@ -113,6 +113,7 @@ public class RentalAgreementService {
                 .autoRenew(request.getAutoRenew() != null ? request.getAutoRenew() : true)
                 .generatesInvoices(invoicingAllowed(unit, request.getGeneratesInvoices()))
                 .contractTemplate(templateOf(request.getContractTemplateId()))
+                .guarantor(clientOrNull(request.getGuarantorId()))
                 .communityFee(request.getCommunityFee())
                 .propertyTax(request.getPropertyTax())
                 .notes(request.getNotes())
@@ -162,6 +163,7 @@ public class RentalAgreementService {
             agreement.setDepositPaid(request.getDepositPaid());
         }
         agreement.setContractTemplate(templateOf(request.getContractTemplateId()));
+        agreement.setGuarantor(clientOrNull(request.getGuarantorId()));
         agreement.setCommunityFee(request.getCommunityFee());
         agreement.setPropertyTax(request.getPropertyTax());
         if (request.getGeneratesInvoices() != null) {
@@ -353,6 +355,13 @@ public class RentalAgreementService {
      * de él no se emiten facturas, así que marcarlo se rechaza en vez de aceptar
      * una casilla que luego no haría nada.
      */
+    /** Una ficha de cliente por su id, o nulo si no se pasó ninguno. */
+    private Client clientOrNull(Long clientId) {
+        if (clientId == null) return null;
+        return clientRepository.findById(clientId)
+                .orElseThrow(() -> new ResourceNotFoundException("Client not found with id: " + clientId));
+    }
+
     /** La plantilla elegida, si se eligió alguna; nulo = la de por defecto. */
     private ContractTemplate templateOf(Long templateId) {
         if (templateId == null) return null;

@@ -5,6 +5,10 @@
 « inventario, los gastos de comunidad, la duración pactada- está escrito y hay
 « que revisarlo en cada contrato.
 «
+« Sirve para los dos pisos: lo que cambia entre un contrato y otro sale de sus
+« fichas, y las cláusulas que no siempre aplican van entre [[si:campo]] y
+« [[fin]], de modo que desaparecen cuando no hay nada que decir.
+«
 « De dónde sale cada cosa, para no buscarla:
 «   - {{inventario}} está en la ficha del PISO (Unidades → Editar);
 «   - {{gastos_comunidad}} y {{gastos_ibi}}, en el CONTRATO, porque los asume
@@ -57,10 +61,15 @@ El impago de la renta o de cualquiera de las cantidades asimiladas facultará a 
 
 **CUARTA. GASTOS A CARGO DE LA PARTE ARRENDATARIA.** De forma expresa y prioritaria, LA PARTE ARRENDATARIA asumirá, como gastos independientes y adicionales a la renta, los siguientes conceptos:
 
+[[si:gastos_comunidad]]
 1. **Gastos de comunidad:** la cantidad fija de {{gastos_comunidad}} mensuales.
+[[fin]]
+[[si:gastos_ibi]]
 1. **Impuesto sobre Bienes Inmuebles (IBI):** la cantidad de {{gastos_ibi}} anuales, que se abonará prorrateada mensualmente, previa acreditación documental de su importe, cuando la parte arrendataria lo solicite de forma expresa.
-
-Ambos conceptos tendrán la consideración de gastos fijos y __no__ estarán incluidos en la renta.
+[[fin]]
+[[si:gastos_comunidad]]
+Estos conceptos tendrán la consideración de gastos fijos y __no__ estarán incluidos en la renta.
+[[fin]]
 
 Asimismo, serán de cuenta y cargo de la parte arrendataria los gastos derivados del uso de la vivienda, tales como agua, electricidad, gas, teléfono, internet y cualesquiera otros suministros o servicios que puedan individualizarse mediante contadores u otros sistemas de medición.
 
@@ -116,8 +125,18 @@ No se devengará indemnización alguna cuando el desistimiento tenga lugar una v
 
 Y cualquier otra causa prevista legalmente en el artículo 27 de la LAU.
 
-**DUODÉCIMA. JURISDICCIÓN.** Para la discusión de cuantas cuestiones pudieran derivarse de la interpretación o desarrollo del presente contrato, ambas partes, con renuncia al fuero que debiera corresponderles, se someten de forma expresa a la jurisdicción y competencia de los Juzgados y Tribunales de A Coruña.
+[[si:fiador]]
+**DUODÉCIMA. FIANZA SOLIDARIA.** {{fiador}}, enterado del contrato de arrendamiento que antecede, se constituye en fiador solidario de la parte arrendataria, respondiendo ante la parte arrendadora del cumplimiento de las obligaciones contraídas durante todo el tiempo que ocupen la vivienda de {{unidad_direccion}}, ya sea por estipulación convenida, ya por tácita reconducción o prórroga, por la simple tenencia o cualquier otra causa; entendiéndose ocupada por los inquilinos, a estos efectos, hasta el momento de su entrega legal a la libre disposición de la parte arrendadora.
+[[fin]]
+
+**DECIMOTERCERA. JURISDICCIÓN.** Para la discusión de cuantas cuestiones pudieran derivarse de la interpretación o desarrollo del presente contrato, ambas partes, con renuncia al fuero que debiera corresponderles, se someten de forma expresa a la jurisdicción y competencia de los Juzgados y Tribunales de A Coruña.
 
 Y en prueba de conformidad suscriben este documento por duplicados ejemplares y a un solo efecto, en el lugar y fecha del encabezamiento.
 
-[[firmas:LOS ARRENDADORES|LA ARRENDATARIA]]
+[[firmas:LOS ARRENDADORES|LA PARTE ARRENDATARIA]]
+
+[[si:fiador]]
+[centro] _______________________________
+
+[centro][pequeño] EL FIADOR SOLIDARIO
+[[fin]]

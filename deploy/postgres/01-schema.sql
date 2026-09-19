@@ -108,6 +108,8 @@ CREATE TABLE rental_agreements (
     deposit_paid         BOOLEAN,
     -- Gastos que asume el inquilino aparte de la renta: comunidad al mes e IBI
     -- al año. Van aquí y no en la unidad porque son una cláusula del contrato.
+    -- Quien avala a los inquilinos, si el contrato lleva fiador solidario.
+    guarantor_id         BIGINT REFERENCES clients (id),
     community_fee        NUMERIC(10,2),
     property_tax         NUMERIC(10,2),
     status               VARCHAR(30) NOT NULL,

@@ -57,6 +57,9 @@ public final class ContractFields {
             new Field("arrendatario_direccion", "Arrendatario", "Domicilio del inquilino", "Rúa Nova 1, 3º B"),
             new Field("arrendatario_email", "Arrendatario", "Correo del inquilino", "ana@ejemplo.es"),
             new Field("arrendatario_telefono", "Arrendatario", "Teléfono del inquilino", "600 111 222"),
+            new Field("fiador", "Arrendatario",
+                    "Fiador solidario con su NIF, si el contrato lleva uno; vacío si no",
+                    "Anthony Alejandro García Albarrán, con N.I.E. Y-7838295-R"),
             new Field("coarrendatario", "Arrendatario",
                     "Párrafo del segundo titular; queda vacío si el contrato es de uno solo",
                     "Y de otra parte, Luis Gómez Pérez, con NIF..."),
@@ -123,6 +126,7 @@ public final class ContractFields {
         values.put("arrendatario_email", client == null ? orMissing(null) : orMissing(client.getEmail()));
         values.put("arrendatario_telefono", client == null ? orMissing(null) : orMissing(client.getPhone()));
         values.put("coarrendatario", coTenant(rental.getCoClient()));
+        values.put("fiador", named(rental.getGuarantor()));
 
         values.put("unidad_numero", unit == null ? orMissing(null) : unit.getUnitNumber());
         values.put("unidad_nombre", unit == null ? orMissing(null) : unit.getName());
@@ -189,6 +193,14 @@ public final class ContractFields {
                 .monthlyRent(new BigDecimal("55.00")).securityDeposit(new BigDecimal("110.00"))
                 .communityFee(new BigDecimal("20.00")).propertyTax(new BigDecimal("120.00"))
                 .build();
+    }
+
+    /** "Fulano, con N.I.F. 12345678Z"; vacío cuando no hay nadie. */
+    private static String named(Client person) {
+        if (person == null) return "";
+        return person.getDocumentId() == null || person.getDocumentId().isBlank()
+                ? person.getFullName()
+                : person.getFullName() + ", con N.I.F. " + person.getDocumentId();
     }
 
     /** El párrafo del segundo titular, o nada cuando el contrato es de uno solo. */

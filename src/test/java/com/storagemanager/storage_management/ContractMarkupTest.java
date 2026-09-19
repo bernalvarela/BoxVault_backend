@@ -159,7 +159,10 @@ class ContractMarkupTest {
         assertTrue(text.contains("120,00 €"), "el IBI, del contrato: " + text);
         assertTrue(text.contains("lavabo con espejo"), "el inventario, de la ficha del piso: " + text);
         assertTrue(text.contains("LOS ARRENDADORES"), "el pie de firmas a medida: " + text);
-        assertTrue(text.contains("LA ARRENDATARIA"), text);
+        // "LA PARTE ARRENDATARIA" y no "LA ARRENDATARIA": la misma plantilla sirve
+        // para un inquilino y para dos.
+        assertTrue(text.contains("LA PARTE ARRENDATARIA"), text);
+        assertFalse(text.contains("FIANZA SOLIDARIA"), "sin fiador, su cláusula no existe: " + text);
     }
 
     @Test
@@ -168,6 +171,34 @@ class ContractMarkupTest {
         assertTrue(text.contains("LA EMPRESA"), text);
         assertTrue(text.contains("EL CLIENTE"), text);
         assertFalse(text.contains("ARRENDADOR"), "no quedan los rótulos de siempre: " + text);
+    }
+
+    @Test
+    void aConditionalBlockDisappearsWhenItsFieldIsEmpty() throws IOException {
+        // El contrato de ejemplo no lleva fiador, así que su cláusula no existe.
+        String template = "Antes.\n\n[[si:fiador]]\nAvala don Fulano.\n[[fin]]\n\nDespués.";
+        String text = textOf(render(template), 1);
+
+        assertTrue(text.contains("Antes."), text);
+        assertTrue(text.contains("Después."), text);
+        assertFalse(text.contains("Avala"), "la cláusula del fiador no sale: " + text);
+        assertFalse(text.contains("[[si:"), "las marcas no se imprimen: " + text);
+        assertFalse(text.contains("[[fin]]"), text);
+    }
+
+    @Test
+    void aConditionalBlockStaysWhenItsFieldHasSomething() throws IOException {
+        String template = "[[si:arrendatario_nombre]]\nArrienda {{arrendatario_nombre}}.\n[[fin]]";
+        String text = textOf(render(template), 1);
+        assertTrue(text.contains("Arrienda Ana Gómez Pérez."), text);
+    }
+
+    @Test
+    void aFieldThatIsJustAGapCountsAsEmpty() throws IOException {
+        // {{fiador}} sin fiador queda vacío; {{arrendador_email}} sin correo queda
+        // en puntos suspensivos. Ninguno de los dos debe encender su cláusula.
+        String text = textOf(render("[[si:fiador]]\nNo debería salir.\n[[fin]]"), 1);
+        assertFalse(text.contains("No debería salir"), text);
     }
 
     private byte[] render(String template) {

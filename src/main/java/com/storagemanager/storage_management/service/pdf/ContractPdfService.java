@@ -44,6 +44,18 @@ public class ContractPdfService {
     private static final Pattern FIELD = Pattern.compile("\\{\\{([a-z_]+)}}");
 
     /**
+     * [[si:campo]] ... [[fin]]: lo de dentro sólo sale si ese campo tiene algo.
+     * <p>
+     * Es lo que permite que una misma plantilla sirva para contratos que no son
+     * iguales: la cláusula del fiador solidario sólo aparece cuando hay fiador, y
+     * la de los gastos de comunidad sólo cuando se pactaron. Sin esto haría falta
+     * una plantilla por combinación, y mantener el mismo texto legal en cuatro
+     * sitios es la forma segura de que un día digan cosas distintas.
+     */
+    private static final Pattern IF_FIELD = Pattern.compile("\\[\\[si:([a-z_]+)]]");
+    private static final String END_IF = "[[fin]]";
+
+    /**
      * [[firmas]] o [[firmas:LOS ARRENDADORES|LA ARRENDATARIA]], cuando quien
      * firma no es un señor y un señor: dos propietarios, una arrendataria, una
      * empresa. Sin nada detrás, los rótulos de siempre.
@@ -95,7 +107,25 @@ public class ContractPdfService {
             // plantilla: así reordenar dos cláusulas no obliga a renumerarlas a
             // mano, que es donde siempre se cuela un "3." repetido.
             int ordinal = 0;
+            // Dentro de un [[si:campo]] que no se cumple, los bloques se leen
+            // pero no se pintan, hasta el [[fin]].
+            boolean skipping = false;
+            boolean pintado = false;
             for (String block : blocks(template)) {
+                String bare = block.trim();
+                Matcher condition = IF_FIELD.matcher(bare);
+                if (condition.matches()) {
+                    String value = values.get(condition.group(1));
+                    skipping = value == null || value.isBlank()
+                            || value.equals(com.storagemanager.storage_management.config.InvoicingProperties.MISSING);
+                    continue;
+                }
+                if (bare.equals(END_IF)) {
+                    skipping = false;
+                    continue;
+                }
+                if (skipping) continue;
+
                 String text = fill(block, values);
                 ordinal = NUMBERED.matcher(stripAttributes(text).text()).matches() ? ordinal + 1 : 0;
                 if (text.trim().equals("[[pagina]]")) {
@@ -103,7 +133,11 @@ public class ContractPdfService {
                     continue;
                 }
                 pdf.add(compose(text, images, ordinal));
+                pintado = true;
             }
+            // Una plantilla cuyas condiciones no se cumplen ninguna se quedaría
+            // sin una sola página, y un PDF sin páginas no se puede ni cerrar.
+            if (!pintado) pdf.add(new Paragraph(" "));
         } catch (DocumentException e) {
             throw new IllegalStateException(
                     "No se pudo componer el contrato " + rental.getAgreementNumber(), e);
