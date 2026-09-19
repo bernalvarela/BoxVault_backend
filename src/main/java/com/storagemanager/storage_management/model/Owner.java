@@ -57,6 +57,14 @@ public class Owner {
     @Column(length = 255)
     private String address;
 
+    /**
+     * Municipio, aparte del domicilio. No es redundante: un contrato empieza por
+     * "En A Coruña, a tal fecha", y para eso hace falta el municipio suelto, no
+     * la dirección entera. Sale en {@code {{lugar}}} y {@code {{arrendador_ciudad}}}.
+     */
+    @Column(length = 120)
+    private String city;
+
     /** IBAN where this owner's share of the profits is transferred. */
     @Column(length = 50)
     private String bankAccount;

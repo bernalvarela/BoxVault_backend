@@ -263,6 +263,8 @@ CREATE TABLE owners (
     phone        VARCHAR(50),
     -- Domicilio fiscal: sale en las facturas y los contratos que emite.
     address      VARCHAR(255),
+    -- Municipio suelto: encabeza los contratos ("En A Coruña, a...").
+    city         VARCHAR(120),
     bank_account VARCHAR(50),
     notes        TEXT,
     created_at   TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,

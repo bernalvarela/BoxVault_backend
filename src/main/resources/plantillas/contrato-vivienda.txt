@@ -19,7 +19,7 @@
 
 # CONTRATO DE ARRENDAMIENTO DE VIVIENDA
 
-En A Coruña, a {{fecha_larga}}.
+En {{lugar}}, a {{fecha_larga}}.
 
 ## Reunidos
 
@@ -35,7 +35,7 @@ Ambas partes actúan en su propio nombre y representación y se reconocen capaci
 
 ## Manifiestan
 
-A) Que la parte arrendadora es propietaria de la vivienda sita en {{unidad_direccion}}, de A Coruña (Ref. Catastral {{unidad_referencia_catastral}}).
+A) Que la parte arrendadora es propietaria de la vivienda sita en {{unidad_direccion}}, de {{lugar}} (Ref. Catastral {{unidad_referencia_catastral}}).
 
 B) Que habiendo convenido el arrendamiento de la vivienda mencionada en el anterior párrafo, manifestando {{arrendatario_nombre}} que lo lleven a efecto de conformidad a lo que resulta de las siguientes:
 
@@ -129,7 +129,7 @@ Y cualquier otra causa prevista legalmente en el artículo 27 de la LAU.
 **DUODÉCIMA. FIANZA SOLIDARIA.** {{fiador}}, enterado del contrato de arrendamiento que antecede, se constituye en fiador solidario de la parte arrendataria, respondiendo ante la parte arrendadora del cumplimiento de las obligaciones contraídas durante todo el tiempo que ocupen la vivienda de {{unidad_direccion}}, ya sea por estipulación convenida, ya por tácita reconducción o prórroga, por la simple tenencia o cualquier otra causa; entendiéndose ocupada por los inquilinos, a estos efectos, hasta el momento de su entrega legal a la libre disposición de la parte arrendadora.
 [[fin]]
 
-**DECIMOTERCERA. JURISDICCIÓN.** Para la discusión de cuantas cuestiones pudieran derivarse de la interpretación o desarrollo del presente contrato, ambas partes, con renuncia al fuero que debiera corresponderles, se someten de forma expresa a la jurisdicción y competencia de los Juzgados y Tribunales de A Coruña.
+**DECIMOTERCERA. JURISDICCIÓN.** Para la discusión de cuantas cuestiones pudieran derivarse de la interpretación o desarrollo del presente contrato, ambas partes, con renuncia al fuero que debiera corresponderles, se someten de forma expresa a la jurisdicción y competencia de los Juzgados y Tribunales de {{lugar}}.
 
 Y en prueba de conformidad suscriben este documento por duplicados ejemplares y a un solo efecto, en el lugar y fecha del encabezamiento.
 

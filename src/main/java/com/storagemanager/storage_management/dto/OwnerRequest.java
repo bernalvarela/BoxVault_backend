@@ -37,6 +37,9 @@ public class OwnerRequest {
     @Size(max = 255, message = "Address must be at most 255 characters")
     private String address;
 
+    @Size(max = 120, message = "City must be at most 120 characters")
+    private String city;
+
     @Size(max = 50, message = "Bank account must be at most 50 characters")
     private String bankAccount;
 

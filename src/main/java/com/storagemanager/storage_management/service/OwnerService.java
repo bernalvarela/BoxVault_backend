@@ -186,6 +186,7 @@ public class OwnerService {
         owner.setEmail(trimToNull(request.getEmail()));
         owner.setPhone(trimToNull(request.getPhone()));
         owner.setAddress(trimToNull(request.getAddress()));
+        owner.setCity(trimToNull(request.getCity()));
         owner.setBankAccount(trimToNull(request.getBankAccount()));
         owner.setNotes(trimToNull(request.getNotes()));
     }
@@ -221,6 +222,7 @@ public class OwnerService {
                 .email(owner.getEmail())
                 .phone(owner.getPhone())
                 .address(owner.getAddress())
+                .city(owner.getCity())
                 .bankAccount(owner.getBankAccount())
                 .notes(owner.getNotes())
                 .createdAt(owner.getCreatedAt())

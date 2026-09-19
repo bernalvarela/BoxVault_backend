@@ -67,9 +67,7 @@ public class InvoiceIssuer {
                 pick(owner.getFullName(), fallback.getIssuerName()),
                 pick(owner.getDocumentId(), fallback.getIssuerTaxId()),
                 pick(owner.getAddress(), fallback.getIssuerAddress()),
-                // El municipio no es un campo del propietario: su domicilio va en
-                // una línea. Esto queda para quien lo tenga puesto en el entorno.
-                fallback.getIssuerCity(),
+                pick(owner.getCity(), fallback.getIssuerCity()),
                 pick(owner.getEmail(), fallback.getIssuerEmail()),
                 pick(owner.getPhone(), fallback.getIssuerPhone()),
                 pick(owner.getBankAccount(), fallback.getIssuerIban()),

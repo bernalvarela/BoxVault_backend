@@ -26,6 +26,8 @@ public class OwnerDTO {
     private String phone;
     /** Domicilio fiscal, en una línea; sale en las facturas y los contratos. */
     private String address;
+    /** Municipio; encabeza los contratos ("En A Coruña, a..."). */
+    private String city;
     private String bankAccount;
     private String notes;
     private LocalDateTime createdAt;
