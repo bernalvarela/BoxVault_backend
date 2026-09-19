@@ -7,13 +7,18 @@ import com.storagemanager.storage_management.service.ContractService;
 import com.storagemanager.storage_management.service.RentalAgreementService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -85,10 +90,26 @@ public class RentalAgreementController {
     }
 
     /**
-     * Compone el contrato desde la plantilla, lo archiva como documento del
-     * alquiler y lo devuelve en PDF para imprimirlo y firmarlo. Se puede volver
-     * a generar cuando cambien los datos: es un borrador, no un documento
-     * emitido.
+     * Compone el contrato y lo devuelve para leerlo, SIN archivar nada. Es el
+     * primer paso: se mira, y si hay algo que corregir se corrige y se vuelve a
+     * pedir, sin que quede ningún fichero por medio.
+     */
+    @PreAuthorize("@access.can('ALQUILERES','ESCRIBIR')")
+    @PostMapping("/{id}/contract/preview")
+    public ResponseEntity<Resource> previewContract(@PathVariable Long id) {
+        ContractService.Draft draft = contractService.preview(id);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline()
+                        .filename(draft.fileName(), StandardCharsets.UTF_8).build().toString())
+                .contentType(MediaType.APPLICATION_PDF)
+                .contentLength(draft.content().length)
+                .body(new ByteArrayResource(draft.content()));
+    }
+
+    /**
+     * El segundo paso: archiva el contrato entre los documentos del alquiler y
+     * lo devuelve. Si ya había uno generado, lo sustituye. Es un borrador para
+     * firmar, no un documento emitido: rehacerlo no tiene coste.
      */
     @PreAuthorize("@access.can('ALQUILERES','ESCRIBIR')")
     @PostMapping("/{id}/contract")

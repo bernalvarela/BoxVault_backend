@@ -67,29 +67,40 @@ ALTER TABLE payments ADD COLUMN IF NOT EXISTS invoiced_total NUMERIC(10,2);
 -- Queda suelto el objeto del almacén (RustFS): el PDF en sí. SQL no llega hasta
 -- ahí. Son unos kilobytes que ya no referencia nadie; se borran desde la consola
 -- de RustFS si molestan.
-CREATE TEMP TABLE facturas_viejas AS
-SELECT d.id AS document_id, d.storage_key
-FROM payments p
-JOIN documents d ON d.id = p.invoice_document_id
-WHERE p.invoice_number IS NOT NULL;
-
+-- Todo esto va dentro de una condicion: se hace SOLO si la tabla invoices esta
+-- vacia, es decir, si esta migracion llega a una base que todavia no habia
+-- emitido ni una factura con el sistema nuevo. En esta instalacion la limpieza
+-- ya se hizo a mano antes de que Flyway existiera y despues se han emitido
+-- facturas de verdad; sin esta guarda, la primera ejecucion automatica de la V2
+-- se las llevaria por delante.
 DO $$
 DECLARE cuantas BIGINT;
 BEGIN
+    IF EXISTS (SELECT 1 FROM invoices) THEN
+        RAISE NOTICE 'Ya hay facturas emitidas: no se toca nada';
+        RETURN;
+    END IF;
+
+    CREATE TEMP TABLE facturas_viejas AS
+    SELECT d.id AS document_id, d.storage_key
+    FROM payments p
+    JOIN documents d ON d.id = p.invoice_document_id
+    WHERE p.invoice_number IS NOT NULL;
+
     SELECT count(*) INTO cuantas FROM facturas_viejas;
     IF cuantas > 0 THEN
-        RAISE NOTICE 'Se tiran % facturas anteriores; sus PDF quedan huérfanos en el almacén', cuantas;
+        RAISE NOTICE 'Se tiran % facturas anteriores; sus PDF quedan huerfanos en el almacen', cuantas;
     END IF;
+
+    UPDATE payments
+    SET invoice_number = NULL,
+        invoiced_at = NULL,
+        invoiced_total = NULL,
+        invoice_document_id = NULL
+    WHERE invoice_number IS NOT NULL;
+
+    DELETE FROM rental_documents WHERE document_id IN (SELECT document_id FROM facturas_viejas);
+    DELETE FROM documents        WHERE id          IN (SELECT document_id FROM facturas_viejas);
+
+    DROP TABLE facturas_viejas;
 END $$;
-
-UPDATE payments
-SET invoice_number = NULL,
-    invoiced_at = NULL,
-    invoiced_total = NULL,
-    invoice_document_id = NULL
-WHERE invoice_number IS NOT NULL;
-
-DELETE FROM rental_documents WHERE document_id IN (SELECT document_id FROM facturas_viejas);
-DELETE FROM documents        WHERE id          IN (SELECT document_id FROM facturas_viejas);
-
-DROP TABLE facturas_viejas;

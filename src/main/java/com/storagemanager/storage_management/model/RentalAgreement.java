@@ -118,6 +118,20 @@ public class RentalAgreement {
     @JoinColumn(name = "contract_template_id")
     private ContractTemplate contractTemplate;
 
+    /**
+     * El contrato en PDF que generó la aplicación desde la plantilla, si ya se
+     * generó alguno.
+     * <p>
+     * Se guarda la referencia para poder REHACERLO: si el inquilino pide un
+     * cambio, se compone otra vez y el borrador anterior se borra, en vez de ir
+     * dejando contratos apilados entre los documentos del alquiler sin saber
+     * cuál es el bueno. Sólo apunta al que hizo la aplicación: la copia firmada
+     * que se sube a mano es otro documento y no se toca nunca.
+     */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "contract_document_id")
+    private Document contractDocument;
+
     /** Nunca null: un contrato sin marcar no factura. */
     public boolean invoices() {
         return Boolean.TRUE.equals(generatesInvoices);

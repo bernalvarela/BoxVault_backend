@@ -91,6 +91,18 @@ public class RentalDocumentService {
     @Transactional
     public void delete(Long rentalId, Long documentId) {
         RentalDocument link = requireLink(rentalId, documentId);
+
+        // Si lo que se borra es el contrato que generó la aplicación, el alquiler
+        // deja de apuntar a él ANTES de que desaparezca: si no, queda señalando a
+        // una fila que ya no está y rehacer el contrato intentaría borrarla otra
+        // vez. Que no haya contrato generado es un estado legítimo.
+        RentalAgreement rental = link.getRentalAgreement();
+        if (rental.getContractDocument() != null
+                && rental.getContractDocument().getId().equals(documentId)) {
+            rental.setContractDocument(null);
+            rentalRepository.save(rental);
+        }
+
         rentalDocumentRepository.delete(link);
         documents.delete(link.getDocument());
     }

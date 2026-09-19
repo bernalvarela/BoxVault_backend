@@ -19,11 +19,23 @@ spring:
       ddl-auto: update
     show-sql: false
 
-  # Migraciones de la base: apagadas salvo en "pro". En desarrollo la base es H2,
-  # se crea de cero en cada arranque a partir de las entidades y se llena con
-  # seed-data.json; estas migraciones son SQL de PostgreSQL y ahí no pintan nada.
+  # Migraciones de la base. Queda ACTIVADO aquí a propósito, aunque en desarrollo
+  # no haya nada que migrar: lo que decide si Flyway existe en la imagen nativa se
+  # evalúa al COMPILAR, y el AOT se ejecuta sin perfil, es decir con esto. Con
+  # "enabled: false" aquí, el arranque anterior se llevó por delante toda la
+  # autoconfiguración de Flyway y en el servidor no se ejecutó ni una migración,
+  # en silencio: activarlo en "pro" ya no servía de nada porque los beans no
+  # estaban en el binario. Es la misma trampa que documenta NativeHints con el
+  # dialecto de PostgreSQL.
+  #
+  # En desarrollo se le quita el trabajo apuntándolo a una carpeta que no existe:
+  # la base es H2, se crea de cero en cada arranque a partir de las entidades, y
+  # estas migraciones son SQL de PostgreSQL.
   flyway:
-    enabled: false
+    enabled: true
+    locations: classpath:db/sin-migraciones
+    # La carpeta no existe a propósito; sin esto Flyway se quejaría de no encontrarla.
+    fail-on-missing-locations: false
 
   # Subida de ficheros adjuntos. El límite real lo pone
   # boxvault.storage.max-file-size (da un error legible); estos dos son la red de
@@ -141,6 +153,7 @@ spring:
   # Flyway sigue desde la V2. Sin esto se negaría a tocar una base que no creó.
   flyway:
     enabled: true
+    locations: classpath:db/migration
     baseline-on-migrate: true
     baseline-version: 1
     baseline-description: "esquema inicial (01-schema.sql)"

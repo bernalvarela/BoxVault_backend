@@ -131,6 +131,13 @@ public class ContractTemplateController {
         return ResponseEntity.noContent().build();
     }
 
+    /** Copia la plantilla con otro nombre, para partir de ella sin tocarla. */
+    @PreAuthorize("@access.can('ALQUILERES','ADMINISTRAR')")
+    @PostMapping("/{id}/duplicate")
+    public ResponseEntity<ContractTemplateDTO> duplicate(@PathVariable Long id) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(templates.duplicate(id));
+    }
+
     @PreAuthorize("@access.can('ALQUILERES','ADMINISTRAR')")
     @PostMapping("/preview")
     public ResponseEntity<Resource> preview(@RequestBody ContractTemplateRequest request) {

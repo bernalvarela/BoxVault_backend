@@ -135,7 +135,23 @@ docker compose pull && docker compose up -d
   database the first time its volume is born, and Flyway baselines at 1
   (`baseline-on-migrate`) and carries on from V2. So a genuinely empty database,
   with no init scripts, will not start — the initial schema is not Flyway's job.
-  Flyway is off in `dev` (H2, rebuilt from the entities on every start).
+  Flyway does nothing in `dev` (H2, rebuilt from the entities on every start),
+  but note **how** it is switched off there: it stays `enabled: true` and is
+  pointed at a locations folder that does not exist. Setting `enabled: false` in
+  the default document looks equivalent and is not — the native image evaluates
+  those conditions **at build time**, and the AOT step runs with no profile, so
+  `enabled: false` deleted the whole Flyway auto-configuration from the binary
+  and `pro` could no longer turn it back on. That is exactly what happened: for
+  its first weeks the deployed image ran no migrations at all and said nothing
+  about it, and V2…V8 had to be applied by hand. The same trap is documented in
+  `NativeHints` for the PostgreSQL dialect; assume it for any `@Conditional`
+  bean.
+
+  Because of that history, the first deploy that actually runs Flyway will find a
+  database whose schema is already up to date and will apply V2…V9 over it. They
+  are written to tolerate it: every one of them is `IF NOT EXISTS`, and V2's
+  one-off clean-out of the old test invoices only runs if the `invoices` table is
+  still empty, so it cannot touch the invoices issued since.
 
   A failed migration leaves the app refusing to start, which is the right
   outcome: better down than running against a schema the code does not expect.

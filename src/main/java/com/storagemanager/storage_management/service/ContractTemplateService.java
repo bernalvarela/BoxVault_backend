@@ -95,6 +95,45 @@ public class ContractTemplateService {
         return ContractTemplateDTO.of(template);
     }
 
+    /**
+     * Copia una plantilla entera con otro nombre.
+     * <p>
+     * Es la forma sensata de empezar una variante: el contrato de un local se
+     * parece al de un trastero en todo menos en tres cláusulas, y escribirlo de
+     * cero para cambiar esas tres es tirar el trabajo. La copia nace sin ser la
+     * de por defecto -eso se decide aparte- y con su propio objeto en el
+     * almacén, así que editarla no toca a la original.
+     */
+    @Transactional
+    public ContractTemplateDTO duplicate(Long id) {
+        ContractTemplate original = require(id);
+        ContractTemplateRequest copy = new ContractTemplateRequest();
+        copy.setName(availableName(original.getName()));
+        copy.setDescription(original.getDescription());
+        copy.setContent(read(original));
+        copy.setMakeDefault(false);
+        log.info("Duplicada la plantilla {} como '{}'", original.getName(), copy.getName());
+        return create(copy);
+    }
+
+    /**
+     * "Contrato de trastero" -> "Contrato de trastero (copia)", y si ya existe,
+     * "(copia 2)", "(copia 3)"... El nombre es único, así que hay que buscar uno
+     * libre en vez de fallar y obligar a renombrar antes de copiar.
+     */
+    private String availableName(String name) {
+        // El nombre no pasa de 120 caracteres: el original se recorta lo justo
+        // para que quepa el sufijo, en vez de fallar al guardar.
+        String base = name.length() > 100 ? name.substring(0, 100).trim() : name;
+        String candidate = base + " (copia)";
+        int number = 2;
+        while (templates.existsByNameIgnoreCase(candidate)) {
+            candidate = base + " (copia " + number + ")";
+            number++;
+        }
+        return candidate;
+    }
+
     @Transactional
     public ContractTemplateDTO update(Long id, ContractTemplateRequest request) {
         requireContent(request);
