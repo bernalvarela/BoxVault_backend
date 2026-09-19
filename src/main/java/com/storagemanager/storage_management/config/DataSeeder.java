@@ -89,12 +89,23 @@ import java.util.Set;
  *   Multiseguros policy, internal transfers, personal card payments and works whose
  *   flat is not identified in the statement.
  * <p>
- * On an already-seeded database the seeder is incremental and idempotent: it
- * backfills price history / kinds when missing, any unit present in seed-data.json
- * but absent from the database is loaded together with its clients, rentals,
- * payments and the expenses booked on it, expenses are loaded when their table is
- * still empty, owners / shares that do not exist yet are created, and the filed tax
- * returns are registered when missing.
+ * <b>On a database that already has data the seeder does nothing.</b> It used to
+ * top it up on every start -missing units, owners, shares, expenses- matching
+ * what seed-data.json described against what the database held. Two reasons that
+ * is gone. It matched people BY NAME, so renaming the comunidad de bienes or a
+ * tenant made them "missing" and the next start created them again, and deleting
+ * them did not stick either. And it is no longer needed: schema and data changes
+ * on a live database are Flyway migrations (db/migration/V{n}__*.sql), which run
+ * once, leave a record and can be audited, which is what that code was trying to
+ * be before Flyway existed.
+ * <p>
+ * The one exception is the filed tax returns, registered when none exist: each
+ * carries a snapshot of the report computed from the data, so deploy/postgres/
+ * 02-seed-data.sql cannot carry them the way it carries everything else.
+ * <p>
+ * So the seeder matters in development and in the tests, where H2 is born empty
+ * on every start, and on the first start of a genuinely empty database. Nowhere
+ * else.
  */
 @Slf4j
 @Component
@@ -133,20 +144,26 @@ public class DataSeeder implements CommandLineRunner {
             boolean legacyDemoData = storageUnitRepository.findAll().stream()
                     .anyMatch(u -> "A-101".equals(u.getUnitNumber()));
             if (!legacyDemoData) {
-                Map<String, Object> root = parseSeedData();
-                if (unitPriceHistoryRepository.count() == 0) {
-                    log.info("Backfilling unit price history from existing rental agreements...");
-                    seedPriceHistoryFromRentals(storageUnitRepository.findAll());
+                // Aquí no se toca NADA de lo que ya hay.
+                //
+                // Esta rama estaba llena de rellenos incrementales: buscaban en
+                // seed-data.json lo que faltara y lo iban creando en cada
+                // arranque. Tenían sentido cuando la única forma de cambiar una
+                // base en marcha era eso; con Flyway, una corrección de datos es
+                // una migración, que se ejecuta UNA vez, queda anotada y se
+                // puede auditar. Y tenían un defecto grave: buscaban por NOMBRE,
+                // así que renombrar la comunidad de bienes o a un inquilino los
+                // hacía "faltar" y volvían a crearlos en el siguiente arranque;
+                // borrarlos tampoco servía de nada. Una base con datos es de
+                // quien la mantiene.
+                //
+                // Se queda sólo el registro de las declaraciones ya presentadas,
+                // y únicamente si no hay ninguna: es lo que 02-seed-data.sql no
+                // sabe traer, porque cada una lleva dentro el informe calculado.
+                if (taxFilingRepository.count() == 0) {
+                    int registradas = seedTaxFilings(parseSeedData());
+                    if (registradas > 0) log.info("Registradas {} declaración(es) ya presentada(s).", registradas);
                 }
-                markUnkindUnits();
-                seedMissingUnits(root);
-                backfillDetails(root);
-                if (expenseRepository.count() == 0) {
-                    int n = seedExpenses(root);
-                    if (n > 0) log.info("Backfilled {} expense(s) from seed-data.json.", n);
-                }
-                seedMissingOwners(root);
-                seedTaxFilings(root);
                 log.info("Database already seeded with {} units ({} top-level).",
                         storageUnitRepository.count(), storageUnitRepository.findByParentIsNull().size());
                 return;
@@ -176,7 +193,7 @@ public class DataSeeder implements CommandLineRunner {
         List<StorageUnit> units = seedUnits(root, unitsByNumber);
 
         // 3. Rental agreements
-        Map<Integer, RentalAgreement> rentalsByRef = seedRentals(root, unitsByNumber, clientsByName, null);
+        Map<Integer, RentalAgreement> rentalsByRef = seedRentals(root, unitsByNumber, clientsByName);
 
         // 4. Payments (all PAID by bank transfer, from the statements)
         int paymentCount = seedPayments(root, rentalsByRef);
@@ -277,19 +294,15 @@ public class DataSeeder implements CommandLineRunner {
         return created;
     }
 
-    /**
-     * Rental agreements from the "rentals" array, keyed by their seed "ref". When
-     * {@code onlyUnits} is given, only the rentals of those unit numbers are created.
-     */
+    /** Rental agreements from the "rentals" array, keyed by their seed "ref". */
     @SuppressWarnings("unchecked")
     private Map<Integer, RentalAgreement> seedRentals(Map<String, Object> root, Map<String, StorageUnit> unitsByNumber,
-                                                      Map<String, Client> clientsByName, Set<String> onlyUnits) {
+                                                      Map<String, Client> clientsByName) {
         Map<Integer, RentalAgreement> rentalsByRef = new HashMap<>();
         long seq = rentalAgreementRepository.count();
         for (Object o : (List<Object>) root.get("rentals")) {
             Map<String, Object> r = (Map<String, Object>) o;
             String unitNumber = str(r, "unit");
-            if (onlyUnits != null && !onlyUnits.contains(unitNumber)) continue;
 
             StorageUnit unit = unitsByNumber.get(unitNumber);
             Client client = clientsByName.get(str(r, "client"));
@@ -363,126 +376,13 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     /**
-     * Incremental load for an already-seeded database: every unit of seed-data.json
-     * missing from the database is created together with its clients, rentals,
-     * payments and price history. Existing units are left untouched.
-     */
-    private void seedMissingUnits(Map<String, Object> root) {
-        Map<String, StorageUnit> unitsByNumber = new HashMap<>();
-        for (StorageUnit u : storageUnitRepository.findAll()) {
-            unitsByNumber.put(u.getUnitNumber(), u);
-        }
-        List<StorageUnit> created = seedUnits(root, unitsByNumber);
-        if (created.isEmpty()) return;
-
-        Set<String> createdNumbers = new HashSet<>();
-        for (StorageUnit u : created) {
-            createdNumbers.add(u.getUnitNumber());
-        }
-        log.info("Loading {} new unit(s) from seed-data.json: {}", created.size(), createdNumbers);
-
-        Map<String, Client> existingClients = new HashMap<>();
-        for (Client c : clientRepository.findAll()) {
-            existingClients.put(c.getFullName(), c);
-        }
-        Map<String, Client> clientsByName = seedClients(root, existingClients);
-        Map<Integer, RentalAgreement> rentalsByRef = seedRentals(root, unitsByNumber, clientsByName, createdNumbers);
-        int payments = seedPayments(root, rentalsByRef);
-        seedPriceHistoryFromRentals(created);
-        int expenses = expenseRepository.count() == 0 ? 0 : seedExpenses(root, createdNumbers);
-
-        log.info("Loaded {} rental(s), {} payment(s) and {} expense(s) for the new unit(s).",
-                rentalsByRef.size(), payments, expenses);
-    }
-
-    /**
-     * Incremental load of details added to seed-data.json after a database was created:
-     * clients' DNI / NIE, units' referencia catastral and the second tenant of a rental
-     * (matched by unit and start date). Only fills what is still empty. Idempotent.
-     */
-    @SuppressWarnings("unchecked")
-    private void backfillDetails(Map<String, Object> root) {
-        int changes = 0;
-        Map<String, Client> clientsByName = new HashMap<>();
-        for (Client c : clientRepository.findAll()) {
-            clientsByName.put(c.getFullName(), c);
-        }
-        for (Object o : (List<Object>) root.get("clients")) {
-            Map<String, Object> c = (Map<String, Object>) o;
-            String name = str(c, "fullName");
-            Client client = clientsByName.get(name);
-            if (client == null) {
-                clientsByName = seedClients(root, clientsByName);
-                changes++;
-                continue;
-            }
-            if (client.getDocumentId() == null && str(c, "documentId") != null) {
-                client.setDocumentId(str(c, "documentId"));
-                clientRepository.save(client);
-                changes++;
-            }
-        }
-
-        Map<String, StorageUnit> unitsByNumber = new HashMap<>();
-        for (StorageUnit u : storageUnitRepository.findAll()) {
-            unitsByNumber.put(u.getUnitNumber(), u);
-        }
-        for (Object o : (List<Object>) root.get("units")) {
-            Map<String, Object> u = (Map<String, Object>) o;
-            StorageUnit unit = unitsByNumber.get(str(u, "unitNumber"));
-            if (unit != null && unit.getCadastralReference() == null && str(u, "cadastralReference") != null) {
-                unit.setCadastralReference(str(u, "cadastralReference"));
-                storageUnitRepository.save(unit);
-                changes++;
-            }
-        }
-
-        for (Object o : (List<Object>) root.get("rentals")) {
-            Map<String, Object> r = (Map<String, Object>) o;
-            if (str(r, "coClient") == null) continue;
-            StorageUnit unit = unitsByNumber.get(str(r, "unit"));
-            Client coClient = clientsByName.get(str(r, "coClient"));
-            if (unit == null || coClient == null) continue;
-            LocalDate start = LocalDate.parse(str(r, "startDate"));
-            for (RentalAgreement agreement : rentalAgreementRepository.findByStorageUnitId(unit.getId())) {
-                if (agreement.getCoClient() == null && start.equals(agreement.getStartDate())) {
-                    agreement.setCoClient(coClient);
-                    rentalAgreementRepository.save(agreement);
-                    changes++;
-                }
-            }
-        }
-        if (changes > 0) log.info("Backfilled {} client / unit / rental detail(s) from seed-data.json.", changes);
-    }
-
-    /** Rows created before unit kinds existed are storage units. Idempotent. */
-    private void markUnkindUnits() {
-        List<StorageUnit> unkindUnits = storageUnitRepository.findByKindIsNull();
-        if (unkindUnits.isEmpty()) return;
-        for (StorageUnit unit : unkindUnits) {
-            unit.setKind(UnitKind.STORAGE_UNIT);
-        }
-        storageUnitRepository.saveAll(unkindUnits);
-        log.info("Marked {} unit(s) without a kind as STORAGE_UNIT.", unkindUnits.size());
-    }
-
-    /**
      * Seeds the "expenses" array. An entry names the unit the cost belongs to
      * ("unit": "3", or "unit": "BD" for the costs of the storage local) or several
      * units ("units": ["3D", "3E"]) among which the amount is split evenly; an entry
      * without any is a general expense.
      */
-    private int seedExpenses(Map<String, Object> root) {
-        return seedExpenses(root, null);
-    }
-
-    /**
-     * Same as {@link #seedExpenses(Map)} but, when {@code onlyUnits} is given, only
-     * the shares booked on those unit numbers are created (general expenses and the
-     * shares of other units are skipped): the incremental load of new units.
-     */
     @SuppressWarnings("unchecked")
-    private int seedExpenses(Map<String, Object> root, Set<String> onlyUnits) {
+    private int seedExpenses(Map<String, Object> root) {
         List<Object> entries = (List<Object>) root.get("expenses");
         if (entries == null) return 0;
 
@@ -507,7 +407,6 @@ public class DataSeeder implements CommandLineRunner {
             }
 
             if (targets.isEmpty()) {
-                if (onlyUnits != null) continue;
                 expenseRepository.save(Expense.builder()
                         .expenseDate(date).amount(amount).description(description).category(category).build());
                 count++;
@@ -526,7 +425,6 @@ public class DataSeeder implements CommandLineRunner {
                 boolean last = i == targets.size() - 1;
                 BigDecimal share = targets.size() == 1 ? amount : last ? amount.subtract(assigned) : each;
                 assigned = assigned.add(share);
-                if (onlyUnits != null && !onlyUnits.contains(number)) continue;
                 String text = targets.size() == 1 ? description
                         : description + " (1/" + targets.size() + ", reparto " + String.join("/", targets) + ")";
                 if (text.length() > 255) text = text.substring(0, 255);
@@ -638,25 +536,6 @@ public class DataSeeder implements CommandLineRunner {
             return numerator.multiply(BigDecimal.valueOf(100)).divide(denominator, 4, RoundingMode.HALF_UP);
         }
         return new BigDecimal(text.replace("%", "").trim()).setScale(4, RoundingMode.HALF_UP);
-    }
-
-    /**
-     * Incremental load for an already-seeded database: the owners, members and
-     * shares of seed-data.json that do not exist yet are created (an owner is matched
-     * by full name, a share by owner and unit, members only when the entity has none).
-     */
-    private void seedMissingOwners(Map<String, Object> root) {
-        Map<String, StorageUnit> unitsByNumber = new HashMap<>();
-        for (StorageUnit u : storageUnitRepository.findAll()) {
-            unitsByNumber.put(u.getUnitNumber(), u);
-        }
-        long before = ownerRepository.count();
-        Map<String, Owner> owners = seedOwners(root);
-        int shares = seedOwnerships(root, owners, unitsByNumber);
-        long created = ownerRepository.count() - before;
-        if (created > 0 || shares > 0) {
-            log.info("Backfilled {} owner(s) and {} share(s) from seed-data.json.", created, shares);
-        }
     }
 
     /**
