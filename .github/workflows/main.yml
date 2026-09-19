@@ -10,8 +10,17 @@ on:
   push:
     branches: ['**']
     tags: ['v*']
+    # Cambiar un documento no cambia el binario: no se compila nada por eso.
+    paths-ignore: ['**.md', '.gitignore', 'deploy/postgres/migrations/**']
   pull_request:
   workflow_dispatch:
+
+# Dos empujones seguidos ya no compilan dos veces: el primero se cancela. Una
+# compilación nativa son quince minutos largos de runner, y el binario del
+# commit de en medio no lo quiere nadie.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   IMAGE_NAME: boxvault-backend
@@ -55,8 +64,24 @@ jobs:
           native-image-musl: 'true'
           cache: 'maven'
 
+      # El runner tiene 8 GB y native-image pide más de 7: el pico real es de
+      # 7,6 GB. Sin este colchón el sistema mata la compilación a media faena
+      # ("exit status 137"), que es de donde venían los fallos intermitentes.
+      # /mnt es el disco grande y efímero del runner.
+      - name: Room to breathe (swap)
+        run: |
+          sudo fallocate -l 12G /mnt/intercambio
+          sudo chmod 600 /mnt/intercambio
+          sudo mkswap /mnt/intercambio
+          sudo swapon /mnt/intercambio
+          free -h
+
+      # -Pnative-quick: "quick build" (-Ob), menos memoria y menos tiempo; ver
+      # pom.xml. El límite corta una compilación encallada en vez de dejarla
+      # consumiendo el runner hasta el tope de seis horas.
       - name: Compile native binary
-        run: ./mvnw -B -Pnative,native-static -DskipTests native:compile
+        timeout-minutes: 45
+        run: ./mvnw -B -Pnative,native-static,native-quick -DskipTests native:compile
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4

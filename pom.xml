@@ -199,6 +199,38 @@
 		  models with "CPU ISA level is lower than required".
 		  Requires the GraalVM musl toolchain (ghcr.io/graalvm/native-image-community:25-muslib).
 		-->
+		<!--
+		  Compilación rápida, para integración continua.
+
+		  native-image tiene dos modos: el normal, que optimiza a fondo, y "quick
+		  build" (-Ob), que tarda bastante menos y -lo que aquí importa- necesita
+		  bastante menos memoria, a cambio de un binario algo más lento en
+		  régimen. En el runner de GitHub (2 núcleos, 8 GB) el compilador pedía
+		  más de 7 GB, llegaba a un pico de 7,6 GB y se pasaba el 38% del tiempo
+		  recogiendo basura cuando no lo mataba el sistema directamente.
+
+		  El intercambio es bueno para lo que esto es: una aplicación de gestión
+		  para una comunidad de vecinos servida desde un NAS, donde el tiempo se
+		  va en la base de datos y en la red, no en el código compilado. Para una
+		  versión definitiva se compila sin este perfil.
+		-->
+		<profile>
+			<id>native-quick</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.graalvm.buildtools</groupId>
+						<artifactId>native-maven-plugin</artifactId>
+						<configuration>
+							<buildArgs combine.children="append">
+								<buildArg>-Ob</buildArg>
+							</buildArgs>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
 		<profile>
 			<id>native-static</id>
 			<build>
