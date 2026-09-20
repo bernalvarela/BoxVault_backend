@@ -2,6 +2,7 @@ package com.storagemanager.storage_management.service;
 
 import com.storagemanager.storage_management.config.VatUtils;
 import com.storagemanager.storage_management.config.VatUtils.Breakdown;
+import com.storagemanager.storage_management.dto.PersonDTO;
 import com.storagemanager.storage_management.dto.IrpfReportDTO;
 import com.storagemanager.storage_management.dto.Modelo184DTO;
 import com.storagemanager.storage_management.dto.Modelo303DTO;
@@ -251,7 +252,8 @@ public class TaxService {
                                 .unitId(p.getStorageUnit().getId())
                                 .unitNumber(p.getStorageUnit().getUnitNumber())
                                 .unitName(p.getStorageUnit().getName())
-                                .clientName(p.getClient() != null ? p.getClient().getFullName() : null)
+                                .clientName(p.getRentalAgreement() == null
+                                        ? null : p.getRentalAgreement().tenantNames())
                                 .billingPeriodYear(p.getBillingPeriodYear())
                                 .billingPeriodMonth(p.getBillingPeriodMonth())
                                 .paymentDate(p.getPaymentDate())
@@ -563,10 +565,7 @@ public class TaxService {
             rentals.add(IrpfReportDTO.Rental.builder()
                     .rentalId(r.getId())
                     .agreementNumber(r.getAgreementNumber())
-                    .clientName(r.getClient() != null ? r.getClient().getFullName() : null)
-                    .clientDocumentId(r.getClient() != null ? r.getClient().getDocumentId() : null)
-                    .coClientName(r.getCoClient() != null ? r.getCoClient().getFullName() : null)
-                    .coClientDocumentId(r.getCoClient() != null ? r.getCoClient().getDocumentId() : null)
+                    .tenants(PersonDTO.of(r.tenants()))
                     .startDate(r.getStartDate())
                     .endDate(r.getEndDate())
                     .status(r.getStatus() != null ? r.getStatus().name() : null)

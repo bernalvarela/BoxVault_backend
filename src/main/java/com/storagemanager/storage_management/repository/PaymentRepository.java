@@ -20,6 +20,9 @@ import java.util.Optional;
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
     List<Payment> findByStatus(PaymentStatus status);
     List<Payment> findByRentalAgreementId(Long rentalAgreementId);
+
+    /** Los cobros de varios contratos: los de una persona salen de sus contratos. */
+    List<Payment> findByRentalAgreementIdIn(java.util.Collection<Long> rentalAgreementIds);
     List<Payment> findByClientId(Long clientId);
     List<Payment> findByStorageUnitId(Long storageUnitId);
     List<Payment> findByBillingPeriodYearAndBillingPeriodMonth(Integer year, Integer month);

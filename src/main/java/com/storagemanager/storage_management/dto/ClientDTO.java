@@ -29,4 +29,12 @@ public class ClientDTO {
 
     private boolean active;
     private long activeRentalsCount;
+
+    /**
+     * Cuántos contratos en vigor avala sin alquilar nada.
+     * <p>
+     * Sin esto, un fiador aparece como "sin contratos activos" y parece una
+     * ficha olvidada que alguien acabaría borrando.
+     */
+    private long guaranteedRentalsCount;
 }

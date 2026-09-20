@@ -1,5 +1,6 @@
 package com.storagemanager.storage_management.service;
 
+import com.storagemanager.storage_management.dto.PersonDTO;
 import com.storagemanager.storage_management.dto.MonthlyChargeDTO;
 import com.storagemanager.storage_management.model.Payment;
 import com.storagemanager.storage_management.model.RentalAgreement;
@@ -168,7 +169,12 @@ public class BillingService {
                 .agreementNumber(rental.getAgreementNumber())
                 .storageUnit(payment != null && payment.getStorageUnit() != null
                         ? payment.getStorageUnit() : rental.getStorageUnit())
-                .client(payment != null && payment.getClient() != null ? payment.getClient() : rental.getClient())
+                // Del contrato y no del cobro: los cobros son del contrato, y sus
+                // arrendatarios son los que firman. "client" se queda como el
+                // titular, que es lo que cabe en una columna; "tenants" los lleva
+                // a todos, para la pantalla de mensualidades.
+                .client(rental.tenants().stream().findFirst().orElse(rental.getClient()))
+                .tenants(PersonDTO.of(rental.tenants()))
                 .billingPeriodYear(ym.getYear())
                 .billingPeriodMonth(ym.getMonthValue())
                 .dueDate(payment != null && payment.getDueDate() != null ? payment.getDueDate() : dueDate(rental, ym))

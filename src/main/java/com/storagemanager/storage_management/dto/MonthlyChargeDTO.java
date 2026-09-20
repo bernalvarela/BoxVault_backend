@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.time.LocalDate;
 
 /**
@@ -32,7 +33,11 @@ public class MonthlyChargeDTO {
     private Long rentalAgreementId;
     private String agreementNumber;
     private StorageUnit storageUnit;
+    /** El titular, que es lo que cabe en una columna estrecha. */
     private Client client;
+
+    /** Todos los que alquilan; en un contrato de dos, los dos pagan. */
+    private List<PersonDTO> tenants;
 
     private Integer billingPeriodYear;
     private Integer billingPeriodMonth;

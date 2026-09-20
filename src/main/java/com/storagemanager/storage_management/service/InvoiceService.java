@@ -230,7 +230,11 @@ public class InvoiceService {
         StorageUnit unit = payment.getStorageUnit();
         boolean vatApplicable = unit == null || unit.isVatApplicable();
         VatUtils.Breakdown amounts = VatUtils.breakdown(payment.getAmountDue(), vatApplicable);
-        Client client = payment.getClient();
+        // El titular, que es el primero que firma: una factura la recibe una
+        // persona con un NIF, no una lista. En lo que se factura -trasteros y
+        // locales- no hay contratos de varios arrendatarios.
+        Client client = payment.getRentalAgreement() == null
+                ? null : payment.getRentalAgreement().tenants().stream().findFirst().orElse(null);
 
         Invoice invoice = invoiceRepository.save(Invoice.builder()
                 .payment(payment)

@@ -11,6 +11,7 @@ import com.storagemanager.storage_management.dto.MonthlyRevenueDTO;
 import com.storagemanager.storage_management.dto.QuarterlyRevenueDTO;
 import com.storagemanager.storage_management.dto.UnitOccupancyDTO;
 import com.storagemanager.storage_management.dto.UnitRevenueDTO;
+import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.StorageUnit;
 import com.storagemanager.storage_management.model.Units;
@@ -284,14 +285,20 @@ public class StatisticsService {
         occupancyRate = Math.round(occupancyRate * 10.0) / 10.0;
 
         List<RentalAgreement> activeRentals = rentalsIn(rentalAgreementRepository.findByStatus(RentalStatus.ACTIVE), rootIds);
-        long activeClients = activeRentals.stream().map(r -> r.getClient().getId()).distinct().count();
+        // Todos los que firman como arrendatarios, no sólo el titular: si un
+        // piso lo alquilan dos, son dos clientes activos. Los fiadores no
+        // cuentan -no alquilan nada- y tenants() ya los deja fuera.
+        long activeClients = activeRentals.stream()
+                .flatMap(r -> r.tenants().stream())
+                .map(Client::getId).distinct().count();
         // Sin filtro ni ámbito: todos los clientes. Con cualquiera de los dos, los
         // que han alquilado (alguna vez) algo de lo que se está mirando; contar
         // todos delataría cuántos hay en el resto de la casa.
         long totalClients = rootIds == null && unitScope.isUnrestricted()
                 ? clientRepository.count()
                 : rentalsIn(rentalAgreementRepository.findAll(), rootIds).stream()
-                        .map(r -> r.getClient().getId()).distinct().count();
+                        .flatMap(r -> r.tenants().stream())
+                        .map(Client::getId).distinct().count();
 
         Breakdown potential = Breakdown.ZERO;
         for (StorageUnit unit : units) {
@@ -583,7 +590,7 @@ public class StatisticsService {
                     .parentUnitName(unit.getParent() != null ? unit.getParent().getName() : null)
                     .rootUnitId(unit.getRootId())
                     .rootUnitName(unit.rootUnit().getName())
-                    .currentClientName(active != null ? active.getClient().getFullName() : null)
+                    .currentClientName(active != null ? active.tenantNames() : null)
                     .currentAgreementNumber(active != null ? active.getAgreementNumber() : null)
                     // Tarifa Base (con IVA y desglose)
                     .baseMonthlyRate(unit.getBaseMonthlyRate())

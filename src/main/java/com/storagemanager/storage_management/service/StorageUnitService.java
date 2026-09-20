@@ -1,6 +1,7 @@
 package com.storagemanager.storage_management.service;
 
 import com.storagemanager.storage_management.config.VatUtils;
+import com.storagemanager.storage_management.dto.PersonDTO;
 import com.storagemanager.storage_management.dto.StorageUnitRequest;
 import com.storagemanager.storage_management.dto.UnitHistoryDTO;
 import com.storagemanager.storage_management.exception.BadRequestException;
@@ -242,10 +243,7 @@ public class StorageUnitService {
                 .map(r -> UnitHistoryDTO.RentalEntry.builder()
                         .rentalId(r.getId())
                         .agreementNumber(r.getAgreementNumber())
-                        .clientName(r.getClient().getFullName())
-                        .clientDocumentId(r.getClient().getDocumentId())
-                        .coClientName(r.getCoClient() != null ? r.getCoClient().getFullName() : null)
-                        .coClientDocumentId(r.getCoClient() != null ? r.getCoClient().getDocumentId() : null)
+                        .tenants(PersonDTO.of(r.tenants()))
                         .startDate(r.getStartDate())
                         .endDate(r.getEndDate())
                         .monthlyRent(r.getMonthlyRent())

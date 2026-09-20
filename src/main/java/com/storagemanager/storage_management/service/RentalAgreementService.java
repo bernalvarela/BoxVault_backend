@@ -151,27 +151,14 @@ public class RentalAgreementService {
     public RentalAgreement updateAgreement(Long id, RentalAgreementRequest request) {
         RentalAgreement agreement = getAgreementById(id);
 
-        if (request.getClientId() != null && !request.getClientId().equals(agreement.getClient().getId())) {
-            Client previous = agreement.getClient();
-            Client corrected = clientRepository.findById(request.getClientId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Client not found with id: " + request.getClientId()));
-            agreement.setClient(corrected);
-
-            // Los cobros llevan su propio cliente, y BillingService da preferencia
-            // a ése sobre el del contrato: si no se cambian también, corregir el
-            // titular dejaría las mensualidades ya registradas a nombre del
-            // anterior —en el registro de cobros y en la ficha de los dos—.
-            // Cambiar el titular de un contrato es corregir un error de captura,
-            // no traspasarlo: sus meses siempre fueron de quien de verdad alquila.
-            List<Payment> ofAgreement = paymentRepository.findByRentalAgreementId(id);
-            ofAgreement.forEach(payment -> payment.setClient(corrected));
-            paymentRepository.saveAll(ofAgreement);
-
-            log.info("Contrato {}: titular corregido de '{}' a '{}'; {} cobro(s) reasignado(s)",
-                    agreement.getAgreementNumber(), previous.getFullName(), corrected.getFullName(),
-                    ofAgreement.size());
-        }
+        // Aquí había quince líneas que reescribían el cliente de todos los cobros
+        // cuando se corregía el titular. Existían para mantener a raya un
+        // duplicado: cada cobro llevaba su propio cliente además del contrato. Ya
+        // no lo lleva nadie -los cobros son del contrato y los arrendatarios son
+        // los del contrato-, así que no hay nada que sincronizar.
+        List<Client> before = List.copyOf(agreement.tenants());
         applyPeople(agreement, peopleOf(request));
+        warnIfPeopleChanged(agreement, before);
         requireNoOverlap(agreement.getStorageUnit(), agreement.getId(), request.getStartDate(), request.getEndDate());
         agreement.setStartDate(request.getStartDate());
         agreement.setEndDate(request.getEndDate());
@@ -313,6 +300,30 @@ public class RentalAgreementService {
     /** El periodo facturado de un cobro, para comparar meses entre contratos. */
     private static YearMonth periodOf(Payment payment) {
         return YearMonth.of(payment.getBillingPeriodYear(), payment.getBillingPeriodMonth());
+    }
+
+    /**
+     * Deja constancia cuando cambia quién alquila en un contrato que ya tiene
+     * cobros registrados.
+     * <p>
+     * Un contrato no cambia de arrendatarios: si entra o sale alguien, lo que
+     * procede es cerrarlo y firmar uno nuevo, porque lo cobrado hasta hoy lo
+     * pagaron los de antes. Pero corregir una ficha mal capturada el primer día
+     * es legítimo y no se puede distinguir desde aquí, así que esto no lo
+     * impide: lo registra. Quien avisa de verdad, antes de guardar, es la
+     * pantalla.
+     */
+    private void warnIfPeopleChanged(RentalAgreement agreement, List<Client> before) {
+        List<Long> antes = before.stream().map(Client::getId).sorted().toList();
+        List<Long> ahora = agreement.tenants().stream().map(Client::getId).sorted().toList();
+        if (antes.equals(ahora)) return;
+
+        long charges = paymentRepository.findByRentalAgreementId(agreement.getId()).size();
+        if (charges == 0) return;
+        log.warn("Contrato {}: cambian los arrendatarios teniendo {} cobro(s) registrado(s). "
+                + "Lo cobrado hasta hoy lo pagaron los de antes; si de verdad ha entrado o salido "
+                + "alguien, lo correcto es cerrar este contrato y firmar otro.",
+                agreement.getAgreementNumber(), charges);
     }
 
     /** Una persona del contrato ya resuelta: su ficha y su papel. */

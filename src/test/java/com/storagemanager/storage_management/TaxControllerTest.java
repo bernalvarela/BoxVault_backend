@@ -5,6 +5,7 @@ import com.storagemanager.storage_management.dto.IrpfReportDTO;
 import com.storagemanager.storage_management.dto.Modelo184DTO;
 import com.storagemanager.storage_management.dto.Modelo303DTO;
 import com.storagemanager.storage_management.dto.OwnerDTO;
+import com.storagemanager.storage_management.dto.PersonDTO;
 import com.storagemanager.storage_management.dto.TaxFilingDTO;
 import com.storagemanager.storage_management.dto.TaxFilingRequest;
 import com.storagemanager.storage_management.model.Expense;
@@ -45,6 +46,85 @@ class TaxControllerTest {
         OwnerDTO[] owners = restTemplate.getForEntity("/api/owners", OwnerDTO[].class).getBody();
         assertNotNull(owners);
         return Arrays.stream(owners).filter(o -> o.getFullName().startsWith(prefix)).findFirst().orElseThrow();
+    }
+
+    /**
+     * Las cifras de dos ejercicios ya cerrados, clavadas.
+     * <p>
+     * No comprueba que el cálculo sea correcto -de eso van las demás pruebas-,
+     * comprueba que NO CAMBIE. Es la red para tocar por dentro cómo se llega a
+     * los inquilinos de un contrato: si al mover eso se mueve un euro de 2024 o
+     * de 2025, esto lo dice al instante y no en junio, delante de la gestoría.
+     * <p>
+     * Los importes salen del propio sistema el 20/09/2026, con los datos
+     * sembrados de los extractos. Si alguna vez cambian a propósito -porque se
+     * corrija un cobro de aquellos años- hay que actualizarlos a mano, y ese
+     * gesto deliberado es justamente el punto.
+     */
+    @Test
+    void theFiguresOfClosedYearsDoNotMove() {
+        // año, propietario, neto del alquiler directo, ingresos, neto atribuido
+        Object[][] irpfEsperado = {
+            {2024, "Bernal",      "5226.20",  "5350.41",  "208.66"},
+            {2024, "Juan María",  "9391.45",  "10057.50", "625.99"},
+            {2024, "Marta",       "1965.41",  "1990.41",  "0.00"},
+            {2024, "María Luisa", "3202.25",  "3382.50",  "208.66"},
+            {2024, "Xiao",        "7191.61",  "7340.82",  "208.66"},
+            {2025, "Bernal",      "5009.66",  "5310.00",  "461.45"},
+            {2025, "Juan María",  "10030.48", "10666.00", "1384.34"},
+            {2025, "Marta",       "1846.20",  "1950.00",  "0.00"},
+            {2025, "María Luisa", "2854.59",  "3166.00",  "461.45"},
+            {2025, "Xiao",        "6855.87",  "7260.00",  "461.45"},
+        };
+        for (Object[] fila : irpfEsperado) {
+            int year = (int) fila[0];
+            String quien = (String) fila[1];
+            IrpfReportDTO report = restTemplate
+                    .getForEntity("/api/taxes/irpf?year=" + year, IrpfReportDTO.class).getBody();
+            assertNotNull(report, "sin informe de IRPF de " + year);
+            IrpfReportDTO.OwnerReport owner = report.getOwners().stream()
+                    .filter(o -> o.getOwnerName().startsWith(quien))
+                    .findFirst().orElseThrow(() -> new AssertionError(quien + " no sale en el IRPF de " + year));
+
+            assertTrue(sameMoney(owner.getRental().getNet(), new BigDecimal((String) fila[2])),
+                    year + " " + quien + ": el neto del alquiler directo se ha movido, ahora "
+                    + owner.getRental().getNet());
+            assertTrue(sameMoney(owner.getRental().getIncomeTotal(), new BigDecimal((String) fila[3])),
+                    year + " " + quien + ": los ingresos se han movido, ahora "
+                    + owner.getRental().getIncomeTotal());
+            assertTrue(sameMoney(owner.getAttribution().getNet(), new BigDecimal((String) fila[4])),
+                    year + " " + quien + ": el neto atribuido se ha movido, ahora "
+                    + owner.getAttribution().getNet());
+        }
+
+        // año, comunero, ingresos, gastos, neto
+        Object[][] m184Esperado = {
+            {2024, "Juan María",  "1545.00", "650.85", "626.00"},
+            {2024, "Bernal",      "515.00",  "216.95", "208.67"},
+            {2024, "María Luisa", "515.00",  "216.95", "208.67"},
+            {2024, "Xiao",        "515.00",  "216.95", "208.67"},
+            {2025, "Juan María",  "2760.00", "896.62", "1384.34"},
+            {2025, "Bernal",      "920.00",  "298.87", "461.45"},
+            {2025, "María Luisa", "920.00",  "298.87", "461.45"},
+            {2025, "Xiao",        "920.00",  "298.87", "461.45"},
+        };
+        for (Object[] fila : m184Esperado) {
+            int year = (int) fila[0];
+            String quien = (String) fila[1];
+            Modelo184DTO report = restTemplate
+                    .getForEntity("/api/taxes/modelo-184?year=" + year, Modelo184DTO.class).getBody();
+            assertNotNull(report, "sin modelo 184 de " + year);
+            Modelo184DTO.Member member = report.getMembers().stream()
+                    .filter(m -> m.getOwnerName().startsWith(quien))
+                    .findFirst().orElseThrow(() -> new AssertionError(quien + " no sale en el 184 de " + year));
+
+            assertTrue(sameMoney(member.getIncomeTotal(), new BigDecimal((String) fila[2])),
+                    year + " " + quien + ": los ingresos del 184 se han movido, ahora " + member.getIncomeTotal());
+            assertTrue(sameMoney(member.getExpenses(), new BigDecimal((String) fila[3])),
+                    year + " " + quien + ": los gastos del 184 se han movido, ahora " + member.getExpenses());
+            assertTrue(sameMoney(member.getNet(), new BigDecimal((String) fila[4])),
+                    year + " " + quien + ": el neto del 184 se ha movido, ahora " + member.getNet());
+        }
     }
 
     @Test
@@ -184,11 +264,17 @@ class TaxControllerTest {
         IrpfReportDTO.Line flat3d = marta.getRental().getLines().get(0);
         assertEquals("3D", flat3d.getUnitNumber());
         assertEquals("9602605NJ4090S0007JT", flat3d.getCadastralReference());
-        IrpfReportDTO.Rental gabriela = flat3d.getRentals().stream().filter(r -> r.getClientName().startsWith("Gabriela")).findFirst().orElseThrow();
-        assertEquals("Y-8033348-Z", gabriela.getClientDocumentId());
-        assertEquals("Jofer Fernando Ramírez Jáuregui", gabriela.getCoClientName());
-        assertEquals("Y-9905319-S", gabriela.getCoClientDocumentId());
-        assertEquals(LocalDate.of(2023, 9, 1), gabriela.getStartDate());
+        // Los dos que firman el 3D, con su NIE. Ya no son "el inquilino y el
+        // segundo" sino una lista, que es lo que el 100 pide en plural.
+        IrpfReportDTO.Rental flat3dContract = flat3d.getRentals().stream()
+                .filter(r -> r.getTenants().stream().anyMatch(t -> t.getName().startsWith("Gabriela")))
+                .findFirst().orElseThrow();
+        List<String> names3d = flat3dContract.getTenants().stream().map(PersonDTO::getName).toList();
+        List<String> ids3d = flat3dContract.getTenants().stream().map(PersonDTO::getDocumentId).toList();
+        assertTrue(names3d.contains("Jofer Fernando Ramírez Jáuregui"), "los dos arrendatarios: " + names3d);
+        assertTrue(ids3d.contains("Y-8033348-Z"), "el NIE de Gabriela: " + ids3d);
+        assertTrue(ids3d.contains("Y-9905319-S"), "el NIE de Jófer: " + ids3d);
+        assertEquals(LocalDate.of(2023, 9, 1), flat3dContract.getStartDate());
         IrpfReportDTO.Line flat3e = xiao.getRental().getLines().stream().filter(l -> "3E".equals(l.getUnitNumber())).findFirst().orElseThrow();
         assertEquals("9602605NJ4090S0008KY", flat3e.getCadastralReference());
         // Carmen's contract on 3E starts in January 2026, so her DNI shows up on the 2026 return
@@ -196,7 +282,10 @@ class TaxControllerTest {
         assertNotNull(report2026);
         IrpfReportDTO.Line flat3e2026 = report2026.getOwners().stream().filter(o -> o.getOwnerName().startsWith("Xiao")).findFirst().orElseThrow()
                 .getRental().getLines().stream().filter(l -> "3E".equals(l.getUnitNumber())).findFirst().orElseThrow();
-        assertTrue(flat3e2026.getRentals().stream().anyMatch(r -> "23.020.088-D".equals(r.getClientDocumentId())), "Carmen's DNI on the 3E contract");
+        assertTrue(flat3e2026.getRentals().stream()
+                        .flatMap(r -> r.getTenants().stream())
+                        .anyMatch(t -> "23.020.088-D".equals(t.getDocumentId())),
+                "Carmen's DNI on the 3E contract");
         assertTrue(report.getOwners().stream().noneMatch(o -> DataSeeder.ENTITY_NAME.equals(o.getOwnerName())));
     }
 

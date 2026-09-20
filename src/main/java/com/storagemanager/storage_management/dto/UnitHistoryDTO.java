@@ -56,11 +56,8 @@ public class UnitHistoryDTO {
     public static class RentalEntry {
         private Long rentalId;
         private String agreementNumber;
-        private String clientName;
-        private String clientDocumentId;
-        /** Second tenant of the contract, if any. */
-        private String coClientName;
-        private String coClientDocumentId;
+        /** Quién lo alquiló, todos los que firmaron como arrendatarios. */
+        private List<PersonDTO> tenants;
         private LocalDate startDate;
         private LocalDate endDate;
         private BigDecimal monthlyRent;

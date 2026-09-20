@@ -5,6 +5,7 @@ import com.storagemanager.storage_management.dto.ClientRequest;
 import com.storagemanager.storage_management.exception.BadRequestException;
 import com.storagemanager.storage_management.exception.ResourceNotFoundException;
 import com.storagemanager.storage_management.model.Client;
+import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.repository.ClientRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 import com.storagemanager.storage_management.security.UnitScope;
@@ -24,6 +25,7 @@ public class ClientService {
     private final ClientRepository clientRepository;
     private final RentalAgreementRepository rentalAgreementRepository;
     private final ClientDocumentService clientDocumentService;
+    private final RentalAgreementService rentalAgreements;
     private final UnitScope unitScope;
 
     public List<Client> getAllClients() {
@@ -52,11 +54,16 @@ public class ClientService {
     }
 
     public List<ClientDTO> searchClientSummaries(String query) {
-        // A client is active when they are the main or the second tenant of an ACTIVE contract
+        // Activo es quien alquila algo hoy. Avalar no es alquilar: un fiador no
+        // cuenta como cliente activo, pero tampoco es una ficha muerta, así que
+        // se cuenta aparte lo que avala y se enseña en su fila.
         Map<Long, Long> activeRentalsByClient = new java.util.HashMap<>();
+        Map<Long, Long> guaranteedByClient = new java.util.HashMap<>();
         for (var r : rentalAgreementRepository.findAllActiveRentals()) {
-            activeRentalsByClient.merge(r.getClient().getId(), 1L, Long::sum);
-            if (r.getCoClient() != null) activeRentalsByClient.merge(r.getCoClient().getId(), 1L, Long::sum);
+            r.guarantors().forEach(person -> guaranteedByClient.merge(person.getId(), 1L, Long::sum));
+            // Cuenta a todos los arrendatarios. Los fiadores no: avalar no es
+            // alquilar, y un fiador no debe salir en las cifras de ocupación.
+            r.tenants().forEach(tenant -> activeRentalsByClient.merge(tenant.getId(), 1L, Long::sum));
         }
 
         return searchClients(query).stream()
@@ -73,6 +80,7 @@ public class ClientService {
                         .updatedAt(c.getUpdatedAt())
                         .active(activeRentalsByClient.containsKey(c.getId()))
                         .activeRentalsCount(activeRentalsByClient.getOrDefault(c.getId(), 0L))
+                        .guaranteedRentalsCount(guaranteedByClient.getOrDefault(c.getId(), 0L))
                         .build())
                 .toList();
     }
@@ -119,6 +127,21 @@ public class ClientService {
     @Transactional
     public void deleteClient(Long id) {
         Client client = getClientById(id);
+
+        // Quien firma un contrato no se borra. Sin esto lo que salía no era un
+        // mensaje sino un error 500 de clave ajena, y con los fiadores es fácil
+        // de provocar: no alquilan nada, así que su ficha parece prescindible.
+        List<RentalAgreement> signed = rentalAgreements.getAgreementsByClient(id);
+        if (!signed.isEmpty()) {
+            String numbers = signed.stream()
+                    .map(RentalAgreement::getAgreementNumber)
+                    .limit(3)
+                    .collect(java.util.stream.Collectors.joining(", "));
+            throw new BadRequestException(client.getFullName() + " firma "
+                    + (signed.size() == 1 ? "el contrato " : signed.size() + " contratos (")
+                    + numbers + (signed.size() == 1 ? "" : "...)")
+                    + " y no se puede borrar. Si ya no alquila, finaliza sus contratos.");
+        }
         // Los documentos archivados van con la ficha: sus filas apuntan al cliente
         // y sus ficheros al almacén, y ninguno de los dos debe sobrevivirle.
         clientDocumentService.deleteByClient(id);

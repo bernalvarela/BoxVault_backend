@@ -142,12 +142,13 @@ public class IrpfReportDTO {
     public static class Rental {
         private Long rentalId;
         private String agreementNumber;
-        private String clientName;
-        /** DNI / NIE of the tenant. */
-        private String clientDocumentId;
-        /** Second tenant of the contract, if any. */
-        private String coClientName;
-        private String coClientDocumentId;
+        /**
+         * Quién alquila. Son los arrendatarios del contrato, todos: el reparto
+         * entre ellos no le importa a la declaración -lo que se declara es lo
+         * cobrado por el inmueble- pero sus NIF sí, y con dos campos sueltos un
+         * contrato de tres se quedaba corto en el papel.
+         */
+        private List<PersonDTO> tenants;
         private LocalDate startDate;
         private LocalDate endDate;
         private String status;

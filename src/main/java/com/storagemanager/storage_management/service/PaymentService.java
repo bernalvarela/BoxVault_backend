@@ -35,6 +35,7 @@ public class PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final RentalAgreementRepository rentalAgreementRepository;
+    private final RentalAgreementService rentals;
     private final UnitScope unitScope;
     private final InvoiceService invoices;
 
@@ -67,8 +68,21 @@ public class PaymentService {
                 paymentRepository.findByRentalAgreementId(rentalAgreementId), Payment::getStorageUnit);
     }
 
+    /**
+     * Los cobros de los contratos que firma esa persona como arrendataria.
+     * <p>
+     * Antes se filtraba por el cliente del propio cobro, que era el titular; en
+     * la ficha del segundo arrendatario no aparecía ni una mensualidad del piso
+     * que alquila. Y era falso: en un contrato de dos, pagan los dos. Ahora se
+     * pregunta por el contrato, que es de quien son los cobros.
+     */
     public List<Payment> getPaymentsByClient(Long clientId) {
-        return unitScope.filterByUnit(paymentRepository.findByClientId(clientId), Payment::getStorageUnit);
+        List<Long> rentalIds = rentals.getAgreementsByClient(clientId).stream()
+                .map(RentalAgreement::getId)
+                .toList();
+        if (rentalIds.isEmpty()) return List.of();
+        return unitScope.filterByUnit(
+                paymentRepository.findByRentalAgreementIdIn(rentalIds), Payment::getStorageUnit);
     }
 
     public List<Payment> getPaymentsByStorageUnit(Long unitId) {

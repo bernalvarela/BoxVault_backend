@@ -171,6 +171,14 @@ public class RentalAgreement {
         return of(PartyRole.ARRENDATARIO);
     }
 
+    /** "Ana Gómez Pérez y Luis Gómez Pérez", para una columna de un listado. */
+    public String tenantNames() {
+        List<String> names = tenants().stream().map(Client::getFullName).filter(java.util.Objects::nonNull).toList();
+        if (names.isEmpty()) return "";
+        if (names.size() == 1) return names.get(0);
+        return String.join(", ", names.subList(0, names.size() - 1)) + " y " + names.get(names.size() - 1);
+    }
+
     /** Los fiadores, en orden. */
     public List<Client> guarantors() {
         return of(PartyRole.FIADOR);
