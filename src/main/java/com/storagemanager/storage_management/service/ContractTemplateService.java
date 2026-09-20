@@ -2,6 +2,7 @@ package com.storagemanager.storage_management.service;
 
 import com.storagemanager.storage_management.config.InvoicingProperties;
 import com.storagemanager.storage_management.dto.ContractTemplateDTO;
+import com.storagemanager.storage_management.dto.TemplateRentalDTO;
 import com.storagemanager.storage_management.dto.ContractTemplateRequest;
 import com.storagemanager.storage_management.exception.BadRequestException;
 import com.storagemanager.storage_management.exception.ResourceNotFoundException;
@@ -11,6 +12,7 @@ import com.storagemanager.storage_management.model.StorageUnit;
 import com.storagemanager.storage_management.repository.ContractTemplateRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
+import com.storagemanager.storage_management.security.UnitScope;
 import com.storagemanager.storage_management.service.storage.FileStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +25,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -46,6 +49,7 @@ public class ContractTemplateService {
 
     private static final String KEY_PREFIX = "plantillas/";
 
+    private final UnitScope unitScope;
     private final ContractTemplateRepository templates;
     private final RentalAgreementRepository rentals;
     private final StorageUnitRepository units;
@@ -199,13 +203,51 @@ public class ContractTemplateService {
      * trasteros, sin repetirla nueve veces ni acordarse en cada alta.
      */
     public String textFor(RentalAgreement rental) {
+        ContractTemplate chosen = templateFor(rental);
+        return chosen == null ? bundledTemplate() : read(chosen);
+    }
+
+    /**
+     * Con qué plantilla se compone el contrato de ese alquiler: la suya, la de
+     * su unidad, la del local que la contiene o la de por defecto, por ese
+     * orden. Nula cuando no hay ninguna creada y se usa la que trae la
+     * aplicación dentro.
+     */
+    public ContractTemplate templateFor(RentalAgreement rental) {
         ContractTemplate chosen = rental.getContractTemplate() != null
                 ? rental.getContractTemplate()
                 : ofUnit(rental.getStorageUnit());
-        if (chosen != null) return read(chosen);
-        return templates.findFirstByDefaultTemplateIsTrue()
-                .map(this::read)
-                .orElseGet(this::bundledTemplate);
+        return chosen != null ? chosen : templates.findFirstByDefaultTemplateIsTrue().orElse(null);
+    }
+
+    /**
+     * Los alquileres que se componen con esta plantilla, para poder verla con
+     * datos de verdad.
+     * <p>
+     * No basta con mirar quién la tiene elegida a mano: la mayoría de los
+     * contratos no eligen ninguna y la heredan de su unidad, del local que la
+     * contiene o del ajuste de por defecto. Así que se pregunta por cada
+     * alquiler con qué se compondría -la misma cadena que al generarlo- y se
+     * queda el que acabe en ésta. Los que el usuario no pueda ver por su ámbito
+     * de unidades no salen.
+     */
+    public List<TemplateRentalDTO> rentalsUsing(Long templateId) {
+        ContractTemplate template = require(templateId);
+        List<RentalAgreement> theirs = rentals.findAll().stream()
+                .filter(rental -> {
+                    ContractTemplate used = templateFor(rental);
+                    return used != null && used.getId().equals(template.getId());
+                })
+                .toList();
+
+        return unitScope.filterByUnit(theirs, RentalAgreement::getStorageUnit).stream()
+                // En vigor primero, y dentro de cada grupo por número de unidad:
+                // el que se quiere mirar casi siempre es uno de los vivos.
+                .sorted(Comparator.comparing(RentalAgreement::getStatus)
+                        .thenComparing(rental -> rental.getStorageUnit() == null
+                                ? "" : String.valueOf(rental.getStorageUnit().getUnitNumber())))
+                .map(TemplateRentalDTO::of)
+                .toList();
     }
 
     /** La plantilla de la unidad o la del local que la contiene; null si ninguna dice nada. */

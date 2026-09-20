@@ -4,7 +4,11 @@ import com.storagemanager.storage_management.dto.ContractTemplateDTO;
 import com.storagemanager.storage_management.dto.ContractTemplateRequest;
 import com.storagemanager.storage_management.exception.BadRequestException;
 import com.storagemanager.storage_management.dto.TemplateImageDTO;
+import com.storagemanager.storage_management.dto.TemplateRentalDTO;
+import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.service.ContractTemplateService;
+import com.storagemanager.storage_management.service.InvoiceIssuer;
+import com.storagemanager.storage_management.service.RentalAgreementService;
 import com.storagemanager.storage_management.service.TemplateImageService;
 import com.storagemanager.storage_management.service.pdf.ContractFields;
 import com.storagemanager.storage_management.service.pdf.ContractPdfService;
@@ -39,6 +43,8 @@ public class ContractTemplateController {
     private final ContractTemplateService templates;
     private final ContractPdfService pdf;
     private final TemplateImageService images;
+    private final RentalAgreementService rentals;
+    private final InvoiceIssuer issuers;
 
     @PreAuthorize("@access.can('ALQUILERES','LEER')")
     @GetMapping
@@ -136,16 +142,43 @@ public class ContractTemplateController {
         return ResponseEntity.status(HttpStatus.CREATED).body(templates.duplicate(id));
     }
 
+    /** Los alquileres que se componen con esta plantilla, para la vista previa. */
+    @PreAuthorize("@access.can('ALQUILERES','ADMINISTRAR')")
+    @GetMapping("/{id}/rentals")
+    public ResponseEntity<List<TemplateRentalDTO>> rentalsUsing(@PathVariable Long id) {
+        return ResponseEntity.ok(templates.rentalsUsing(id));
+    }
+
+    /**
+     * Compone el texto para verlo.
+     * <p>
+     * Sin {@code rentalId} usa el contrato de mentira, que lleva todos los
+     * campos puestos y sirve para revisar la redacción. Con él, los datos de ese
+     * alquiler de verdad: es la única forma de ver si la cláusula de los gastos
+     * dice lo que tiene que decir en el 3D, con sus tres propietarios y sus
+     * importes.
+     */
     @PreAuthorize("@access.can('ALQUILERES','ADMINISTRAR')")
     @PostMapping("/preview")
-    public ResponseEntity<Resource> preview(@RequestBody ContractTemplateRequest request) {
+    public ResponseEntity<Resource> preview(@RequestBody ContractTemplateRequest request,
+                                            @RequestParam(required = false) Long rentalId) {
         // Sin @Valid: para ver cómo queda un texto todavía no hace falta que
         // tenga nombre. Lo único que se exige es que haya texto.
         if (request.getContent() == null || request.getContent().isBlank()) {
             throw new BadRequestException("No hay nada que previsualizar");
         }
-        var sample = ContractFields.sampleRental();
-        byte[] content = pdf.render(sample, ContractFields.sampleIssuer(), request.getContent(), images::bytesOf);
+        RentalAgreement sample;
+        InvoiceIssuer.Issuer issuer;
+        if (rentalId == null) {
+            sample = ContractFields.sampleRental();
+            issuer = ContractFields.sampleIssuer();
+        } else {
+            // getAgreementById comprueba que la unidad esté en el ámbito de quien
+            // mira: una vista previa no es un atajo para leer datos ajenos.
+            sample = rentals.getAgreementById(rentalId);
+            issuer = issuers.forUnit(sample.getStorageUnit());
+        }
+        byte[] content = pdf.render(sample, issuer, request.getContent(), images::bytesOf);
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline()
