@@ -43,7 +43,7 @@ public class InvoiceIssuer {
      */
     public record Issuer(String name, String taxId, String address, String city,
                          String email, String phone, String iban, boolean entity,
-                         String owners) {}
+                         String ownersPhrase, List<Owner> owners) {}
 
     public Issuer forUnit(StorageUnit unit) {
         List<Ownership> shares = sharesOf(unit);
@@ -52,6 +52,7 @@ public class InvoiceIssuer {
     }
 
     private Issuer from(Owner owner, List<Ownership> shares) {
+        List<Owner> all = listed(shares);
         return new Issuer(
                 pick(owner.getFullName(), fallback.getIssuerName()),
                 pick(owner.getDocumentId(), fallback.getIssuerTaxId()),
@@ -61,7 +62,8 @@ public class InvoiceIssuer {
                 pick(owner.getPhone(), fallback.getIssuerPhone()),
                 pick(owner.getBankAccount(), fallback.getIssuerIban()),
                 owner.isEntity(),
-                ownersPhrase(shares));
+                ownersPhrase(all),
+                all);
     }
 
     /**
@@ -72,10 +74,8 @@ public class InvoiceIssuer {
      * las dos; el emisor "principal" sirve para una factura, pero no para decir
      * quién arrienda.
      */
-    private String ownersPhrase(List<Ownership> shares) {
-        List<String> names = shares.stream()
-                .map(Ownership::getOwner)
-                .filter(owner -> !owner.isEntity() || shares.size() == 1)
+    private String ownersPhrase(List<Owner> owners) {
+        List<String> names = owners.stream()
                 .map(owner -> owner.getDocumentId() == null || owner.getDocumentId().isBlank()
                         ? owner.getFullName()
                         : owner.getFullName() + " (NIF " + owner.getDocumentId() + ")")
@@ -92,7 +92,29 @@ public class InvoiceIssuer {
                 fallback.getIssuerIban(),
                 // Sin propietario que mirar no se afirma lo que no consta.
                 false,
-                InvoicingProperties.MISSING);
+                InvoicingProperties.MISSING,
+                List.of());
+    }
+
+    /**
+     * Los propietarios que arriendan, de mayor a menor participación.
+     * <p>
+     * La comunidad de bienes se cae de la lista cuando hay más: es una
+     * envoltura fiscal de los mismos señores, y en un contrato quien arrienda
+     * son ellos. Si es la única propietaria, entonces sí es quien arrienda.
+     * <p>
+     * El orden no es capricho: de aquí salen {@code {{arrendador[1]}}},
+     * {@code [2]}... y quien escribe una plantilla espera que el primero sea el
+     * principal, no el que la base devolviera antes.
+     */
+    private List<Owner> listed(List<Ownership> shares) {
+        return shares.stream()
+                .filter(share -> share.getOwner() != null)
+                .filter(share -> !share.getOwner().isEntity() || shares.size() == 1)
+                .sorted(Comparator.comparing((Ownership share) -> share.getSharePercent() == null
+                        ? BigDecimal.ZERO : share.getSharePercent()).reversed())
+                .map(Ownership::getOwner)
+                .toList();
     }
 
 /** Las participaciones que mandan en esta unidad: las suyas o las del local que la contiene. */

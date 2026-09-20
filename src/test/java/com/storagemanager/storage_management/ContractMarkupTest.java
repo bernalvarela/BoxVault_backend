@@ -2,6 +2,7 @@ package com.storagemanager.storage_management;
 
 import com.storagemanager.storage_management.service.InvoiceIssuer;
 import com.storagemanager.storage_management.model.RentalAgreement;
+import com.storagemanager.storage_management.model.Owner;
 import com.storagemanager.storage_management.service.pdf.ContractFields;
 import com.storagemanager.storage_management.service.pdf.ContractPdfService;
 import org.junit.jupiter.api.Test;
@@ -22,11 +23,21 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class ContractMarkupTest {
 
+    private static final Owner BERNAL = Owner.builder()
+            .fullName("Bernal Varela Gómez").documentId("46906413Y")
+            .city("Oleiros (A Coruña)").bankAccount("ES11 1111 1111 1111 1111 1111")
+            .build();
+    private static final Owner XIAO = Owner.builder()
+            .fullName("Xiao Varela Gómez").documentId("46906414F")
+            .city("Oleiros (A Coruña)").bankAccount("ES22 2222 2222 2222 2222 2222")
+            .build();
+
     private static final InvoiceIssuer.Issuer ISSUER = new InvoiceIssuer.Issuer(
             "Comunidad de bienes Pasaxe 29", "E56424500", "Avenida del Pasaje 29",
             "Oleiros (A Coruña)", "pasaxe29@ejemplo.es", "600 000 000",
             "ES00 0000 0000 0000 0000 0000", true,
-            "Bernal Varela Gómez (NIF 46906413Y) y Xiao Varela Gómez (NIF 46906414F)");
+            "Bernal Varela Gómez (NIF 46906413Y) y Xiao Varela Gómez (NIF 46906414F)",
+            java.util.List.of(BERNAL, XIAO));
 
     private final ContractPdfService pdf = new ContractPdfService();
 
@@ -238,6 +249,42 @@ class ContractMarkupTest {
                 "la frase se cierra sola, sin espacios colgando: " + text);
         assertFalse(text.contains("fiador solidario"), text);
         assertFalse(text.contains("[[fin]]"), text);
+    }
+
+    @Test
+    void peopleCanBeAskedForByTheirNumber() throws IOException {
+        // Un piso de dos propietarios y dos arrendatarios no cabe en un juego de
+        // campos en singular; con el número se llega a cada uno.
+        String template = "Arriendan {{arrendador[1]_nombre}} y {{arrendador[2]_nombre}}.\n\n"
+                + "Alquilan {{arrendatario[1]_nombre}} y {{arrendatario[2]_nombre}}.\n\n"
+                + "Avala {{fiador[1]}}.";
+        String text = textOf(render(template), 1);
+
+        assertTrue(text.contains("Arriendan Bernal Varela Gómez y Xiao Varela Gómez."), text);
+        assertTrue(text.contains("Alquilan Ana Gómez Pérez y Luis Gómez Pérez."), text);
+        assertTrue(text.contains("Avala Carmen Pérez Souto, con N.I.F. 11223344M."), text);
+    }
+
+    @Test
+    void aNumberBeyondWhoSignsIsJustEmpty() throws IOException {
+        // Lo importante: no se imprime "{{arrendatario[7]_nombre}}" en un
+        // contrato firmado. Y su condición tampoco se cumple, así que una
+        // plantilla puede servir para dos firmantes y para siete.
+        String template = "Firman {{arrendatario[1]_nombre}}"
+                + "[[si:arrendatario[7]_nombre]] y {{arrendatario[7]_nombre}}[[fin]].";
+        String text = textOf(render(template), 1);
+
+        assertTrue(text.contains("Firman Ana Gómez Pérez."), text);
+        assertFalse(text.contains("{{"), "ningún campo sin sustituir: " + text);
+        assertFalse(text.contains("[[si:"), text);
+    }
+
+    @Test
+    void everyoneAtOnceReadsLikeAContract() throws IOException {
+        String text = textOf(render("De una parte {{arrendadores}}; de otra {{arrendatarios}}."), 1);
+
+        assertTrue(text.contains("Bernal Varela Gómez (NIF 46906413Y) y Xiao Varela Gómez (NIF 46906414F)"), text);
+        assertTrue(text.contains("Ana Gómez Pérez (NIF 12345678Z) y Luis Gómez Pérez (NIF 87654321X)"), text);
     }
 
     private byte[] render(String template) {

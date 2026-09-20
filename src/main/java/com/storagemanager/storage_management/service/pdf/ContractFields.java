@@ -2,8 +2,11 @@ package com.storagemanager.storage_management.service.pdf;
 
 import com.storagemanager.storage_management.config.VatUtils;
 import com.storagemanager.storage_management.model.Client;
+import com.storagemanager.storage_management.model.Owner;
 import com.storagemanager.storage_management.model.RentalAgreement;
+import com.storagemanager.storage_management.model.RentalParty;
 import com.storagemanager.storage_management.model.StorageUnit;
+import com.storagemanager.storage_management.model.enums.PartyRole;
 import com.storagemanager.storage_management.model.enums.UnitKind;
 import com.storagemanager.storage_management.service.InvoiceIssuer;
 
@@ -49,20 +52,39 @@ public final class ContractFields {
             new Field("arrendador_telefono", "Arrendador", "Teléfono de contacto", "600 000 000"),
             new Field("arrendador_iban", "Arrendador", "Cuenta donde se cobra", "ES00 0000 0000 0000 0000 0000"),
             new Field("arrendadores", "Arrendador",
-                    "Todos los propietarios de la unidad, con su NIF; para un piso de dos titulares",
+                    "Todos los propietarios de la unidad, con su NIF, en una frase",
                     "Bernal Varela Gómez (NIF 46906413Y) y Xiao Varela Gómez (NIF 46906414F)"),
+            new Field("arrendador[1]", "Arrendador",
+                    "El primer propietario, con su NIF. Cambiando el número se llega al segundo, "
+                    + "al tercero... tantos como tenga la unidad; si no hay tantos, queda vacío",
+                    "Xiao Varela Gómez, con N.I.F. 46906414F"),
+            new Field("arrendador[1]_nombre", "Arrendador",
+                    "Igual que los campos de arriba pero de uno concreto: _nif, _direccion, "
+                    + "_ciudad, _email, _telefono, _iban",
+                    "Xiao Varela Gómez"),
 
             new Field("arrendatario_nombre", "Arrendatario", "Nombre del inquilino", "Ana Gómez Pérez"),
             new Field("arrendatario_nif", "Arrendatario", "NIF del inquilino", "12345678Z"),
             new Field("arrendatario_direccion", "Arrendatario", "Domicilio del inquilino", "Rúa Nova 1, 3º B"),
             new Field("arrendatario_email", "Arrendatario", "Correo del inquilino", "ana@ejemplo.es"),
             new Field("arrendatario_telefono", "Arrendatario", "Teléfono del inquilino", "600 111 222"),
+            new Field("arrendatarios", "Arrendatario",
+                    "Todos los arrendatarios del contrato, con su NIF, en una frase",
+                    "Ana Gómez Pérez (NIF 12345678Z) y Luis Gómez Pérez (NIF 87654321X)"),
+            new Field("arrendatario[1]", "Arrendatario",
+                    "El primer arrendatario, con su NIF. Cambiando el número se llega al segundo, "
+                    + "al tercero... tantos como firmen; si no hay tantos, queda vacío",
+                    "Ana Gómez Pérez, con N.I.F. 12345678Z"),
+            new Field("arrendatario[1]_nombre", "Arrendatario",
+                    "Igual que los campos de arriba pero de uno concreto: _nif, _direccion, "
+                    + "_email, _telefono",
+                    "Ana Gómez Pérez"),
             new Field("fiador", "Arrendatario",
-                    "Fiador solidario con su NIF, si el contrato lleva uno; vacío si no",
-                    "Anthony Alejandro García Albarrán, con N.I.E. Y-7838295-R"),
-            new Field("coarrendatario", "Arrendatario",
-                    "Párrafo del segundo titular; queda vacío si el contrato es de uno solo",
-                    "Y de otra parte, Luis Gómez Pérez, con NIF..."),
+                    "Los fiadores solidarios con su NIF, si el contrato lleva alguno; vacío si no",
+                    "Anthony Alejandro García Albarrán, con N.I.F. Y-7838295-R"),
+            new Field("fiador[1]", "Arrendatario",
+                    "Un fiador concreto; también _nombre, _nif, _direccion, _email, _telefono",
+                    "Anthony Alejandro García Albarrán, con N.I.F. Y-7838295-R"),
 
             new Field("unidad_numero", "Unidad", "Número de la unidad", "3"),
             new Field("unidad_nombre", "Unidad", "Nombre de la unidad", "Trastero 3"),
@@ -93,11 +115,6 @@ public final class ContractFields {
                     "EL ARRENDATARIO entrega a EL ARRENDADOR la cantidad de 110,00 € en concepto de fianza.")
     );
 
-    /** Los nombres, para comprobar de un vistazo si una plantilla usa algo que no existe. */
-    public static boolean exists(String name) {
-        return CATALOGUE.stream().anyMatch(f -> f.name().equals(name));
-    }
-
     /** El ejemplo que el catálogo da para un campo; "" si no existe. */
     public static String example(String name) {
         return CATALOGUE.stream()
@@ -127,15 +144,41 @@ public final class ContractFields {
         values.put("arrendador_email", orMissing(issuer.email()));
         values.put("arrendador_telefono", orMissing(issuer.phone()));
         values.put("arrendador_iban", orMissing(issuer.iban()));
-        values.put("arrendadores", orMissing(issuer.owners()));
+        values.put("arrendadores", orMissing(issuer.ownersPhrase()));
+        // arrendador[1], arrendador[2]... Los mismos datos de arriba, pero de
+        // cada propietario por su cuenta: un piso de tres no cabe en un juego de
+        // campos en singular, y cuántos hay sólo se sabe al componer el contrato.
+        List<Owner> landlords = issuer.owners();
+        for (int i = 0; i < landlords.size(); i++) {
+            Owner landlord = landlords.get(i);
+            person(values, "arrendador", i + 1, landlord.getFullName(), landlord.getDocumentId(),
+                    landlord.getAddress(), landlord.getCity(), landlord.getEmail(),
+                    landlord.getPhone(), landlord.getBankAccount());
+        }
 
+        // El singular es el titular, que es el primero de la lista; con los
+        // índices se llega a los demás.
         values.put("arrendatario_nombre", client == null ? orMissing(null) : client.getFullName());
         values.put("arrendatario_nif", client == null ? orMissing(null) : orMissing(client.getDocumentId()));
         values.put("arrendatario_direccion", client == null ? orMissing(null) : orMissing(client.getAddress()));
         values.put("arrendatario_email", client == null ? orMissing(null) : orMissing(client.getEmail()));
         values.put("arrendatario_telefono", client == null ? orMissing(null) : orMissing(client.getPhone()));
-        values.put("coarrendatario", coTenant(rental.getCoClient()));
-        values.put("fiador", named(rental.getGuarantor()));
+
+        List<Client> tenants = rental.tenants();
+        values.put("arrendatarios", phrase(tenants));
+        for (int i = 0; i < tenants.size(); i++) {
+            Client tenant = tenants.get(i);
+            person(values, "arrendatario", i + 1, tenant.getFullName(), tenant.getDocumentId(),
+                    tenant.getAddress(), null, tenant.getEmail(), tenant.getPhone(), null);
+        }
+
+        List<Client> guarantors = rental.guarantors();
+        values.put("fiador", named(guarantors));
+        for (int i = 0; i < guarantors.size(); i++) {
+            Client guarantor = guarantors.get(i);
+            person(values, "fiador", i + 1, guarantor.getFullName(), guarantor.getDocumentId(),
+                    guarantor.getAddress(), null, guarantor.getEmail(), guarantor.getPhone(), null);
+        }
 
         values.put("unidad_numero", unit == null ? orMissing(null) : unit.getUnitNumber());
         values.put("unidad_nombre", unit == null ? orMissing(null) : unit.getName());
@@ -214,13 +257,22 @@ public final class ContractFields {
                 .inventory("Cocina: muebles, vitrocerámica y horno, nevera y lavadora.\nBaño: lavabo con espejo, WC y ducha.\nSalón: sofá, mesa de centro y mesa de comedor con cuatro sillas.")
                 .build();
         LocalDate start = LocalDate.now();
-        return RentalAgreement.builder()
+        RentalAgreement sample = RentalAgreement.builder()
                 .agreementNumber("CON-EJEMPLO").storageUnit(unit)
+                // Las tres columnas de siempre, que son el reflejo de la lista.
                 .client(tenant).coClient(coTenant).guarantor(guarantor)
                 .startDate(start).endDate(start.plusYears(1)).billingDayOfMonth(1)
                 .monthlyRent(new BigDecimal("55.00")).securityDeposit(new BigDecimal("110.00"))
                 .communityFee(new BigDecimal("20.00")).propertyTax(new BigDecimal("120.00"))
                 .build();
+        sample.setParties(new java.util.ArrayList<>(List.of(
+                RentalParty.builder().rentalAgreement(sample).client(tenant)
+                        .role(PartyRole.ARRENDATARIO).position(0).build(),
+                RentalParty.builder().rentalAgreement(sample).client(coTenant)
+                        .role(PartyRole.ARRENDATARIO).position(1).build(),
+                RentalParty.builder().rentalAgreement(sample).client(guarantor)
+                        .role(PartyRole.FIADOR).position(2).build())));
+        return sample;
     }
 
     /**
@@ -238,6 +290,21 @@ public final class ContractFields {
      * del propio alquiler, que es donde eso importa.
      */
     public static InvoiceIssuer.Issuer sampleIssuer() {
+        // Dos, para que {{arrendador[2]}} tenga algo que enseñar: una vista
+        // previa con un solo propietario no deja revisar la plantilla de un piso
+        // que es de dos.
+        Owner first = Owner.builder()
+                .fullName("Bernal Varela Gómez").documentId("46906413Y")
+                .address(example("arrendador_direccion")).city(example("arrendador_ciudad"))
+                .email(example("arrendador_email")).phone(example("arrendador_telefono"))
+                .bankAccount(example("arrendador_iban"))
+                .build();
+        Owner second = Owner.builder()
+                .fullName("Xiao Varela Gómez").documentId("46906414F")
+                .address(example("arrendador_direccion")).city(example("arrendador_ciudad"))
+                .email(example("arrendador_email")).phone(example("arrendador_telefono"))
+                .bankAccount(example("arrendador_iban"))
+                .build();
         return new InvoiceIssuer.Issuer(
                 example("arrendador_nombre"),
                 example("arrendador_nif"),
@@ -247,24 +314,64 @@ public final class ContractFields {
                 example("arrendador_telefono"),
                 example("arrendador_iban"),
                 true,
-                example("arrendadores"));
+                example("arrendadores"),
+                List.of(first, second));
+    }
+
+    /**
+     * Escribe el juego de campos de una persona con su número:
+     * {@code arrendatario[2]}, {@code arrendatario[2]_nombre},
+     * {@code arrendatario[2]_nif}...
+     * <p>
+     * Lo que esa persona no tenga (un arrendatario no tiene IBAN ni municipio)
+     * no se escribe: así el campo queda vacío en vez de imprimir una línea de
+     * puntos prometiendo un dato que no existe.
+     */
+    private static void person(Map<String, String> values, String group, int number,
+                               String name, String taxId, String address, String city,
+                               String email, String phone, String iban) {
+        String prefix = group + "[" + number + "]";
+        values.put(prefix, named(name, taxId));
+        values.put(prefix + "_nombre", orMissing(name));
+        values.put(prefix + "_nif", orMissing(taxId));
+        values.put(prefix + "_direccion", orMissing(address));
+        if (city != null) values.put(prefix + "_ciudad", orMissing(city));
+        values.put(prefix + "_email", orMissing(email));
+        values.put(prefix + "_telefono", orMissing(phone));
+        if (iban != null) values.put(prefix + "_iban", orMissing(iban));
     }
 
     /** "Fulano, con N.I.F. 12345678Z"; vacío cuando no hay nadie. */
-    private static String named(Client person) {
-        if (person == null) return "";
-        return person.getDocumentId() == null || person.getDocumentId().isBlank()
-                ? person.getFullName()
-                : person.getFullName() + ", con N.I.F. " + person.getDocumentId();
+    private static String named(String name, String taxId) {
+        if (name == null || name.isBlank()) return "";
+        return taxId == null || taxId.isBlank() ? name : name + ", con N.I.F. " + taxId;
     }
 
-    /** El párrafo del segundo titular, o nada cuando el contrato es de uno solo. */
-    private static String coTenant(Client coClient) {
-        if (coClient == null) return "";
-        return "Y de otra parte, **" + coClient.getFullName() + "**, con NIF "
-               + orMissing(coClient.getDocumentId())
-               + ", que interviene igualmente como ARRENDATARIO y responde solidariamente "
-               + "de las obligaciones de este contrato.";
+    /** Los que sean, uno detrás de otro: "Fulano, con N.I.F. X y Mengano, con N.I.F. Y". */
+    private static String named(List<Client> people) {
+        List<String> names = people.stream()
+                .map(person -> named(person.getFullName(), person.getDocumentId()))
+                .filter(text -> !text.isBlank())
+                .toList();
+        return join(names);
+    }
+
+    /** "Ana (NIF 1) y Luis (NIF 2)", como se escribe a las partes en un contrato. */
+    private static String phrase(List<Client> people) {
+        List<String> names = people.stream()
+                .map(person -> person.getDocumentId() == null || person.getDocumentId().isBlank()
+                        ? person.getFullName()
+                        : person.getFullName() + " (NIF " + person.getDocumentId() + ")")
+                .filter(text -> text != null && !text.isBlank())
+                .toList();
+        return names.isEmpty() ? orMissing(null) : join(names);
+    }
+
+    /** Comas entre todos menos el último, que lleva "y". */
+    private static String join(List<String> names) {
+        if (names.isEmpty()) return "";
+        if (names.size() == 1) return names.get(0);
+        return String.join(", ", names.subList(0, names.size() - 1)) + " y " + names.get(names.size() - 1);
     }
 
     /** 5.0 m² queda raro en un contrato; 5 m², no. */

@@ -135,7 +135,10 @@ public class UnitScope {
         Set<Long> visible = new HashSet<>();
         Set<Long> withAnyRental = new HashSet<>();
         for (RentalAgreement rental : rentals.findAll()) {
-            for (Client tenant : new Client[]{rental.getClient(), rental.getCoClient()}) {
+            // rental.tenants() y no las dos columnas de siempre: un contrato
+            // puede tener tres arrendatarios, y el tercero también es inquilino
+            // a efectos de quién puede ver su ficha.
+            for (Client tenant : rental.tenants()) {
                 if (tenant == null) continue;
                 withAnyRental.add(tenant.getId());
                 if (rental.getStorageUnit() != null

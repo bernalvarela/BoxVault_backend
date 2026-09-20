@@ -14,9 +14,10 @@
 « Campos: fecha_larga, lugar,
 «   arrendador_nombre, arrendador_nif, arrendador_direccion, arrendador_ciudad,
 «   arrendador_email, arrendador_telefono, arrendador_iban,
+«   arrendatarios (todos, con su NIF, en una frase),
 «   arrendatario_nombre, arrendatario_nif, arrendatario_direccion,
 «   arrendatario_email, arrendatario_telefono,
-«   coarrendatario (línea entera, vacía si no hay),
+«   arrendatario[2]_nombre y demás, para dirigirse a uno concreto,
 «   unidad_numero, unidad_nombre, unidad_metros, unidad_direccion,
 «   contrato_numero, fecha_inicio, fecha_fin, duracion,
 «   renta_base, renta_iva, renta_total, iva_texto, dia_cobro,
@@ -30,9 +31,7 @@ En {{lugar}}, a {{fecha_larga}}.
 
 De una parte, **{{arrendador_nombre}}**, con NIF {{arrendador_nif}} y domicilio en {{arrendador_direccion}}, {{arrendador_ciudad}}, en adelante EL ARRENDADOR.
 
-De otra parte, **{{arrendatario_nombre}}**, con NIF {{arrendatario_nif}} y domicilio en {{arrendatario_direccion}}, en adelante EL ARRENDATARIO.
-
-{{coarrendatario}}
+De otra parte, **{{arrendatarios}}**, con domicilio en {{arrendatario_direccion}}, en adelante EL ARRENDATARIO.
 
 Ambas partes se reconocen capacidad legal suficiente para contratar y obligarse, y a tal efecto
 

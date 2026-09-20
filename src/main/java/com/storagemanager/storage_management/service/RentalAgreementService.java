@@ -7,8 +7,10 @@ import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.model.Payment;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.RentalDocument;
+import com.storagemanager.storage_management.model.RentalParty;
 import com.storagemanager.storage_management.model.ContractTemplate;
 import com.storagemanager.storage_management.model.StorageUnit;
+import com.storagemanager.storage_management.model.enums.PartyRole;
 import com.storagemanager.storage_management.model.enums.RentalStatus;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
 import com.storagemanager.storage_management.repository.ClientRepository;
@@ -16,6 +18,7 @@ import com.storagemanager.storage_management.repository.PaymentRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 import com.storagemanager.storage_management.repository.ContractTemplateRepository;
 import com.storagemanager.storage_management.repository.RentalDocumentRepository;
+import com.storagemanager.storage_management.repository.RentalPartyRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
 import com.storagemanager.storage_management.security.UnitScope;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +28,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.UUID;
@@ -38,6 +44,7 @@ public class RentalAgreementService {
     private final RentalAgreementRepository rentalAgreementRepository;
     private final StorageUnitRepository storageUnitRepository;
     private final ClientRepository clientRepository;
+    private final RentalPartyRepository rentalParties;
     private final PaymentRepository paymentRepository;
     private final RentalDocumentRepository rentalDocumentRepository;
     private final ContractTemplateRepository contractTemplateRepository;
@@ -60,11 +67,24 @@ public class RentalAgreementService {
         return agreement;
     }
 
-    /** Contracts of a client as main or second tenant. */
+    /**
+     * Los contratos que ha firmado esa persona, sea el papel que sea.
+     * <p>
+     * Va por dos caminos a propósito: las columnas de siempre (titular y segundo
+     * titular) y la lista de partes, que es donde están el tercer arrendatario y
+     * los fiadores. Con sólo el primero, el tercero de un contrato no vería en
+     * su ficha el contrato que ha firmado.
+     */
     public List<RentalAgreement> getAgreementsByClient(Long clientId) {
-        return unitScope.filterByUnit(
-                rentalAgreementRepository.findByClientIdOrCoClientId(clientId, clientId),
-                RentalAgreement::getStorageUnit);
+        Map<Long, RentalAgreement> byId = new LinkedHashMap<>();
+        rentalAgreementRepository.findByClientIdOrCoClientId(clientId, clientId)
+                .forEach(rental -> byId.put(rental.getId(), rental));
+        rentalParties.findByClientId(clientId).stream()
+                .map(RentalParty::getRentalAgreement)
+                .filter(java.util.Objects::nonNull)
+                .forEach(rental -> byId.putIfAbsent(rental.getId(), rental));
+
+        return unitScope.filterByUnit(List.copyOf(byId.values()), RentalAgreement::getStorageUnit);
     }
 
     public List<RentalAgreement> getAgreementsByStorageUnit(Long storageUnitId) {
@@ -88,9 +108,8 @@ public class RentalAgreementService {
             throw new BadRequestException("La unidad " + unit.getUnitNumber() + " está en mantenimiento");
         }
 
-        Client client = clientRepository.findById(request.getClientId())
-                .orElseThrow(() -> new ResourceNotFoundException("Client not found with id: " + request.getClientId()));
-        Client coClient = resolveCoClient(request.getCoClientId(), client);
+        List<PersonInContract> people = peopleOf(request);
+        Client client = people.get(0).client();
         requireNoOverlap(unit, null, request.getStartDate(), request.getEndDate());
 
         String agreementNumber = "RNT-" + LocalDate.now().getYear() + "-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
@@ -100,7 +119,6 @@ public class RentalAgreementService {
                 .agreementNumber(agreementNumber)
                 .storageUnit(unit)
                 .client(client)
-                .coClient(coClient)
                 .startDate(request.getStartDate())
                 .endDate(request.getEndDate())
                 .billingDayOfMonth(request.getBillingDayOfMonth() != null ? request.getBillingDayOfMonth() : 1)
@@ -113,11 +131,12 @@ public class RentalAgreementService {
                 .autoRenew(request.getAutoRenew() != null ? request.getAutoRenew() : true)
                 .generatesInvoices(invoicingAllowed(unit, request.getGeneratesInvoices()))
                 .contractTemplate(templateOf(request.getContractTemplateId()))
-                .guarantor(clientOrNull(request.getGuarantorId()))
                 .communityFee(request.getCommunityFee())
                 .propertyTax(request.getPropertyTax())
                 .notes(request.getNotes())
                 .build();
+
+        applyPeople(agreement, people);
 
         // Y por lo mismo, sólo ocupa la unidad el que está en vigor.
         if (inForce) {
@@ -152,7 +171,7 @@ public class RentalAgreementService {
                     agreement.getAgreementNumber(), previous.getFullName(), corrected.getFullName(),
                     ofAgreement.size());
         }
-        agreement.setCoClient(resolveCoClient(request.getCoClientId(), agreement.getClient()));
+        applyPeople(agreement, peopleOf(request));
         requireNoOverlap(agreement.getStorageUnit(), agreement.getId(), request.getStartDate(), request.getEndDate());
         agreement.setStartDate(request.getStartDate());
         agreement.setEndDate(request.getEndDate());
@@ -163,7 +182,6 @@ public class RentalAgreementService {
             agreement.setDepositPaid(request.getDepositPaid());
         }
         agreement.setContractTemplate(templateOf(request.getContractTemplateId()));
-        agreement.setGuarantor(clientOrNull(request.getGuarantorId()));
         agreement.setCommunityFee(request.getCommunityFee());
         agreement.setPropertyTax(request.getPropertyTax());
         if (request.getGeneratesInvoices() != null) {
@@ -297,14 +315,98 @@ public class RentalAgreementService {
         return YearMonth.of(payment.getBillingPeriodYear(), payment.getBillingPeriodMonth());
     }
 
-    /** The optional second tenant: must exist and differ from the main tenant. */
-    private Client resolveCoClient(Long coClientId, Client client) {
-        if (coClientId == null) return null;
-        if (coClientId.equals(client.getId())) {
-            throw new BadRequestException("The second tenant must be a different client");
+    /** Una persona del contrato ya resuelta: su ficha y su papel. */
+    private record PersonInContract(Client client, PartyRole role) {}
+
+    /**
+     * Quién firma el contrato, leído de la petición.
+     * <p>
+     * Acepta las dos formas: la lista de partes, que es la de ahora, y los tres
+     * campos de siempre (clientId, coClientId, guarantorId), que es lo que manda
+     * cualquier cliente que todavía no se haya enterado del cambio. La lista
+     * tiene preferencia cuando viene.
+     */
+    private List<PersonInContract> peopleOf(RentalAgreementRequest request) {
+        List<PersonInContract> people = new ArrayList<>();
+
+        if (request.getParties() != null && !request.getParties().isEmpty()) {
+            for (RentalAgreementRequest.Party party : request.getParties()) {
+                if (party.getClientId() == null) continue;
+                PartyRole role = party.getRole() == null ? PartyRole.ARRENDATARIO : party.getRole();
+                Client person = clientRepository.findById(party.getClientId())
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Client not found with id: " + party.getClientId()));
+                // La misma persona no firma dos veces con el mismo papel. Sí puede
+                // firmar como arrendataria y avalar: raro, pero no imposible, y no
+                // es la aplicación quien tiene que decir que no.
+                boolean repeated = people.stream()
+                        .anyMatch(p -> p.role() == role && p.client().getId().equals(person.getId()));
+                if (repeated) {
+                    throw new BadRequestException(person.getFullName()
+                            + " ya está en el contrato como " + role.name().toLowerCase());
+                }
+                people.add(new PersonInContract(person, role));
+            }
+            if (people.stream().noneMatch(p -> p.role() == PartyRole.ARRENDATARIO)) {
+                throw new BadRequestException("El contrato necesita al menos un arrendatario");
+            }
+            return people;
         }
-        return clientRepository.findById(coClientId)
-                .orElseThrow(() -> new ResourceNotFoundException("Client not found with id: " + coClientId));
+
+        Client client = clientRepository.findById(request.getClientId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Client not found with id: " + request.getClientId()));
+        people.add(new PersonInContract(client, PartyRole.ARRENDATARIO));
+        if (request.getCoClientId() != null) {
+            if (request.getCoClientId().equals(client.getId())) {
+                throw new BadRequestException("The second tenant must be a different client");
+            }
+            people.add(new PersonInContract(clientRepository.findById(request.getCoClientId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Client not found with id: " + request.getCoClientId())),
+                    PartyRole.ARRENDATARIO));
+        }
+        Client guarantor = clientOrNull(request.getGuarantorId());
+        if (guarantor != null) people.add(new PersonInContract(guarantor, PartyRole.FIADOR));
+        return people;
+    }
+
+    /**
+     * Deja el contrato con exactamente esas personas, y pone al día el reflejo:
+     * client es el primer arrendatario, coClient el segundo y guarantor el
+     * primer fiador.
+     * <p>
+     * Ese reflejo es lo que leen los cobros, las facturas, el modelo 184, el
+     * IRPF y el ámbito de acceso por unidad. Mientras se mantenga aquí, en un
+     * solo sitio y en cada guardado, todo aquello sigue funcionando sin saber
+     * que esto existe.
+     */
+    private void applyPeople(RentalAgreement agreement, List<PersonInContract> people) {
+        // Se vacía la lista que ya tiene en vez de cambiarla por otra: es la
+        // colección que vigila Hibernate, y sustituirla deja huérfanas las filas.
+        agreement.getParties().clear();
+        int position = 0;
+        for (PersonInContract person : people) {
+            agreement.getParties().add(RentalParty.builder()
+                    .rentalAgreement(agreement)
+                    .client(person.client())
+                    .role(person.role())
+                    .position(position++)
+                    .build());
+        }
+
+        List<Client> tenants = people.stream()
+                .filter(p -> p.role() == PartyRole.ARRENDATARIO)
+                .map(PersonInContract::client)
+                .toList();
+        List<Client> guarantors = people.stream()
+                .filter(p -> p.role() == PartyRole.FIADOR)
+                .map(PersonInContract::client)
+                .toList();
+
+        agreement.setClient(tenants.get(0));
+        agreement.setCoClient(tenants.size() > 1 ? tenants.get(1) : null);
+        agreement.setGuarantor(guarantors.isEmpty() ? null : guarantors.get(0));
     }
 
     /**

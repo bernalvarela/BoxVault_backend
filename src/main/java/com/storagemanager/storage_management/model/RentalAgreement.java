@@ -1,5 +1,6 @@
 package com.storagemanager.storage_management.model;
 
+import com.storagemanager.storage_management.model.enums.PartyRole;
 import com.storagemanager.storage_management.model.enums.RentalStatus;
 import jakarta.persistence.*;
 import org.springframework.data.annotation.CreatedBy;
@@ -12,6 +13,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @EntityListeners(AuditingEntityListener.class)
 @Entity
@@ -38,10 +41,33 @@ public class RentalAgreement {
     @JoinColumn(name = "client_id", nullable = false)
     private Client client;
 
-    /** Second tenant of the same contract (co-titular), if any. */
+    /**
+     * Second tenant of the same contract (co-titular), if any.
+     * <p>
+     * Ya no se elige: es un reflejo de {@link #parties}, el segundo
+     * ARRENDATARIO de la lista. Sigue existiendo porque de él cuelgan el modelo
+     * 184, el IRPF, el historial de la unidad y el control de acceso, que
+     * declaran al inquilino por su NIF.
+     */
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "co_client_id")
     private Client coClient;
+
+    /**
+     * Quién firma este contrato y en calidad de qué: los arrendatarios, que
+     * pueden ser los que hagan falta, y los fiadores.
+     * <p>
+     * Ésta es la lista de verdad. {@link #client}, {@link #coClient} y
+     * {@link #guarantor} son su reflejo -el primer arrendatario, el segundo y el
+     * primer fiador- y los mantiene al día RentalAgreementService en cada
+     * guardado: así lo que ya leía esas columnas (cobros, facturas, impuestos,
+     * ámbito de acceso) sigue funcionando sin enterarse de nada.
+     */
+    @OneToMany(mappedBy = "rentalAgreement", cascade = CascadeType.ALL, orphanRemoval = true,
+            fetch = FetchType.EAGER)
+    @OrderBy("position ASC, id ASC")
+    @Builder.Default
+    private List<RentalParty> parties = new ArrayList<>();
 
     /**
      * Quien avala a los inquilinos, si el contrato lleva fiador solidario.
@@ -50,6 +76,9 @@ public class RentalAgreement {
      * suele repetirse entre contratos- pero no alquila nada: no se le generan
      * mensualidades ni aparece como titular. Sólo responde si los inquilinos no
      * pagan, y por eso sale en su cláusula del contrato.
+     * <p>
+     * Como {@link #coClient}, es un reflejo de {@link #parties}: el primer
+     * FIADOR. Si el contrato lleva dos, el segundo sólo está en la lista.
      */
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "guarantor_id")
@@ -135,6 +164,38 @@ public class RentalAgreement {
     /** Nunca null: un contrato sin marcar no factura. */
     public boolean invoices() {
         return Boolean.TRUE.equals(generatesInvoices);
+    }
+
+    /** Los arrendatarios, en orden; el primero es el titular. */
+    public List<Client> tenants() {
+        return of(PartyRole.ARRENDATARIO);
+    }
+
+    /** Los fiadores, en orden. */
+    public List<Client> guarantors() {
+        return of(PartyRole.FIADOR);
+    }
+
+    /**
+     * Las personas de un papel, en el orden de la lista.
+     * <p>
+     * Con la lista vacía cae a las columnas de siempre. Eso no es un apaño
+     * temporal: un contrato recién construido en memoria -el de la vista previa
+     * de una plantilla, por ejemplo- no ha pasado por la base y no tiene
+     * partes, y tiene que poder imprimirse igual.
+     */
+    private List<Client> of(PartyRole role) {
+        if (parties != null && !parties.isEmpty()) {
+            return parties.stream()
+                    .filter(party -> party.getRole() == role)
+                    .map(RentalParty::getClient)
+                    .filter(java.util.Objects::nonNull)
+                    .toList();
+        }
+        List<Client> fallback = role == PartyRole.ARRENDATARIO
+                ? java.util.Arrays.asList(client, coClient)
+                : java.util.Collections.singletonList(guarantor);
+        return fallback.stream().filter(java.util.Objects::nonNull).toList();
     }
 
     @Column(columnDefinition = "TEXT")

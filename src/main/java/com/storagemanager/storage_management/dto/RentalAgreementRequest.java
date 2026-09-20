@@ -1,11 +1,13 @@
 package com.storagemanager.storage_management.dto;
 
+import com.storagemanager.storage_management.model.enums.PartyRole;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 public class RentalAgreementRequest {
@@ -17,6 +19,26 @@ public class RentalAgreementRequest {
 
     /** Optional second tenant (co-titular) of the contract. */
     private Long coClientId;
+
+    /**
+     * Quién firma el contrato y en calidad de qué, en orden: los arrendatarios
+     * que haya y los fiadores que haya.
+     * <p>
+     * Si viene, manda: de aquí salen clientId, coClientId y guarantorId, que se
+     * quedan como reflejo. Si no viene -una pantalla antigua, una llamada de
+     * fuera- se usan esos tres como toda la vida. Así el cambio no rompe a
+     * nadie mientras las dos formas convivan.
+     */
+    private List<Party> parties;
+
+    /** Una persona del contrato: quién es y a qué viene. */
+    @Data
+    public static class Party {
+        @NotNull(message = "Cada parte del contrato necesita un cliente")
+        private Long clientId;
+        /** Nulo = arrendatario, que es el caso normal. */
+        private PartyRole role;
+    }
 
     @NotNull(message = "Start date is required")
     private LocalDate startDate;

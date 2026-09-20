@@ -25,9 +25,7 @@ En {{lugar}}, a {{fecha_larga}}.
 
 De una parte, **{{arrendadores}}**, como ARRENDADORES.
 
-Y de otra parte, **{{arrendatario_nombre}}**, con D.N.I. {{arrendatario_nif}}, como ARRENDATARIA.
-
-{{coarrendatario}}
+Y de otra parte, **{{arrendatarios}}**, como PARTE ARRENDATARIA.
 
 ## Intervienen
 

@@ -42,7 +42,20 @@ import java.util.regex.Pattern;
 @Service
 public class ContractPdfService {
 
-    private static final Pattern FIELD = Pattern.compile("\\{\\{([a-z_]+)}}");
+    /**
+     * Cómo se escribe el nombre de un campo: {@code renta_total} y también
+     * {@code arrendatario[2]_nombre}.
+     * <p>
+     * El número entre corchetes es lo que permite escribir una plantilla sin
+     * saber cuánta gente va a firmar: se pide el segundo arrendatario y, si el
+     * contrato no lo tiene, el campo queda vacío en vez de imprimirse tal cual.
+     */
+    private static final String NAME = "[a-z_]+(?:\\[\\d{1,2}])?[a-z_]*";
+
+    private static final Pattern FIELD = Pattern.compile("\\{\\{(" + NAME + ")}}");
+
+    /** Un campo con número: existe aunque el contrato no llegue a ese número. */
+    private static final Pattern INDEXED = Pattern.compile("[a-z_]+\\[\\d{1,2}][a-z_]*");
 
     /**
      * [[si:campo]] ... [[fin]]: lo de dentro sólo sale si ese campo tiene algo.
@@ -53,7 +66,7 @@ public class ContractPdfService {
      * una plantilla por combinación, y mantener el mismo texto legal en cuatro
      * sitios es la forma segura de que un día digan cosas distintas.
      */
-    private static final Pattern IF_FIELD = Pattern.compile("\\[\\[si:([a-z_]+)]]");
+    private static final Pattern IF_FIELD = Pattern.compile("\\[\\[si:(" + NAME + ")]]");
     private static final String END_IF = "[[fin]]";
 
     /**
@@ -72,7 +85,7 @@ public class ContractPdfService {
      * más abajo sigue siendo el caso de siempre, el de párrafos enteros.
      */
     private static final Pattern INLINE_IF =
-            Pattern.compile("\\[\\[si:([a-z_]+)]](.*?)\\[\\[fin]]", Pattern.DOTALL);
+            Pattern.compile("\\[\\[si:(" + NAME + ")]](.*?)\\[\\[fin]]", Pattern.DOTALL);
 
     /**
      * [[firmas]] o [[firmas:LOS ARRENDADORES|LA ARRENDATARIA]], cuando quien
@@ -250,7 +263,12 @@ public class ContractPdfService {
         StringBuilder result = new StringBuilder();
         while (matcher.find()) {
             String value = values.get(matcher.group(1));
-            if (value == null) {
+            if (value == null && INDEXED.matcher(matcher.group(1)).matches()) {
+                // {{arrendatario[3]_nombre}} en un contrato de dos: no es un
+                // error, es que no hay tercero. Queda vacío, y su [[si:...]]
+                // tampoco se cumple, que es justo lo que se quiere.
+                value = "";
+            } else if (value == null) {
                 log.warn("La plantilla del contrato usa un campo que no existe: {}", matcher.group(0));
                 value = matcher.group(0);
             }
