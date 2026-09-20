@@ -51,17 +51,6 @@ public class InvoiceIssuer {
         return owner == null ? fromProperties() : from(owner, shares);
     }
 
-    /**
-     * El emisor para una vista previa, que no va de ninguna unidad concreta: la
-     * comunidad de bienes si la hay, y si no el primer propietario que conste.
-     * Con los datos de verdad, que es de lo que sirve una vista previa.
-     */
-    public Issuer any() {
-        List<Ownership> shares = ownershipRepository.findAll();
-        Owner owner = pickOwner(shares);
-        return owner == null ? fromProperties() : from(owner, shares);
-    }
-
     private Issuer from(Owner owner, List<Ownership> shares) {
         return new Issuer(
                 pick(owner.getFullName(), fallback.getIssuerName()),

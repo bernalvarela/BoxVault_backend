@@ -6,7 +6,6 @@ import com.storagemanager.storage_management.exception.BadRequestException;
 import com.storagemanager.storage_management.dto.TemplateImageDTO;
 import com.storagemanager.storage_management.service.ContractTemplateService;
 import com.storagemanager.storage_management.service.TemplateImageService;
-import com.storagemanager.storage_management.service.InvoiceIssuer;
 import com.storagemanager.storage_management.service.pdf.ContractFields;
 import com.storagemanager.storage_management.service.pdf.ContractPdfService;
 import jakarta.validation.Valid;
@@ -39,7 +38,6 @@ public class ContractTemplateController {
 
     private final ContractTemplateService templates;
     private final ContractPdfService pdf;
-    private final InvoiceIssuer issuers;
     private final TemplateImageService images;
 
     @PreAuthorize("@access.can('ALQUILERES','LEER')")
@@ -147,7 +145,7 @@ public class ContractTemplateController {
             throw new BadRequestException("No hay nada que previsualizar");
         }
         var sample = ContractFields.sampleRental();
-        byte[] content = pdf.render(sample, issuers.any(), request.getContent(), images::bytesOf);
+        byte[] content = pdf.render(sample, ContractFields.sampleIssuer(), request.getContent(), images::bytesOf);
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline()

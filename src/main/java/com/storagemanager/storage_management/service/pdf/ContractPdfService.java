@@ -11,6 +11,7 @@ import org.openpdf.text.Phrase;
 import org.openpdf.text.pdf.PdfPCell;
 import org.openpdf.text.pdf.PdfPTable;
 import org.openpdf.text.pdf.PdfWriter;
+import com.storagemanager.storage_management.config.InvoicingProperties;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.service.InvoiceIssuer;
 import lombok.extern.slf4j.Slf4j;
@@ -54,6 +55,24 @@ public class ContractPdfService {
      */
     private static final Pattern IF_FIELD = Pattern.compile("\\[\\[si:([a-z_]+)]]");
     private static final String END_IF = "[[fin]]";
+
+    /**
+     * La misma condición, pero dentro de una frase:
+     * {@code ...la parte arrendataria[[si:fiador]] y {{fiador}} como fiador
+     * solidario[[fin]], que firman...}
+     * <p>
+     * Empezó valiendo sólo para párrafos enteros y se quedaba corta: media
+     * cláusula del fiador no es un párrafo aparte, es una coletilla dentro de la
+     * frase, y escribirla como párrafo suelto rompe el texto legal. Si la
+     * condición no se cumple desaparece el trozo entero, marcas incluidas; si se
+     * cumple, se van sólo las marcas.
+     * <p>
+     * No anida: dentro de un trozo condicional no cabe otro. Los dos extremos
+     * tienen que estar en el mismo párrafo — abrir aquí y cerrar tres párrafos
+     * más abajo sigue siendo el caso de siempre, el de párrafos enteros.
+     */
+    private static final Pattern INLINE_IF =
+            Pattern.compile("\\[\\[si:([a-z_]+)]](.*?)\\[\\[fin]]", Pattern.DOTALL);
 
     /**
      * [[firmas]] o [[firmas:LOS ARRENDADORES|LA ARRENDATARIA]], cuando quien
@@ -115,9 +134,7 @@ public class ContractPdfService {
                 String bare = block.trim();
                 Matcher condition = IF_FIELD.matcher(bare);
                 if (condition.matches()) {
-                    String value = values.get(condition.group(1));
-                    skipping = value == null || value.isBlank()
-                            || value.equals(com.storagemanager.storage_management.config.InvoicingProperties.MISSING);
+                    skipping = !hasValue(values, condition.group(1));
                     continue;
                 }
                 if (bare.equals(END_IF)) {
@@ -125,6 +142,12 @@ public class ContractPdfService {
                     continue;
                 }
                 if (skipping) continue;
+
+                // Las condiciones que empiezan y acaban dentro de este mismo
+                // párrafo se resuelven aquí; un párrafo que era sólo condición y
+                // no se cumple se queda sin nada que pintar.
+                block = inlineConditions(block, values);
+                if (block.isBlank()) continue;
 
                 String text = fill(block, values);
                 ordinal = NUMBERED.matcher(stripAttributes(text).text()).matches() ? ordinal + 1 : 0;
@@ -187,6 +210,38 @@ public class ContractPdfService {
         }
         if (current.length() > 0) blocks.add(current.toString());
         return blocks;
+    }
+
+    /**
+     * Resuelve las condiciones que caben dentro de un párrafo. Lo que sobra se
+     * va limpio: sin dobles espacios ni un espacio colgando antes de la coma.
+     */
+    private String inlineConditions(String block, Map<String, String> values) {
+        Matcher matcher = INLINE_IF.matcher(block);
+        StringBuilder result = new StringBuilder();
+        boolean any = false;
+        while (matcher.find()) {
+            any = true;
+            String kept = hasValue(values, matcher.group(1)) ? matcher.group(2) : "";
+            matcher.appendReplacement(result, Matcher.quoteReplacement(kept));
+        }
+        if (!any) return block;
+        matcher.appendTail(result);
+        return result.toString()
+                .replaceAll("[ \\t]{2,}", " ")
+                .replaceAll("[ \\t]+([.,;:)])", "$1")
+                .trim();
+    }
+
+    /**
+     * Si ese campo tiene algo que decir.
+     * <p>
+     * Una línea de puntos no cuenta: {@code ..........} es lo que se imprime
+     * cuando falta un dato, y un dato que falta no debe encender una cláusula.
+     */
+    private boolean hasValue(Map<String, String> values, String field) {
+        String value = values.get(field);
+        return value != null && !value.isBlank() && !value.equals(InvoicingProperties.MISSING);
     }
 
     /** Sustituye los {@code {{campos}}}; lo que no conozca se queda como está. */

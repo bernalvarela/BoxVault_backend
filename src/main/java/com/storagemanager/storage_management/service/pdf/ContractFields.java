@@ -98,6 +98,15 @@ public final class ContractFields {
         return CATALOGUE.stream().anyMatch(f -> f.name().equals(name));
     }
 
+    /** El ejemplo que el catálogo da para un campo; "" si no existe. */
+    public static String example(String name) {
+        return CATALOGUE.stream()
+                .filter(f -> f.name().equals(name))
+                .map(Field::example)
+                .findFirst()
+                .orElse("");
+    }
+
     /** Con qué se rellena cada campo en un contrato de verdad. */
     public static Map<String, String> of(RentalAgreement rental, InvoiceIssuer.Issuer issuer) {
         StorageUnit unit = rental.getStorageUnit();
@@ -173,12 +182,29 @@ public final class ContractFields {
      * Se inventa en memoria en vez de coger un alquiler de verdad: probar una
      * plantilla no debería sacar los datos de un inquilino real en un PDF que
      * acaba en la carpeta de descargas de cualquiera.
+     * <p>
+     * Lleva TODO puesto -segundo titular, fiador, fecha de fin, gastos,
+     * inventario, fianza- aunque un alquiler corriente no tenga la mitad. En una
+     * vista previa, un campo vacío no se lee como "aquí no hay nada": se lee
+     * como que la plantilla está mal. Y los trozos condicionales
+     * ({@code [[si:fiador]]}) sólo se pueden revisar si su condición se cumple,
+     * así que aquí se cumplen todas.
      */
     public static RentalAgreement sampleRental() {
         Client tenant = Client.builder()
                 .fullName("Ana Gómez Pérez").documentId("12345678Z")
                 .address("Rúa Nova 1, 3º B, 15172 Oleiros (A Coruña)")
                 .email("ana@ejemplo.es").phone("600 111 222")
+                .build();
+        Client coTenant = Client.builder()
+                .fullName("Luis Gómez Pérez").documentId("87654321X")
+                .address("Rúa Nova 1, 3º B, 15172 Oleiros (A Coruña)")
+                .email("luis@ejemplo.es").phone("600 333 444")
+                .build();
+        Client guarantor = Client.builder()
+                .fullName("Carmen Pérez Souto").documentId("11223344M")
+                .address("Rúa do Franco 8, 15702 Santiago de Compostela")
+                .email("carmen@ejemplo.es").phone("600 555 666")
                 .build();
         StorageUnit unit = StorageUnit.builder()
                 .unitNumber("3").name("Trastero 3").kind(UnitKind.STORAGE_UNIT)
@@ -187,12 +213,41 @@ public final class ContractFields {
                 .cadastralReference("9602605NJ4090S0008KY")
                 .inventory("Cocina: muebles, vitrocerámica y horno, nevera y lavadora.\nBaño: lavabo con espejo, WC y ducha.\nSalón: sofá, mesa de centro y mesa de comedor con cuatro sillas.")
                 .build();
+        LocalDate start = LocalDate.now();
         return RentalAgreement.builder()
-                .agreementNumber("CON-EJEMPLO").storageUnit(unit).client(tenant)
-                .startDate(LocalDate.now()).billingDayOfMonth(1)
+                .agreementNumber("CON-EJEMPLO").storageUnit(unit)
+                .client(tenant).coClient(coTenant).guarantor(guarantor)
+                .startDate(start).endDate(start.plusYears(1)).billingDayOfMonth(1)
                 .monthlyRent(new BigDecimal("55.00")).securityDeposit(new BigDecimal("110.00"))
                 .communityFee(new BigDecimal("20.00")).propertyTax(new BigDecimal("120.00"))
                 .build();
+    }
+
+    /**
+     * El arrendador de mentira de la vista previa, construido con los ejemplos
+     * del propio catálogo.
+     * <p>
+     * No sale de la base a propósito, por dos razones. Una: así la vista previa
+     * enseña EXACTAMENTE los mismos valores que la lista de campos del editor,
+     * que es lo que se está aprendiendo al mirarla. Y dos: antes se cogía "el
+     * primer propietario que conste" con todas las participaciones de la casa,
+     * de modo que un PDF de prueba salía con los nombres y los NIF de todos los
+     * propietarios reales; y si a alguno le faltaba un dato, la vista previa
+     * enseñaba una línea de puntos que parecía un fallo de la plantilla sin
+     * serlo. Para ver el contrato con los datos de verdad está la vista previa
+     * del propio alquiler, que es donde eso importa.
+     */
+    public static InvoiceIssuer.Issuer sampleIssuer() {
+        return new InvoiceIssuer.Issuer(
+                example("arrendador_nombre"),
+                example("arrendador_nif"),
+                example("arrendador_direccion"),
+                example("arrendador_ciudad"),
+                example("arrendador_email"),
+                example("arrendador_telefono"),
+                example("arrendador_iban"),
+                true,
+                example("arrendadores"));
     }
 
     /** "Fulano, con N.I.F. 12345678Z"; vacío cuando no hay nadie. */

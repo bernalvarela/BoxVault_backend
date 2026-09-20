@@ -1,6 +1,7 @@
 package com.storagemanager.storage_management;
 
 import com.storagemanager.storage_management.service.InvoiceIssuer;
+import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.service.pdf.ContractFields;
 import com.storagemanager.storage_management.service.pdf.ContractPdfService;
 import org.junit.jupiter.api.Test;
@@ -162,7 +163,22 @@ class ContractMarkupTest {
         // "LA PARTE ARRENDATARIA" y no "LA ARRENDATARIA": la misma plantilla sirve
         // para un inquilino y para dos.
         assertTrue(text.contains("LA PARTE ARRENDATARIA"), text);
+        assertTrue(text.contains("Luis Gómez Pérez"), "el segundo titular: " + text);
+        // El contrato de ejemplo lleva fiador, así que su cláusula se imprime:
+        // es la única forma de revisar que el texto condicional está bien escrito.
+        assertTrue(text.contains("FIANZA SOLIDARIA"), "la cláusula del fiador: " + text);
+        assertTrue(text.contains("Carmen Pérez Souto"), "el fiador, con su nombre: " + text);
+    }
+
+    @Test
+    void theHousingTemplateDropsTheGuarantorClauseWhenThereIsNoGuarantor() throws IOException {
+        String template = new String(getClass().getClassLoader()
+                .getResourceAsStream("plantillas/contrato-vivienda.txt").readAllBytes(),
+                java.nio.charset.StandardCharsets.UTF_8);
+        String text = wholeTextOf(renderWithoutGuarantor(template));
+
         assertFalse(text.contains("FIANZA SOLIDARIA"), "sin fiador, su cláusula no existe: " + text);
+        assertFalse(text.contains("{{"), "ningún campo sin sustituir: " + text);
     }
 
     @Test
@@ -175,9 +191,8 @@ class ContractMarkupTest {
 
     @Test
     void aConditionalBlockDisappearsWhenItsFieldIsEmpty() throws IOException {
-        // El contrato de ejemplo no lleva fiador, así que su cláusula no existe.
         String template = "Antes.\n\n[[si:fiador]]\nAvala don Fulano.\n[[fin]]\n\nDespués.";
-        String text = textOf(render(template), 1);
+        String text = textOf(renderWithoutGuarantor(template), 1);
 
         assertTrue(text.contains("Antes."), text);
         assertTrue(text.contains("Después."), text);
@@ -197,11 +212,50 @@ class ContractMarkupTest {
     void aFieldThatIsJustAGapCountsAsEmpty() throws IOException {
         // {{fiador}} sin fiador queda vacío; {{arrendador_email}} sin correo queda
         // en puntos suspensivos. Ninguno de los dos debe encender su cláusula.
-        String text = textOf(render("[[si:fiador]]\nNo debería salir.\n[[fin]]"), 1);
+        String text = textOf(renderWithoutGuarantor("[[si:fiador]]\nNo debería salir.\n[[fin]]"), 1);
         assertFalse(text.contains("No debería salir"), text);
+    }
+
+    @Test
+    void aConditionAlsoWorksInsideASentence() throws IOException {
+        // Media cláusula del fiador no es un párrafo aparte: es una coletilla
+        // dentro de la frase, y ahí es donde hay que poder ponerla.
+        String template = "La parte arrendataria[[si:fiador]] y {{fiador}} como fiador solidario[[fin]], que firman.";
+        String text = textOf(render(template), 1);
+
+        assertTrue(text.contains("Carmen Pérez Souto"), "el fiador, dentro de la frase: " + text);
+        assertTrue(text.contains("como fiador solidario"), text);
+        assertFalse(text.contains("[[si:"), "las marcas no se imprimen: " + text);
+        assertFalse(text.contains("[[fin]]"), text);
+    }
+
+    @Test
+    void aConditionInsideASentenceTakesItsTextWithIt() throws IOException {
+        String template = "La parte arrendataria[[si:fiador]] y {{fiador}} como fiador solidario[[fin]], que firman.";
+        String text = textOf(renderWithoutGuarantor(template), 1);
+
+        assertTrue(text.contains("La parte arrendataria, que firman."),
+                "la frase se cierra sola, sin espacios colgando: " + text);
+        assertFalse(text.contains("fiador solidario"), text);
+        assertFalse(text.contains("[[fin]]"), text);
     }
 
     private byte[] render(String template) {
         return pdf.render(ContractFields.sampleRental(), ISSUER, template);
+    }
+
+    /**
+     * El contrato de ejemplo, quitándole el fiador.
+     * <p>
+     * El de {@link ContractFields#sampleRental()} lleva TODOS los campos puestos
+     * a propósito, porque su oficio es la vista previa del editor de plantillas
+     * y ahí un hueco se lee como un fallo. Pero para comprobar que un trozo
+     * condicional DESAPARECE hace falta un campo que de verdad esté vacío, y
+     * éste es el que se usa: sin fiador no hay cláusula de fianza solidaria.
+     */
+    private byte[] renderWithoutGuarantor(String template) {
+        RentalAgreement rental = ContractFields.sampleRental();
+        rental.setGuarantor(null);
+        return pdf.render(rental, ISSUER, template);
     }
 }
