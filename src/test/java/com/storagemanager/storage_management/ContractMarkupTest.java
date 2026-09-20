@@ -3,6 +3,7 @@ package com.storagemanager.storage_management;
 import com.storagemanager.storage_management.service.InvoiceIssuer;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.Owner;
+import com.storagemanager.storage_management.model.enums.PartyRole;
 import com.storagemanager.storage_management.service.pdf.ContractFields;
 import com.storagemanager.storage_management.service.pdf.ContractPdfService;
 import org.junit.jupiter.api.Test;
@@ -232,7 +233,7 @@ class ContractMarkupTest {
         // Media cláusula del fiador no es un párrafo aparte: es una coletilla
         // dentro de la frase, y ahí es donde hay que poder ponerla.
         String template = "La parte arrendataria[[si:fiador]] y {{fiador}} como fiador solidario[[fin]], que firman.";
-        String text = textOf(render(template), 1);
+        String text = flat(textOf(render(template), 1));
 
         assertTrue(text.contains("Carmen Pérez Souto"), "el fiador, dentro de la frase: " + text);
         assertTrue(text.contains("como fiador solidario"), text);
@@ -243,7 +244,7 @@ class ContractMarkupTest {
     @Test
     void aConditionInsideASentenceTakesItsTextWithIt() throws IOException {
         String template = "La parte arrendataria[[si:fiador]] y {{fiador}} como fiador solidario[[fin]], que firman.";
-        String text = textOf(renderWithoutGuarantor(template), 1);
+        String text = flat(textOf(renderWithoutGuarantor(template), 1));
 
         assertTrue(text.contains("La parte arrendataria, que firman."),
                 "la frase se cierra sola, sin espacios colgando: " + text);
@@ -258,7 +259,7 @@ class ContractMarkupTest {
         String template = "Arriendan {{arrendador[1]_nombre}} y {{arrendador[2]_nombre}}.\n\n"
                 + "Alquilan {{arrendatario[1]_nombre}} y {{arrendatario[2]_nombre}}.\n\n"
                 + "Avala {{fiador[1]}}.";
-        String text = textOf(render(template), 1);
+        String text = flat(textOf(render(template), 1));
 
         assertTrue(text.contains("Arriendan Bernal Varela Gómez y Xiao Varela Gómez."), text);
         assertTrue(text.contains("Alquilan Ana Gómez Pérez y Luis Gómez Pérez."), text);
@@ -272,7 +273,7 @@ class ContractMarkupTest {
         // plantilla puede servir para dos firmantes y para siete.
         String template = "Firman {{arrendatario[1]_nombre}}"
                 + "[[si:arrendatario[7]_nombre]] y {{arrendatario[7]_nombre}}[[fin]].";
-        String text = textOf(render(template), 1);
+        String text = flat(textOf(render(template), 1));
 
         assertTrue(text.contains("Firman Ana Gómez Pérez."), text);
         assertFalse(text.contains("{{"), "ningún campo sin sustituir: " + text);
@@ -281,7 +282,7 @@ class ContractMarkupTest {
 
     @Test
     void everyoneAtOnceReadsLikeAContract() throws IOException {
-        String text = textOf(render("De una parte {{arrendadores}}; de otra {{arrendatarios}}."), 1);
+        String text = flat(textOf(render("De una parte {{arrendadores}}; de otra {{arrendatarios}}."), 1));
 
         assertTrue(text.contains("Bernal Varela Gómez (NIF 46906413Y) y Xiao Varela Gómez (NIF 46906414F)"), text);
         assertTrue(text.contains("Ana Gómez Pérez (NIF 12345678Z) y Luis Gómez Pérez (NIF 87654321X)"), text);
@@ -302,7 +303,23 @@ class ContractMarkupTest {
      */
     private byte[] renderWithoutGuarantor(String template) {
         RentalAgreement rental = ContractFields.sampleRental();
+        // De la lista, que es de donde se leen las partes desde que un contrato
+        // puede llevar varios fiadores; la columna es sólo su reflejo, y
+        // vaciarla sola dejaba al fiador puesto.
+        rental.getParties().removeIf(party -> party.getRole() == PartyRole.FIADOR);
         rental.setGuarantor(null);
         return pdf.render(rental, ISSUER, template);
+    }
+
+    /**
+     * El texto de un PDF con los saltos de línea aplanados.
+     * <p>
+     * Una frase larga se parte donde cabe, así que "Ana Gómez Pérez (NIF ...)"
+     * puede llegar cortado entre dos líneas. Para comprobar lo que DICE el
+     * contrato, los saltos sobran; para comprobar cómo se compone, no, y por eso
+     * esto no se usa en todas partes.
+     */
+    private String flat(String text) {
+        return text.replaceAll("\\s+", " ");
     }
 }
