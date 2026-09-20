@@ -124,7 +124,7 @@ No se devengará indemnización alguna cuando el desistimiento tenga lugar una v
 Y cualquier otra causa prevista legalmente en el artículo 27 de la LAU.
 
 [[si:fiador]]
-**DUODÉCIMA. FIANZA SOLIDARIA.** {{fiador}}, enterado del contrato de arrendamiento que antecede, se constituye en fiador solidario de la parte arrendataria, respondiendo ante la parte arrendadora del cumplimiento de las obligaciones contraídas durante todo el tiempo que ocupen la vivienda de {{unidad_direccion}}, ya sea por estipulación convenida, ya por tácita reconducción o prórroga, por la simple tenencia o cualquier otra causa; entendiéndose ocupada por los inquilinos, a estos efectos, hasta el momento de su entrega legal a la libre disposición de la parte arrendadora.
+**DUODÉCIMA. FIANZA SOLIDARIA.** **{{fiador}}**, enterado del contrato de arrendamiento que antecede, se constituye en fiador solidario de la parte arrendataria, respondiendo ante la parte arrendadora del cumplimiento de las obligaciones contraídas durante todo el tiempo que ocupen la vivienda de {{unidad_direccion}}, ya sea por estipulación convenida, ya por tácita reconducción o prórroga, por la simple tenencia o cualquier otra causa; entendiéndose ocupada por los inquilinos, a estos efectos, hasta el momento de su entrega legal a la libre disposición de la parte arrendadora.
 [[fin]]
 
 **DECIMOTERCERA. JURISDICCIÓN.** Para la discusión de cuantas cuestiones pudieran derivarse de la interpretación o desarrollo del presente contrato, ambas partes, con renuncia al fuero que debiera corresponderles, se someten de forma expresa a la jurisdicción y competencia de los Juzgados y Tribunales de {{lugar}}.
