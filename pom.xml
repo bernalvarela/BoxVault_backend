@@ -117,6 +117,17 @@
 		  flyway-database-postgresql va aparte desde Flyway 10: el núcleo ya no trae
 		  dentro el soporte de cada motor.
 		-->
+		<!--
+		  El arranque automático de Flyway. En Spring Boot 4 la autoconfiguración
+		  se partió en módulos, así que flyway-core trae la biblioteca pero NO
+		  quien la pone en marcha al arrancar: sin esto, Flyway está en el
+		  classpath y no se ejecuta jamás, sin un aviso ni una línea de log.
+		  Es lo que pasó durante semanas, y el mismo patrón que spring-boot-h2console.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-flyway</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.flywaydb</groupId>
 			<artifactId>flyway-core</artifactId>
