@@ -175,8 +175,15 @@ CREATE INDEX IF NOT EXISTS idx_clients_building
 -- ---------------------------------------------------------------------
 -- Lo que hay hoy: un edificio
 -- ---------------------------------------------------------------------
-INSERT INTO buildings (name, address, city)
-SELECT 'Pasaxe 29', 'Avenida del Pasaje (A Pasaxe) 29', 'Oleiros (A Coruña)'
+-- created_at y updated_at van explicitos a proposito. El CREATE TABLE de mas
+-- arriba les pone DEFAULT CURRENT_TIMESTAMP, pero en esta instalacion la tabla
+-- ya existia: la creo Hibernate con ddl-auto durante las semanas en que Flyway
+-- no llegaba a ejecutarse, y la creo NOT NULL y sin valor por defecto. El
+-- CREATE TABLE IF NOT EXISTS no la corrige -por eso es IF NOT EXISTS- asi que
+-- el INSERT tiene que traerlos puestos, y asi vale para los dos casos.
+INSERT INTO buildings (name, address, city, created_at, updated_at)
+SELECT 'Pasaxe 29', 'Avenida del Pasaje (A Pasaxe) 29', 'Oleiros (A Coruña)',
+       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 WHERE NOT EXISTS (SELECT 1 FROM buildings);
 
 UPDATE storage_units
