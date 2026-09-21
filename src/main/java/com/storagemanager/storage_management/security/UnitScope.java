@@ -1,8 +1,10 @@
 package com.storagemanager.storage_management.security;
 
+import com.storagemanager.storage_management.model.Building;
 import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.StorageUnit;
+import com.storagemanager.storage_management.model.UserUnitScope;
 import com.storagemanager.storage_management.repository.ClientRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
@@ -132,6 +134,18 @@ public class UnitScope {
         Set<Long> accessibleUnits = accessibleUnitIds();
         if (accessibleUnits == null) return null;
 
+        // Los edificios que alcanzo, para ver sus fichas aunque todavía no hayan
+        // firmado nada. Antes, una ficha sin contratos la veía todo el mundo
+        // -era la única forma de poder darla de alta antes de firmarle- y con
+        // dos edificios eso era una fuga. Ahora nace con el edificio de quien la
+        // crea y ése la ve desde el primer segundo.
+        Set<Long> accessibleBuildings = new HashSet<>();
+        for (StorageUnit unit : storageUnits.findAll()) {
+            if (accessibleUnits.contains(unit.getId()) && unit.building() != null) {
+                accessibleBuildings.add(unit.building().getId());
+            }
+        }
+
         Set<Long> visible = new HashSet<>();
         Set<Long> withAnyRental = new HashSet<>();
         for (RentalAgreement rental : rentals.findAll()) {
@@ -148,7 +162,15 @@ public class UnitScope {
             }
         }
         for (Client client : clients.findAll()) {
-            if (!withAnyRental.contains(client.getId())) visible.add(client.getId());
+            // La ficha de mi edificio es mía, firme o no. Y la que no es de
+            // ningún edificio -las de antes de que esto existiera- se sigue
+            // viendo si no tiene contratos, para no hacer desaparecer nada al
+            // desplegar.
+            if (client.getBuilding() != null) {
+                if (accessibleBuildings.contains(client.getBuilding().getId())) visible.add(client.getId());
+            } else if (!withAnyRental.contains(client.getId())) {
+                visible.add(client.getId());
+            }
         }
         return visible;
     }
@@ -183,9 +205,30 @@ public class UnitScope {
 
     private Resolved resolve() {
         CurrentUser user = Authenticated.user();
-        List<Long> granted = grants.findByUserId(user.id()).stream()
-                .map(scope -> scope.getStorageUnit().getId())
-                .toList();
+        List<UserUnitScope> given = grants.findByUserId(user.id());
+
+        // Conceder un edificio es conceder sus unidades raíz, y de ahí el paseo
+        // hacia abajo hace el resto: sus trasteros de hoy y los de mañana. No
+        // hace falta ningún recorrido especial, sólo el punto de partida.
+        Set<Long> grantedBuildings = given.stream()
+                .map(UserUnitScope::getBuilding)
+                .filter(java.util.Objects::nonNull)
+                .map(Building::getId)
+                .collect(java.util.stream.Collectors.toSet());
+
+        List<Long> granted = new ArrayList<>(given.stream()
+                .map(UserUnitScope::getStorageUnit)
+                .filter(java.util.Objects::nonNull)
+                .map(StorageUnit::getId)
+                .toList());
+        if (!grantedBuildings.isEmpty()) {
+            storageUnits.findAll().stream()
+                    .filter(unit -> unit.getBuilding() != null
+                            && grantedBuildings.contains(unit.getBuilding().getId()))
+                    .map(StorageUnit::getId)
+                    .forEach(granted::add);
+        }
+
         if (granted.isEmpty()) {
             // Sin concesiones y sin fullScope: no ve nada. Es lo que se acordó,
             // y además es el lado seguro para un usuario recién creado.

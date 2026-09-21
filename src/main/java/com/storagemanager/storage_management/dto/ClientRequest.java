@@ -20,4 +20,10 @@ public class ClientRequest {
     private String address;
     private String emergencyContact;
     private String notes;
+
+    /**
+     * El edificio cuya administración mantiene la ficha. Si no viene y el
+     * usuario sólo alcanza un edificio, se pone ése: es lo que quería decir.
+     */
+    private Long buildingId;
 }

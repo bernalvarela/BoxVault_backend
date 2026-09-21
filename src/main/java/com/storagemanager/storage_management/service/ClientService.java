@@ -4,8 +4,10 @@ import com.storagemanager.storage_management.dto.ClientDTO;
 import com.storagemanager.storage_management.dto.ClientRequest;
 import com.storagemanager.storage_management.exception.BadRequestException;
 import com.storagemanager.storage_management.exception.ResourceNotFoundException;
+import com.storagemanager.storage_management.model.Building;
 import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.model.RentalAgreement;
+import com.storagemanager.storage_management.repository.BuildingRepository;
 import com.storagemanager.storage_management.repository.ClientRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 import com.storagemanager.storage_management.security.UnitScope;
@@ -26,6 +28,8 @@ public class ClientService {
     private final RentalAgreementRepository rentalAgreementRepository;
     private final ClientDocumentService clientDocumentService;
     private final RentalAgreementService rentalAgreements;
+    private final BuildingRepository buildings;
+    private final BuildingService buildingService;
     private final UnitScope unitScope;
 
     public List<Client> getAllClients() {
@@ -44,6 +48,48 @@ public class ClientService {
             return getAllClients();
         }
         return visibleOnly(clientRepository.searchClients(query.trim()));
+    }
+
+    /**
+     * A qué edificio pertenece una ficha nueva.
+     * <p>
+     * Si no lo dicen y el usuario sólo alcanza uno, es ése: no tiene sentido
+     * preguntárselo a quien no puede contestar otra cosa. Quien alcanza varios
+     * tiene que elegir, porque de ahí sale quién la verá.
+     */
+    private Building buildingFor(Long buildingId) {
+        if (buildingId != null) {
+            return buildings.findById(buildingId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Building not found with id: " + buildingId));
+        }
+        Set<Long> visible = buildingService.visibleBuildingIds();
+        List<Building> candidates = visible == null
+                ? buildings.findAllByOrderByNameAsc()
+                : buildings.findAllByOrderByNameAsc().stream()
+                        .filter(b -> visible.contains(b.getId()))
+                        .toList();
+        return candidates.size() == 1 ? candidates.get(0) : null;
+    }
+
+    /**
+     * Cuántas fichas comparten el NIF de ésta.
+     * <p>
+     * Una ficha sin NIF no se agrupa con nadie -no hay por dónde- y cuenta como
+     * una: es su propia persona hasta que alguien le ponga el documento.
+     */
+    private long sameDocumentCount(Map<String, Long> fichasPorNif, Client client) {
+        String key = personKey(client.getDocumentId());
+        return key == null ? 1L : fichasPorNif.getOrDefault(key, 1L);
+    }
+
+    /**
+     * El NIF en limpio, para agrupar: mayúsculas y sin puntos, guiones ni
+     * espacios. Sin esto, "Y-8033348-Z" y "Y8033348Z" serían dos personas.
+     */
+    public static String personKey(String documentId) {
+        if (documentId == null) return null;
+        String clean = documentId.replaceAll("[^A-Za-z0-9]", "").toUpperCase();
+        return clean.isEmpty() ? null : clean;
     }
 
     /** El ámbito de clientes lo resuelve {@link UnitScope}, que lo comparte con los documentos. */
@@ -66,6 +112,16 @@ public class ClientService {
             r.tenants().forEach(tenant -> activeRentalsByClient.merge(tenant.getId(), 1L, Long::sum));
         }
 
+        // Cuántas fichas comparten NIF. Sólo para quien lo ve todo: para los
+        // demás es información sobre personas con las que no tienen relación.
+        Map<String, Long> fichasPorNif = unitScope.isUnrestricted()
+                ? clientRepository.findAll().stream()
+                        .map(c -> personKey(c.getDocumentId()))
+                        .filter(java.util.Objects::nonNull)
+                        .collect(java.util.stream.Collectors.groupingBy(key -> key,
+                                java.util.stream.Collectors.counting()))
+                : Map.of();
+
         return searchClients(query).stream()
                 .map(c -> ClientDTO.builder()
                         .id(c.getId())
@@ -81,6 +137,10 @@ public class ClientService {
                         .active(activeRentalsByClient.containsKey(c.getId()))
                         .activeRentalsCount(activeRentalsByClient.getOrDefault(c.getId(), 0L))
                         .guaranteedRentalsCount(guaranteedByClient.getOrDefault(c.getId(), 0L))
+                        .buildingId(c.getBuilding() == null ? null : c.getBuilding().getId())
+                        .buildingName(c.getBuilding() == null ? null : c.getBuilding().getName())
+                        .personKey(personKey(c.getDocumentId()))
+                        .sameDocumentCount(sameDocumentCount(fichasPorNif, c))
                         .build())
                 .toList();
     }
@@ -99,6 +159,7 @@ public class ClientService {
                 .address(request.getAddress())
                 .emergencyContact(request.getEmergencyContact())
                 .notes(request.getNotes())
+                .building(buildingFor(request.getBuildingId()))
                 .build();
 
         return clientRepository.save(client);
@@ -120,6 +181,11 @@ public class ClientService {
         client.setAddress(request.getAddress());
         client.setEmergencyContact(request.getEmergencyContact());
         client.setNotes(request.getNotes());
+        // Mover una ficha de edificio cambia quién la ve, así que sólo se hace
+        // si lo piden explícitamente; en blanco se queda donde estaba.
+        if (request.getBuildingId() != null) {
+            client.setBuilding(buildingFor(request.getBuildingId()));
+        }
 
         return clientRepository.save(client);
     }

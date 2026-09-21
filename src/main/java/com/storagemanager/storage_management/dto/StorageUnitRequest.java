@@ -49,4 +49,17 @@ public class StorageUnitRequest {
 
     /** Plantilla con la que se hacen sus contratos; nulo = la del local o la de por defecto. */
     private Long contractTemplateId;
+
+    /**
+     * El edificio. Sólo lo llevan las unidades raíz: las que cuelgan de otra lo
+     * heredan, y ponérselo a mano sería guardar dos veces el mismo dato.
+     */
+    private Long buildingId;
+
+    /**
+     * El coeficiente de participación de la escritura, en tanto por ciento.
+     * Sólo los elementos de la propiedad horizontal -bajos y pisos- tienen uno;
+     * un trastero dentro de un bajo no participa por separado.
+     */
+    private BigDecimal participationCoefficient;
 }

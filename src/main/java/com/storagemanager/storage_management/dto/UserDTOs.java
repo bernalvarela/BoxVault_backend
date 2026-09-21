@@ -34,9 +34,11 @@ public final class UserDTOs {
             boolean mustChangePassword,
             Map<AccessArea, AccessLevel> overrides,
             List<Long> unitScopeIds,
+            /** Edificios concedidos enteros: sus unidades de hoy y las de mañana. */
+            List<Long> buildingScopeIds,
             LocalDateTime lastLoginAt) {
 
-        public static UserDTO of(AppUser user, List<Long> unitScopeIds) {
+        public static UserDTO of(AppUser user, List<Long> unitScopeIds, List<Long> buildingScopeIds) {
             return new UserDTO(
                     user.getId(),
                     user.getUsername(),
@@ -50,6 +52,7 @@ public final class UserDTOs {
                     user.getPermissions().stream()
                             .collect(Collectors.toMap(p -> p.getArea(), p -> p.getLevel())),
                     unitScopeIds,
+                    buildingScopeIds,
                     user.getLastLoginAt());
         }
     }
@@ -68,7 +71,8 @@ public final class UserDTOs {
             boolean fullScope,
             boolean active,
             Map<AccessArea, AccessLevel> overrides,
-            List<Long> unitScopeIds) {}
+            List<Long> unitScopeIds,
+            List<Long> buildingScopeIds) {}
 
     /** Un perfil con sus niveles por área, para el desplegable y la rejilla. */
     public record RoleDTO(Long id, String name, String description, boolean systemRole,

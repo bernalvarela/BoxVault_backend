@@ -33,7 +33,16 @@ public class UserUnitScope {
     @JoinColumn(name = "user_id", nullable = false)
     private AppUser user;
 
-    @ManyToOne(fetch = FetchType.EAGER, optional = false)
-    @JoinColumn(name = "storage_unit_id", nullable = false)
+    /** La unidad concedida; nula cuando lo concedido es un edificio entero. */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "storage_unit_id")
     private StorageUnit storageUnit;
+
+    /**
+     * El edificio concedido: sus unidades de hoy y las de mañana. Nulo cuando lo
+     * concedido es una unidad suelta. Siempre uno de los dos, nunca los dos.
+     */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "building_id")
+    private Building building;
 }

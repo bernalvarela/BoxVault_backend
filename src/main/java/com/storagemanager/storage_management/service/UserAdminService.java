@@ -39,6 +39,7 @@ public class UserAdminService {
     private final AppUserRepository users;
     private final RoleRepository roles;
     private final UserUnitScopeRepository unitScopes;
+    private final BuildingRepository buildings;
     private final StorageUnitRepository storageUnits;
     private final PasswordEncoder passwordEncoder;
 
@@ -48,13 +49,13 @@ public class UserAdminService {
 
     public List<UserDTO> getUsers() {
         return users.findAllByOrderByFullNameAsc().stream()
-                .map(user -> UserDTO.of(user, scopeIdsOf(user.getId())))
+                .map(user -> UserDTO.of(user, scopeIdsOf(user.getId()), buildingScopeIdsOf(user.getId())))
                 .toList();
     }
 
     public UserDTO getUser(Long id) {
         AppUser user = requireUser(id);
-        return UserDTO.of(user, scopeIdsOf(id));
+        return UserDTO.of(user, scopeIdsOf(id), buildingScopeIdsOf(id));
     }
 
     @Transactional
@@ -78,9 +79,9 @@ public class UserAdminService {
                 .build();
         applyOverrides(user, request.overrides());
         AppUser saved = users.save(user);
-        replaceUnitScopes(saved, request.unitScopeIds());
+        replaceUnitScopes(saved, request.unitScopeIds(), request.buildingScopeIds());
         log.info("Usuario '{}' creado con el perfil {}", saved.getUsername(), saved.getRole().getName());
-        return UserDTO.of(saved, scopeIdsOf(saved.getId()));
+        return UserDTO.of(saved, scopeIdsOf(saved.getId()), buildingScopeIdsOf(saved.getId()));
     }
 
     @Transactional
@@ -104,7 +105,7 @@ public class UserAdminService {
         boolean wasActive = user.isActive();
         user.setActive(request.active());
         applyOverrides(user, request.overrides());
-        replaceUnitScopes(user, request.unitScopeIds());
+        replaceUnitScopes(user, request.unitScopeIds(), request.buildingScopeIds());
 
         // Cambiarle los permisos o darle de baja tiene que notarse ya, no cuando
         // le caduque el token que lleva en el navegador.
@@ -114,7 +115,7 @@ public class UserAdminService {
         if (wasActive && !request.active()) {
             log.info("Usuario '{}' dado de baja", user.getUsername());
         }
-        return UserDTO.of(user, scopeIdsOf(id));
+        return UserDTO.of(user, scopeIdsOf(id), buildingScopeIdsOf(id));
     }
 
     /** Reinicia la contraseña de otro: la nueva es provisional y hay que cambiarla. */
@@ -156,21 +157,48 @@ public class UserAdminService {
                 UserPermission.builder().user(user).area(area).level(level).build()));
     }
 
-    private void replaceUnitScopes(AppUser user, List<Long> unitIds) {
+    /**
+     * Deja al usuario exactamente con estas concesiones.
+     * <p>
+     * Una concesión es de una unidad o de un edificio entero, nunca de las dos
+     * cosas. Lo normal es el edificio: quien lo administra ve sus unidades de
+     * hoy y las que se creen mañana sin volver a tocar los permisos. Las
+     * concesiones sueltas siguen valiendo para el caso fino —dar dos trasteros
+     * y nada más—.
+     */
+    private void replaceUnitScopes(AppUser user, List<Long> unitIds, List<Long> buildingIds) {
         unitScopes.deleteByUserId(user.getId());
-        if (unitIds == null || unitIds.isEmpty()) return;
         List<UserUnitScope> scopes = new ArrayList<>();
-        for (Long unitId : unitIds) {
-            StorageUnit unit = storageUnits.findById(unitId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Storage unit not found with id: " + unitId));
-            scopes.add(UserUnitScope.builder().user(user).storageUnit(unit).build());
+        if (unitIds != null) {
+            for (Long unitId : unitIds) {
+                StorageUnit unit = storageUnits.findById(unitId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Storage unit not found with id: " + unitId));
+                scopes.add(UserUnitScope.builder().user(user).storageUnit(unit).build());
+            }
         }
-        unitScopes.saveAll(scopes);
+        if (buildingIds != null) {
+            for (Long buildingId : buildingIds) {
+                Building building = buildings.findById(buildingId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Building not found with id: " + buildingId));
+                scopes.add(UserUnitScope.builder().user(user).building(building).build());
+            }
+        }
+        if (!scopes.isEmpty()) unitScopes.saveAll(scopes);
     }
 
     private List<Long> scopeIdsOf(Long userId) {
         return unitScopes.findByUserId(userId).stream()
-                .map(scope -> scope.getStorageUnit().getId())
+                .map(UserUnitScope::getStorageUnit)
+                .filter(java.util.Objects::nonNull)
+                .map(StorageUnit::getId)
+                .toList();
+    }
+
+    private List<Long> buildingScopeIdsOf(Long userId) {
+        return unitScopes.findByUserId(userId).stream()
+                .map(UserUnitScope::getBuilding)
+                .filter(java.util.Objects::nonNull)
+                .map(Building::getId)
                 .toList();
     }
 

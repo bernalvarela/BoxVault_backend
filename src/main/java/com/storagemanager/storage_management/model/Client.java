@@ -53,6 +53,18 @@ public class Client {
     private LocalDateTime updatedAt;
 
     /** Quién la creó; lo rellena solo AuditingConfig. */
+    /**
+     * El edificio cuya administración mantiene esta ficha.
+     * <p>
+     * La misma persona puede tener ficha en dos edificios y no son duplicados:
+     * en uno dio su móvil y en otro el del trabajo, y cada una lleva sus propios
+     * documentos y sus notas. Quien lo ve todo las agrupa por NIF; no se
+     * fusionan, porque fusionarlas perdería información.
+     */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "building_id")
+    private Building building;
+
     @CreatedBy
     @Column(updatable = false, length = 60)
     private String createdBy;

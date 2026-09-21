@@ -2,6 +2,7 @@ package com.storagemanager.storage_management.config;
 
 import com.storagemanager.storage_management.dto.IrpfReportDTO;
 import com.storagemanager.storage_management.dto.Modelo184DTO;
+import com.storagemanager.storage_management.model.Building;
 import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.model.Expense;
 import com.storagemanager.storage_management.model.Owner;
@@ -13,6 +14,7 @@ import com.storagemanager.storage_management.model.StorageUnit;
 import com.storagemanager.storage_management.model.TaxFiling;
 import com.storagemanager.storage_management.model.UnitPriceHistory;
 import com.storagemanager.storage_management.model.enums.*;
+import com.storagemanager.storage_management.repository.BuildingRepository;
 import com.storagemanager.storage_management.repository.ClientRepository;
 import com.storagemanager.storage_management.repository.ExpenseRepository;
 import com.storagemanager.storage_management.repository.OwnerMembershipRepository;
@@ -118,6 +120,7 @@ public class DataSeeder implements CommandLineRunner {
     public static final String ENTITY_NAME = "Comunidad de bienes Pasaxe 29";
 
     private final StorageUnitRepository storageUnitRepository;
+    private final BuildingRepository buildingRepository;
     private final ClientRepository clientRepository;
     private final RentalAgreementRepository rentalAgreementRepository;
     private final PaymentRepository paymentRepository;
@@ -191,6 +194,7 @@ public class DataSeeder implements CommandLineRunner {
         // 2. Units (locales first, then the trasteros inside them and the apartments)
         Map<String, StorageUnit> unitsByNumber = new HashMap<>();
         List<StorageUnit> units = seedUnits(root, unitsByNumber);
+        seedBuilding(units);
 
         // 3. Rental agreements
         Map<Integer, RentalAgreement> rentalsByRef = seedRentals(root, unitsByNumber, clientsByName);
@@ -214,6 +218,31 @@ public class DataSeeder implements CommandLineRunner {
         log.info("Seeding complete: {} clients, {} units, {} rentals, {} payments, {} price-history entries, {} expenses, {} owners, {} shares, {} tax filings.",
                 clientsByName.size(), units.size(), rentalsByRef.size(), paymentCount,
                 unitPriceHistoryRepository.count(), expenseCount, ownersByName.size(), ownershipCount, filingCount);
+    }
+
+    /**
+     * El edificio, y las unidades raíz colgadas de él.
+     * <p>
+     * Hasta que hubo dos edificios, la casa era una sola y no hacía falta
+     * nombrarla. Ahora sí: es el nivel al que se conceden los permisos, y sin
+     * ninguno la pantalla no tendría de dónde colgar nada.
+     * <p>
+     * Los coeficientes de participación no se inventan aquí: salen de la
+     * escritura y los teclea quien la tiene delante. Sin ellos, el estado de
+     * cuentas de la comunidad sale a cero, que es más honesto que un reparto
+     * plausible y falso.
+     */
+    private void seedBuilding(List<StorageUnit> units) {
+        if (buildingRepository.count() > 0) return;
+        Building building = buildingRepository.save(Building.builder()
+                .name("Pasaxe 29")
+                .address("Avenida del Pasaje (A Pasaxe) 29")
+                .city("Oleiros (A Coruña)")
+                .build());
+        List<StorageUnit> roots = units.stream().filter(unit -> unit.getParent() == null).toList();
+        roots.forEach(unit -> unit.setBuilding(building));
+        storageUnitRepository.saveAll(roots);
+        log.info("Creado el edificio {} con {} unidad(es) raíz.", building.getName(), roots.size());
     }
 
     private static Map<String, Object> parseSeedData() throws java.io.IOException {

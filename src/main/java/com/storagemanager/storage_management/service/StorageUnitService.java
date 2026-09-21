@@ -13,6 +13,7 @@ import com.storagemanager.storage_management.model.UnitPriceHistory;
 import com.storagemanager.storage_management.model.enums.RentalStatus;
 import com.storagemanager.storage_management.model.enums.UnitKind;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
+import com.storagemanager.storage_management.repository.BuildingRepository;
 import com.storagemanager.storage_management.repository.ExpenseRepository;
 import com.storagemanager.storage_management.repository.OwnershipRepository;
 import com.storagemanager.storage_management.repository.PaymentRepository;
@@ -35,6 +36,7 @@ import java.util.Optional;
 public class StorageUnitService {
 
     private final StorageUnitRepository storageUnitRepository;
+    private final BuildingRepository buildings;
     private final ContractTemplateRepository contractTemplateRepository;
     private final RentalAgreementRepository rentalAgreementRepository;
     private final UnitPriceHistoryRepository unitPriceHistoryRepository;
@@ -177,6 +179,7 @@ public class StorageUnitService {
         unit.setCadastralReference(trimToNull(request.getCadastralReference()));
         unit.setInventory(trimToNull(request.getInventory()));
         unit.setContractTemplate(templateOf(request.getContractTemplateId()));
+        applyBuilding(unit, request);
         unit.setBaseMonthlyRate(request.getBaseMonthlyRate());
         if (priceChanged) {
             recordPrice(unit, request.getBaseMonthlyRate(), "Cambio de precio");
@@ -187,6 +190,28 @@ public class StorageUnitService {
         unit.setDescription(request.getDescription());
 
         return storageUnitRepository.save(unit);
+    }
+
+    /**
+     * El edificio y el coeficiente, que sólo tienen sentido en las raíces.
+     * <p>
+     * Una unidad que cuelga de otra hereda el edificio de su padre y no
+     * participa por separado en la comunidad: un trastero es una división
+     * dentro del bajo, no una finca registral. Si alguien manda esos datos en
+     * una unidad hija, se ignoran en vez de guardar una verdad a medias.
+     */
+    private void applyBuilding(StorageUnit unit, StorageUnitRequest request) {
+        if (unit.getParent() != null) {
+            unit.setBuilding(null);
+            unit.setParticipationCoefficient(null);
+            return;
+        }
+        if (request.getBuildingId() != null) {
+            unit.setBuilding(buildings.findById(request.getBuildingId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Building not found with id: " + request.getBuildingId())));
+        }
+        unit.setParticipationCoefficient(request.getParticipationCoefficient());
     }
 
     @Transactional

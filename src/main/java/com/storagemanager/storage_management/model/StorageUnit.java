@@ -53,6 +53,26 @@ public class StorageUnit {
     @JoinColumn(name = "parent_unit_id")
     private StorageUnit parent;
 
+    /**
+     * El edificio en el que está. Sólo lo llevan las unidades raíz: las demás lo
+     * heredan subiendo, y guardárselo a cada trastero sería repetir un dato que
+     * ya está en su local. Se lee con {@link #building()}.
+     */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "building_id")
+    private Building building;
+
+    /**
+     * El coeficiente de participación de la escritura, en tanto por ciento.
+     * <p>
+     * Es de la finca registral y no de quien la posee hoy: si se vende el 3D, el
+     * coeficiente se va con el piso. Sólo lo tienen los elementos de la
+     * propiedad horizontal -los bajos y los pisos-; los trasteros son divisiones
+     * dentro del bajo y no participan por separado.
+     */
+    @Column(precision = 7, scale = 4)
+    private java.math.BigDecimal participationCoefficient;
+
     @Column(nullable = false, length = 100)
     private String name;
 
@@ -132,6 +152,11 @@ public class StorageUnit {
     @JsonProperty("premises")
     public boolean isPremises() {
         return getKind() == UnitKind.PREMISES;
+    }
+
+    /** El edificio de esta unidad: el suyo, o el de la raíz de la que cuelga. */
+    public Building building() {
+        return building != null ? building : rootUnit().getBuilding();
     }
 
     /** Topmost unit of the parent chain (this unit when it has no parent). */
