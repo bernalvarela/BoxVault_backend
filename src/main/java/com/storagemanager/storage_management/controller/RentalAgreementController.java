@@ -110,6 +110,18 @@ public class RentalAgreementController {
     }
 
     /**
+     * Genera (o rehace) el contrato de salida de un contrato ya finalizado, con
+     * lo que diga el cuerpo sobre la fianza. La fecha de salida es la del cierre.
+     */
+    @PreAuthorize("@access.can('ALQUILERES','ESCRIBIR')")
+    @PostMapping("/{id}/exit-contract")
+    public ResponseEntity<RentalAgreement> generateExitContract(@PathVariable Long id,
+                                                                @RequestBody(required = false) TerminationRequest request) {
+        return ResponseEntity.ok(contractService.generateExitAfterwards(id,
+                request != null ? request : new TerminationRequest()));
+    }
+
+    /**
      * Compone el contrato y lo devuelve para leerlo, SIN archivar nada. Es el
      * primer paso: se mira, y si hay algo que corregir se corrige y se vuelve a
      * pedir, sin que quede ningún fichero por medio.

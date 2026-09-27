@@ -1,6 +1,8 @@
 package com.storagemanager.storage_management.service;
 
 import com.storagemanager.storage_management.dto.TerminationRequest;
+import com.storagemanager.storage_management.exception.BadRequestException;
+import com.storagemanager.storage_management.model.enums.RentalStatus;
 import com.storagemanager.storage_management.model.Document;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.enums.DocumentType;
@@ -117,6 +119,26 @@ public class ContractService {
         if (Boolean.TRUE.equals(request.getGenerateExitContract())) {
             generateExit(rental);
         }
+        return rental;
+    }
+
+    /**
+     * El contrato de salida de un alquiler que YA está cerrado: no se generó al
+     * cerrarlo, o hay que rehacerlo. Lo que se decidió sobre la fianza se puede
+     * corregir aquí (llega en el cuerpo, como al cerrar); la fecha de salida no:
+     * es la del cierre, y moverla cambiaría lo facturado.
+     */
+    @Transactional
+    public RentalAgreement generateExitAfterwards(Long rentalId, TerminationRequest request) {
+        RentalAgreement rental = rentals.getAgreementById(rentalId);
+        if (rental.getStatus() == RentalStatus.ACTIVE) {
+            throw new BadRequestException("El contrato " + rental.getAgreementNumber()
+                    + " sigue en vigor: el contrato de salida se genera al finalizarlo");
+        }
+        request.setTerminationDate(rental.getEndDate());
+        rentals.applyTermination(rental, request);
+        rentalRepository.save(rental);
+        generateExit(rental);
         return rental;
     }
 
