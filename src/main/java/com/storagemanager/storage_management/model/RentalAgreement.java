@@ -161,6 +161,30 @@ public class RentalAgreement {
     @JoinColumn(name = "contract_document_id")
     private Document contractDocument;
 
+    /**
+     * Qué se hizo con la fianza al cerrar el contrato. Nulo = todavía no se ha
+     * decidido: el contrato sigue vivo, o se cerró antes de que esto existiera.
+     * FALSE = se retiene entera; TRUE = se devuelve, toda o parte, y cuánto lo
+     * dice {@link #depositReturnedAmount}.
+     */
+    private Boolean depositReturned;
+
+    @Column(precision = 10, scale = 2)
+    private BigDecimal depositReturnedAmount;
+
+    /** Por qué no se devuelve entera: desperfectos, limpieza, mensualidades pendientes... */
+    @Column(columnDefinition = "TEXT")
+    private String depositReturnNotes;
+
+    /**
+     * El contrato de salida (finiquito) que generó la aplicación al cerrar el
+     * alquiler, si se generó. Como {@link #contractDocument}: se guarda para
+     * poder rehacerlo sin dejar borradores apilados.
+     */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "exit_contract_document_id")
+    private Document exitContractDocument;
+
     /** Nunca null: un contrato sin marcar no factura. */
     public boolean invoices() {
         return Boolean.TRUE.equals(generatesInvoices);

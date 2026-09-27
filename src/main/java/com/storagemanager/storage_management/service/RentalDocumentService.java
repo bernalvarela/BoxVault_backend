@@ -96,12 +96,20 @@ public class RentalDocumentService {
         // deja de apuntar a él ANTES de que desaparezca: si no, queda señalando a
         // una fila que ya no está y rehacer el contrato intentaría borrarla otra
         // vez. Que no haya contrato generado es un estado legítimo.
+        // Lo mismo con el contrato de salida.
         RentalAgreement rental = link.getRentalAgreement();
+        boolean changed = false;
         if (rental.getContractDocument() != null
                 && rental.getContractDocument().getId().equals(documentId)) {
             rental.setContractDocument(null);
-            rentalRepository.save(rental);
+            changed = true;
         }
+        if (rental.getExitContractDocument() != null
+                && rental.getExitContractDocument().getId().equals(documentId)) {
+            rental.setExitContractDocument(null);
+            changed = true;
+        }
+        if (changed) rentalRepository.save(rental);
 
         rentalDocumentRepository.delete(link);
         documents.delete(link.getDocument());

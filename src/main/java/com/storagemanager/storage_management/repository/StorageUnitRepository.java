@@ -22,6 +22,12 @@ public interface StorageUnitRepository extends JpaRepository<StorageUnit, Long> 
     @Modifying
     @Query("UPDATE StorageUnit u SET u.contractTemplate = NULL WHERE u.contractTemplate.id = :templateId")
     void clearContractTemplate(@Param("templateId") Long templateId);
+
+    /** Lo mismo con la plantilla del contrato de salida. */
+    @Modifying
+    @Query("UPDATE StorageUnit u SET u.exitContractTemplate = NULL WHERE u.exitContractTemplate.id = :templateId")
+    void clearExitContractTemplate(@Param("templateId") Long templateId);
+
     Optional<StorageUnit> findByUnitNumber(String unitNumber);
     List<StorageUnit> findByStatus(UnitStatus status);
     long countByStatus(UnitStatus status);

@@ -1,6 +1,7 @@
 package com.storagemanager.storage_management.service;
 
 import com.storagemanager.storage_management.dto.RentalAgreementRequest;
+import com.storagemanager.storage_management.dto.TerminationRequest;
 import com.storagemanager.storage_management.exception.BadRequestException;
 import com.storagemanager.storage_management.exception.ResourceNotFoundException;
 import com.storagemanager.storage_management.model.Client;
@@ -26,6 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
@@ -214,6 +216,12 @@ public class RentalAgreementService {
         // Un contrato en vigor no tiene fecha de fin: si se dejara, BillingService
         // dejaría de generarle mensualidades a partir de ella.
         agreement.setEndDate(null);
+        // Si se cerró por error, la fianza no se llegó a devolver. El contrato de
+        // salida que se hubiera generado se queda entre sus documentos: si se
+        // vuelve a cerrar, el nuevo lo sustituye.
+        agreement.setDepositReturned(null);
+        agreement.setDepositReturnedAmount(null);
+        agreement.setDepositReturnNotes(null);
         unit.setStatus(UnitStatus.OCCUPIED);
         storageUnitRepository.save(unit);
 
@@ -448,11 +456,16 @@ public class RentalAgreementService {
 
     @Transactional
     public RentalAgreement terminateAgreement(Long id, LocalDate terminationDate) {
+        TerminationRequest request = new TerminationRequest();
+        request.setTerminationDate(terminationDate);
+        return terminateAgreement(id, request);
+    }
+
+    @Transactional
+    public RentalAgreement terminateAgreement(Long id, TerminationRequest request) {
         RentalAgreement agreement = getAgreementById(id);
-        LocalDate end = terminationDate != null ? terminationDate : LocalDate.now();
-        requireNoOverlap(agreement.getStorageUnit(), agreement.getId(), agreement.getStartDate(), end);
+        applyTermination(agreement, request);
         agreement.setStatus(RentalStatus.TERMINATED);
-        agreement.setEndDate(end);
 
         // Free up the storage unit if no other active agreement exists
         StorageUnit unit = agreement.getStorageUnit();
@@ -460,6 +473,54 @@ public class RentalAgreementService {
         storageUnitRepository.save(unit);
 
         return rentalAgreementRepository.save(agreement);
+    }
+
+    /**
+     * Pone en el contrato lo que se decide al cerrarlo -la fecha de salida y qué
+     * pasa con la fianza- SIN guardarlo ni cambiar su estado.
+     * <p>
+     * Lo usan el cierre de verdad y la vista previa del contrato de salida, que
+     * lo aplica sobre el alquiler recién leído (y ya fuera de la sesión de
+     * Hibernate, así que no se guarda nada) para componer el PDF con los datos
+     * que se van a confirmar. Una sola regla para los dos: lo que se lee es lo
+     * que se firma.
+     */
+    public void applyTermination(RentalAgreement agreement, TerminationRequest request) {
+        LocalDate end = request.getTerminationDate() != null ? request.getTerminationDate() : LocalDate.now();
+        if (agreement.getStartDate() != null && end.isBefore(agreement.getStartDate())) {
+            throw new BadRequestException("La fecha de salida (" + end + ") es anterior al inicio del contrato ("
+                    + agreement.getStartDate() + ")");
+        }
+        requireNoOverlap(agreement.getStorageUnit(), agreement.getId(), agreement.getStartDate(), end);
+        agreement.setEndDate(end);
+
+        BigDecimal deposit = agreement.getSecurityDeposit();
+        // Sin fianza, o sin decidir (una llamada de las de antes, sólo con la
+        // fecha), no se apunta nada: nulo es "no consta", no "cero euros".
+        if (deposit == null || deposit.signum() <= 0 || request.getDepositReturned() == null) {
+            agreement.setDepositReturned(null);
+            agreement.setDepositReturnedAmount(null);
+            agreement.setDepositReturnNotes(null);
+            return;
+        }
+
+        BigDecimal returned;
+        if (Boolean.TRUE.equals(request.getDepositReturned())) {
+            returned = request.getDepositReturnedAmount() != null ? request.getDepositReturnedAmount() : deposit;
+            if (returned.signum() <= 0) {
+                throw new BadRequestException("Si no se devuelve nada de la fianza, marca que no se devuelve");
+            }
+            if (returned.compareTo(deposit) > 0) {
+                throw new BadRequestException("No se pueden devolver " + returned + " €: la fianza era de "
+                        + deposit + " €");
+            }
+        } else {
+            returned = BigDecimal.ZERO;
+        }
+        agreement.setDepositReturned(request.getDepositReturned());
+        agreement.setDepositReturnedAmount(returned.setScale(2, java.math.RoundingMode.HALF_UP));
+        String notes = request.getDepositReturnNotes();
+        agreement.setDepositReturnNotes(notes == null || notes.isBlank() ? null : notes.trim());
     }
 
     /**

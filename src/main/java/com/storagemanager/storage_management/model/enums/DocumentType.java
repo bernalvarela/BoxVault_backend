@@ -17,6 +17,8 @@ import java.util.List;
  * CONTRATO_ALQUILER: copia firmada del contrato de alquiler. Cuelga del
  *   alquiler, no del cliente: es de una unidad y unas fechas concretas. Las
  *   fichas de clientes anteriores a ese cambio pueden llevarlo todavía.
+ * CONTRATO_SALIDA: el contrato de salida (finiquito) que se firma al cerrar
+ *   el alquiler: fecha de entrega, estado de la unidad y devolución de la fianza.
  * ANEXO: anexo o adenda al contrato (subida de precio, cambio de unidad...).
  * FACTURA: la factura de una mensualidad, con su número de serie y el desglose
  *   del IVA. La genera la propia aplicación y se archiva en el alquiler, que es
@@ -38,6 +40,7 @@ public enum DocumentType {
     NOMINA,
     FOTO,
     CONTRATO_ALQUILER,
+    CONTRATO_SALIDA,
     ANEXO,
     FACTURA,
     JUSTIFICANTE,
@@ -48,7 +51,7 @@ public enum DocumentType {
             List.of(DNI, CONTRATO_TRABAJO, NOMINA, FOTO, JUSTIFICANTE, OTRO);
 
     private static final List<DocumentType> FOR_RENTAL =
-            List.of(CONTRATO_ALQUILER, ANEXO, FACTURA, FOTO, JUSTIFICANTE, OTRO);
+            List.of(CONTRATO_ALQUILER, CONTRATO_SALIDA, ANEXO, FACTURA, FOTO, JUSTIFICANTE, OTRO);
 
     private static final List<DocumentType> FOR_TAX_FILING = List.of(JUSTIFICANTE, DECLARACION, OTRO);
 

@@ -122,6 +122,16 @@ public class StorageUnit {
     @JoinColumn(name = "contract_template_id")
     private ContractTemplate contractTemplate;
 
+    /**
+     * Con qué plantilla se compone el contrato de SALIDA (el finiquito que se
+     * firma al cerrar el alquiler). Se hereda del padre como la de entrada; si
+     * nadie dice nada, se usa la que trae la aplicación dentro. No hay una "de
+     * salida por defecto": la marca de por defecto es la del contrato de entrada.
+     */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "exit_contract_template_id")
+    private ContractTemplate exitContractTemplate;
+
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;

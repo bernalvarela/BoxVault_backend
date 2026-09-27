@@ -145,6 +145,7 @@ public class StorageUnitService {
                 .cadastralReference(trimToNull(request.getCadastralReference()))
                 .inventory(trimToNull(request.getInventory()))
                 .contractTemplate(templateOf(request.getContractTemplateId()))
+                .exitContractTemplate(templateOf(request.getExitContractTemplateId()))
                 .baseMonthlyRate(request.getBaseMonthlyRate())
                 .status(request.getStatus() != null ? request.getStatus() : UnitStatus.AVAILABLE)
                 .description(request.getDescription())
@@ -179,6 +180,7 @@ public class StorageUnitService {
         unit.setCadastralReference(trimToNull(request.getCadastralReference()));
         unit.setInventory(trimToNull(request.getInventory()));
         unit.setContractTemplate(templateOf(request.getContractTemplateId()));
+        unit.setExitContractTemplate(templateOf(request.getExitContractTemplateId()));
         applyBuilding(unit, request);
         unit.setBaseMonthlyRate(request.getBaseMonthlyRate());
         if (priceChanged) {

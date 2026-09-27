@@ -17,4 +17,6 @@ public interface ContractTemplateRepository extends JpaRepository<ContractTempla
     Optional<ContractTemplate> findFirstByDefaultTemplateIsTrue();
 
     boolean existsByNameIgnoreCase(String name);
+
+    Optional<ContractTemplate> findByStorageKey(String storageKey);
 }

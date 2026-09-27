@@ -50,6 +50,9 @@ public class StorageUnitRequest {
     /** Plantilla con la que se hacen sus contratos; nulo = la del local o la de por defecto. */
     private Long contractTemplateId;
 
+    /** Plantilla del contrato de salida; nulo = la del local o la que trae la aplicación. */
+    private Long exitContractTemplateId;
+
     /**
      * El edificio. Sólo lo llevan las unidades raíz: las que cuelgan de otra lo
      * heredan, y ponérselo a mano sería guardar dos veces el mismo dato.

@@ -1,5 +1,6 @@
 package com.storagemanager.storage_management.service;
 
+import com.storagemanager.storage_management.dto.TerminationRequest;
 import com.storagemanager.storage_management.model.Document;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.enums.DocumentType;
@@ -88,6 +89,71 @@ public class ContractService {
         log.info("Generado el contrato del alquiler {} ({})", rentalId, rental.getAgreementNumber());
         return document;
     }
+
+    // --- El contrato de salida ---------------------------------------------
+
+    /**
+     * Compone el contrato de salida con lo que se va a decidir al cerrar -la
+     * fecha y la fianza- y lo devuelve sin cerrar nada ni archivar nada.
+     * <p>
+     * Los datos del cierre se ponen sobre el alquiler recién leído, que ya está
+     * fuera de la sesión de Hibernate: se usan para componer y se tiran. Por eso
+     * este método NO puede ser transaccional, o el cambio se guardaría.
+     */
+    public Draft previewExit(Long rentalId, TerminationRequest request) {
+        RentalAgreement rental = rentals.getAgreementById(rentalId);
+        rentals.applyTermination(rental, request);
+        return new Draft(exitFileNameOf(rental), composeExit(rental));
+    }
+
+    /**
+     * Cierra el contrato con lo decidido y, si se pidió, archiva su contrato de
+     * salida. Todo o nada: si el PDF no se puede componer, el contrato no se
+     * cierra, y así no queda un cierre sin el papel que se iba a firmar.
+     */
+    @Transactional
+    public RentalAgreement terminate(Long rentalId, TerminationRequest request) {
+        RentalAgreement rental = rentals.terminateAgreement(rentalId, request);
+        if (Boolean.TRUE.equals(request.getGenerateExitContract())) {
+            generateExit(rental);
+        }
+        return rental;
+    }
+
+    /** Archiva el contrato de salida; si ya había uno generado, lo sustituye. */
+    private Document generateExit(RentalAgreement rental) {
+        Long rentalId = rental.getId();
+        byte[] content = composeExit(rental);
+
+        Document previous = rental.getExitContractDocument();
+        Document document = rentalDocuments.attach(rentalId, exitFileNameOf(rental), "application/pdf", content,
+                DocumentType.CONTRATO_SALIDA,
+                "Contrato de salida generado el " + Pdfs.day(LocalDate.now()) + " (sin firmar)");
+        rental.setExitContractDocument(document);
+        rentalRepository.save(rental);
+
+        // Como en generate: primero se apunta el nuevo y luego se retira el viejo.
+        if (previous != null && !previous.getId().equals(document.getId())) {
+            rentalDocuments.delete(rentalId, previous.getId());
+            log.info("Rehecho el contrato de salida del alquiler {}: se retira el anterior ({})",
+                    rentalId, previous.getFileName());
+        }
+        log.info("Generado el contrato de salida del alquiler {} ({})", rentalId, rental.getAgreementNumber());
+        return document;
+    }
+
+    private byte[] composeExit(RentalAgreement rental) {
+        String template = templates.exitTextFor(rental);
+        return pdf.render(rental, issuers.forUnit(rental.getStorageUnit()), template, images::bytesOf);
+    }
+
+    private String exitFileNameOf(RentalAgreement rental) {
+        String unit = rental.getStorageUnit() == null ? "" : Pdfs.slug(rental.getStorageUnit().getName());
+        return "contrato-salida-" + slug(rental.getAgreementNumber())
+                + (unit.isEmpty() ? "" : "-" + unit) + "-" + LocalDate.now() + ".pdf";
+    }
+
+    // ------------------------------------------------------------------------
 
     /**
      * Compone el PDF: la plantilla que diga el contrato, la de su unidad, la del

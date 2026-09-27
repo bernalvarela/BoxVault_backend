@@ -1,0 +1,52 @@
+« Plantilla de ejemplo del contrato de salida (finiquito) de un trastero.
+«
+« Se compone al cerrar el alquiler, con lo que se decide en ese momento: el día
+« de salida y qué se hace con la fianza. Las reglas de marcado son las mismas
+« que las del contrato de entrada (ver "Contrato de trastero").
+«
+« Campos propios de la salida:
+«   fecha_salida, fecha_salida_larga      el día en que se cierra y se entrega;
+«   fianza                                la fianza que se entregó al entrar;
+«   fianza_devuelta, fianza_retenida      cuánto se devuelve y cuánto no;
+«   fianza_motivo                         por qué no se devuelve entera (vacío si
+«                                         no se dio motivo);
+«   fianza_devolucion_texto               la frase hecha: entera, en parte o nada.
+«
+« El párrafo del motivo va entre [[si:fianza_motivo]] y [[fin]]: sólo sale
+« cuando se retuvo algo y se explicó por qué.
+
+# CONTRATO DE SALIDA Y LIQUIDACIÓN DEL ARRENDAMIENTO
+
+En {{lugar}}, a {{fecha_salida_larga}}.
+
+## Reunidos
+
+De una parte, **{{arrendador_nombre}}**, con NIF {{arrendador_nif}} y domicilio en {{arrendador_direccion}}, {{arrendador_ciudad}}, en adelante EL ARRENDADOR.
+
+De otra parte, **{{arrendatarios}}**, con domicilio en {{arrendatario_direccion}}, en adelante EL ARRENDATARIO.
+
+Ambas partes se reconocen capacidad legal suficiente para otorgar el presente documento y, a tal efecto,
+
+## Exponen
+
+I. Que el {{fecha_inicio}} ambas partes suscribieron el contrato de arrendamiento número {{contrato_numero}} sobre el trastero número {{unidad_numero}} ({{unidad_nombre}}), de aproximadamente {{unidad_metros}} m², situado en {{unidad_direccion}}.
+
+II. Que es voluntad de ambas partes dar por terminado dicho contrato con fecha {{fecha_salida}}, y dejar constancia de la entrega del trastero y de la liquidación de la fianza.
+
+## Acuerdan
+
+**Primera. Terminación.** Las partes dan por resuelto de mutuo acuerdo el contrato de arrendamiento número {{contrato_numero}} con efectos del día {{fecha_salida}}, fecha a partir de la cual no se devengará renta alguna.
+
+**Segunda. Entrega del trastero.** EL ARRENDATARIO entrega en este acto a EL ARRENDADOR el trastero libre de enseres y las llaves y medios de acceso que recibió. EL ARRENDADOR ha revisado el trastero y deja constancia de su estado a los efectos de la cláusula siguiente.
+
+**Tercera. Fianza.** Al inicio del contrato EL ARRENDATARIO entregó {{fianza}} en concepto de fianza. {{fianza_devolucion_texto}}
+
+[[si:fianza_motivo]]La cantidad retenida, {{fianza_retenida}}, se aplica al siguiente concepto: *{{fianza_motivo}}*.[[fin]]
+
+**Cuarta. Liquidación.** Con lo anterior, ambas partes declaran liquidadas todas las obligaciones derivadas del contrato de arrendamiento y nada más tienen que reclamarse por razón de él, salvo lo que resulte de vicios ocultos o de daños no apreciables en la revisión.
+
+**Quinta. Protección de datos.** Los datos personales de EL ARRENDATARIO se conservarán bloqueados únicamente durante los plazos legales de prescripción y para el cumplimiento de las obligaciones fiscales de EL ARRENDADOR. Pueden ejercerse los derechos reconocidos por la normativa dirigiéndose a {{arrendador_email}}.
+
+Y en prueba de conformidad, ambas partes firman el presente documento por duplicado y a un solo efecto, en el lugar y fecha indicados en el encabezamiento.
+
+[[firmas]]

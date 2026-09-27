@@ -68,6 +68,13 @@ public class InvoicingProperties {
      */
     private String contractTemplate = "plantillas/contrato-alquiler.txt";
 
+    /**
+     * Plantilla del contrato de salida (finiquito), en el classpath: la que se
+     * usa cuando ninguna unidad del árbol tiene fijada otra, y la que siembra la
+     * plantilla de ejemplo.
+     */
+    private String exitContractTemplate = "plantillas/contrato-salida.txt";
+
     /** El valor, o el hueco visible cuando no está configurado. */
     public static String orMissing(String value) {
         return value == null || value.isBlank() ? MISSING : value.trim();

@@ -112,7 +112,20 @@ public final class ContractFields {
                     "IBI anual que asume el inquilino, si se pactó", "120,00 €"),
             new Field("fianza", "Dinero", "Importe de la fianza", "110,00 €"),
             new Field("fianza_texto", "Dinero", "Frase hecha con la fianza; dice que no hay si no la hay",
-                    "EL ARRENDATARIO entrega a EL ARRENDADOR la cantidad de 110,00 € en concepto de fianza.")
+                    "EL ARRENDATARIO entrega a EL ARRENDADOR la cantidad de 110,00 € en concepto de fianza."),
+
+            // Los del contrato de salida: se rellenan al cerrar el alquiler. En
+            // uno que sigue vivo salen como hueco a la vista.
+            new Field("fecha_salida", "Salida", "Día en que se cierra el contrato y se entrega la unidad", "31/08/2026"),
+            new Field("fecha_salida_larga", "Salida", "El mismo día, escrito", "31 de agosto de 2026"),
+            new Field("fianza_devuelta", "Salida", "Cuánto de la fianza se devuelve", "80,00 €"),
+            new Field("fianza_retenida", "Salida", "Cuánto de la fianza se queda el arrendador", "30,00 €"),
+            new Field("fianza_motivo", "Salida",
+                    "Por qué no se devuelve entera; vacío si no se dio motivo", "Limpieza del trastero y pintura de una pared"),
+            new Field("fianza_devolucion_texto", "Salida",
+                    "Frase hecha con lo que se hace con la fianza: entera, en parte o nada",
+                    "EL ARRENDADOR devuelve a EL ARRENDATARIO 80,00 € de los 110,00 € entregados en concepto "
+                    + "de fianza, y retiene 30,00 €.")
     );
 
     /** El ejemplo que el catálogo da para un campo; "" si no existe. */
@@ -216,7 +229,59 @@ public final class ContractFields {
                 ? "No se establece fianza."
                 : "EL ARRENDATARIO entrega a EL ARRENDADOR la cantidad de " + Pdfs.euros(deposit)
                   + " en concepto de fianza.");
+
+        exit(values, rental);
         return values;
+    }
+
+    /**
+     * Los campos del contrato de salida. Salen de lo que se decidió al cerrar:
+     * la fecha de fin y lo que se hizo con la fianza. Mientras no se haya
+     * decidido, la cantidad queda como hueco a la vista, igual que cualquier
+     * dato que falte.
+     */
+    private static void exit(Map<String, String> values, RentalAgreement rental) {
+        values.put("fecha_salida", rental.getEndDate() == null ? orMissing(null) : Pdfs.day(rental.getEndDate()));
+        values.put("fecha_salida_larga",
+                rental.getEndDate() == null ? orMissing(null) : Pdfs.longDay(rental.getEndDate()));
+        // El motivo es el de lo que se retiene: sin retención no hay motivo que
+        // imprimir, aunque se escribiera una nota.
+        values.put("fianza_motivo", orMissing(null));
+
+        BigDecimal deposit = rental.getSecurityDeposit();
+        if (deposit == null || deposit.signum() <= 0) {
+            values.put("fianza_devuelta", Pdfs.euros(BigDecimal.ZERO));
+            values.put("fianza_retenida", Pdfs.euros(BigDecimal.ZERO));
+            values.put("fianza_devolucion_texto", "No se estableció fianza, por lo que no hay nada que devolver.");
+            return;
+        }
+        if (rental.getDepositReturned() == null) {
+            values.put("fianza_devuelta", orMissing(null));
+            values.put("fianza_retenida", orMissing(null));
+            values.put("fianza_devolucion_texto", "EL ARRENDADOR devuelve a EL ARRENDATARIO " + orMissing(null)
+                    + " de los " + Pdfs.euros(deposit) + " entregados en concepto de fianza.");
+            return;
+        }
+
+        BigDecimal returned = rental.getDepositReturnedAmount() == null
+                ? (rental.getDepositReturned() ? deposit : BigDecimal.ZERO)
+                : rental.getDepositReturnedAmount();
+        BigDecimal kept = deposit.subtract(returned).max(BigDecimal.ZERO);
+        values.put("fianza_devuelta", Pdfs.euros(returned));
+        values.put("fianza_retenida", Pdfs.euros(kept));
+        if (kept.signum() > 0) values.put("fianza_motivo", orMissing(rental.getDepositReturnNotes()));
+
+        String text;
+        if (kept.signum() == 0) {
+            text = "EL ARRENDADOR devuelve a EL ARRENDATARIO la totalidad de la fianza, " + Pdfs.euros(deposit)
+                    + ", que éste recibe a su entera satisfacción.";
+        } else if (returned.signum() == 0) {
+            text = "EL ARRENDADOR retiene la totalidad de la fianza, " + Pdfs.euros(deposit) + ".";
+        } else {
+            text = "EL ARRENDADOR devuelve a EL ARRENDATARIO " + Pdfs.euros(returned) + " de los "
+                    + Pdfs.euros(deposit) + " entregados en concepto de fianza, y retiene " + Pdfs.euros(kept) + ".";
+        }
+        values.put("fianza_devolucion_texto", text);
     }
 
     /**
@@ -264,6 +329,11 @@ public final class ContractFields {
                 .startDate(start).endDate(start.plusYears(1)).billingDayOfMonth(1)
                 .monthlyRent(new BigDecimal("55.00")).securityDeposit(new BigDecimal("110.00"))
                 .communityFee(new BigDecimal("20.00")).propertyTax(new BigDecimal("120.00"))
+                // El cierre, para que una plantilla de salida también se pueda
+                // revisar: devolución parcial, que es la que enseña todos los
+                // campos (lo devuelto, lo retenido y el motivo).
+                .depositReturned(true).depositReturnedAmount(new BigDecimal("80.00"))
+                .depositReturnNotes(example("fianza_motivo"))
                 .build();
         sample.setParties(new java.util.ArrayList<>(List.of(
                 RentalParty.builder().rentalAgreement(sample).client(tenant)

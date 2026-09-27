@@ -142,6 +142,9 @@ public class DataSeeder implements CommandLineRunner {
         // todavía la suya. Va aparte del resto del sembrado porque no depende de
         // seed-data.json ni de que haya unidades.
         contractTemplates.seedIfEmpty();
+        // La plantilla de salida de ejemplo que creó la migración V12 nace sin
+        // texto (desde SQL no se llega al almacén): se lo pone aquí, una vez.
+        contractTemplates.storeBundledExitTemplate();
 
         if (storageUnitRepository.count() > 0) {
             boolean legacyDemoData = storageUnitRepository.findAll().stream()
@@ -195,6 +198,9 @@ public class DataSeeder implements CommandLineRunner {
         Map<String, StorageUnit> unitsByNumber = new HashMap<>();
         List<StorageUnit> units = seedUnits(root, unitsByNumber);
         seedBuilding(units);
+        // El finiquito de los trasteros: la plantilla de salida de ejemplo, en el
+        // local que los contiene. En el servidor lo hace la migración V12.
+        contractTemplates.seedExitExample(unitsByNumber.get(STORAGE_PREMISES_NUMBER));
 
         // 3. Rental agreements
         Map<Integer, RentalAgreement> rentalsByRef = seedRentals(root, unitsByNumber, clientsByName);

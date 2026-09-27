@@ -1,6 +1,7 @@
 package com.storagemanager.storage_management.controller;
 
 import com.storagemanager.storage_management.dto.RentalAgreementRequest;
+import com.storagemanager.storage_management.dto.TerminationRequest;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.enums.RentalStatus;
 import com.storagemanager.storage_management.service.ContractService;
@@ -81,12 +82,31 @@ public class RentalAgreementController {
         return ResponseEntity.ok(rentalAgreementService.absorb(id, sourceId));
     }
 
+    /**
+     * Cierra el contrato. El cuerpo, opcional, dice qué pasa con la fianza y si
+     * se archiva el contrato de salida; sin cuerpo vale la fecha de la URL, como
+     * antes.
+     */
     @PreAuthorize("@access.can('ALQUILERES','ESCRIBIR')")
     @PostMapping("/{id}/terminate")
     public ResponseEntity<RentalAgreement> terminateRental(
             @PathVariable Long id,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate terminationDate) {
-        return ResponseEntity.ok(rentalAgreementService.terminateAgreement(id, terminationDate));
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate terminationDate,
+            @RequestBody(required = false) TerminationRequest request) {
+        TerminationRequest termination = request != null ? request : new TerminationRequest();
+        if (termination.getTerminationDate() == null) termination.setTerminationDate(terminationDate);
+        return ResponseEntity.ok(contractService.terminate(id, termination));
+    }
+
+    /**
+     * El contrato de salida tal como quedaría con lo que se va a decidir al
+     * cerrar, para leerlo ANTES de confirmar. No cierra ni archiva nada.
+     */
+    @PreAuthorize("@access.can('ALQUILERES','ESCRIBIR')")
+    @PostMapping("/{id}/exit-contract/preview")
+    public ResponseEntity<Resource> previewExitContract(@PathVariable Long id,
+                                                        @RequestBody(required = false) TerminationRequest request) {
+        return pdfInline(contractService.previewExit(id, request != null ? request : new TerminationRequest()));
     }
 
     /**
@@ -97,7 +117,10 @@ public class RentalAgreementController {
     @PreAuthorize("@access.can('ALQUILERES','ESCRIBIR')")
     @PostMapping("/{id}/contract/preview")
     public ResponseEntity<Resource> previewContract(@PathVariable Long id) {
-        ContractService.Draft draft = contractService.preview(id);
+        return pdfInline(contractService.preview(id));
+    }
+
+    private static ResponseEntity<Resource> pdfInline(ContractService.Draft draft) {
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline()
                         .filename(draft.fileName(), StandardCharsets.UTF_8).build().toString())
