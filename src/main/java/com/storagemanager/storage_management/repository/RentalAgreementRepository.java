@@ -22,6 +22,10 @@ public interface RentalAgreementRepository extends JpaRepository<RentalAgreement
     Optional<RentalAgreement> findByStorageUnitIdAndStatus(Long storageUnitId, RentalStatus status);
     long countByStatus(RentalStatus status);
 
+    /** Los que tienen la baja dada y su fecha de fin ya pasó: toca cerrarlos. */
+    List<RentalAgreement> findByStatusAndTerminationNoticeDateIsNotNullAndEndDateBefore(
+            RentalStatus status, java.time.LocalDate day);
+
     @Query("SELECT r FROM RentalAgreement r WHERE r.status = 'ACTIVE'")
     List<RentalAgreement> findAllActiveRentals();
 

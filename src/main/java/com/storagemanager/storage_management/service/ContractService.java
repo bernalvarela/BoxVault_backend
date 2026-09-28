@@ -131,9 +131,9 @@ public class ContractService {
     @Transactional
     public RentalAgreement generateExitAfterwards(Long rentalId, TerminationRequest request) {
         RentalAgreement rental = rentals.getAgreementById(rentalId);
-        if (rental.getStatus() == RentalStatus.ACTIVE) {
+        if (rental.getStatus() == RentalStatus.ACTIVE && !rental.isTerminationScheduled()) {
             throw new BadRequestException("El contrato " + rental.getAgreementNumber()
-                    + " sigue en vigor: el contrato de salida se genera al finalizarlo");
+                    + " sigue en vigor sin baja: el contrato de salida se genera al finalizarlo");
         }
         request.setTerminationDate(rental.getEndDate());
         rentals.applyTermination(rental, request);

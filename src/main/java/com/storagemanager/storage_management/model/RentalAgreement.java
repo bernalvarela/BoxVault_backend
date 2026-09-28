@@ -162,6 +162,22 @@ public class RentalAgreement {
     private Document contractDocument;
 
     /**
+     * Cuándo se dio la baja de un contrato que termina más adelante: el
+     * inquilino avisa hoy de que se va en dos meses.
+     * <p>
+     * Hasta su fecha de fin el contrato sigue ACTIVE -se le cobra, la unidad
+     * sigue ocupada- y esto es sólo la marca de que ya tiene la baja dada.
+     * Cuando la fecha pasa, RentalClosingService lo pasa a TERMINATED y libera
+     * la unidad. Nulo = nadie ha dado la baja.
+     */
+    private LocalDate terminationNoticeDate;
+
+    /** En vigor, pero con la baja ya dada para su fecha de fin. */
+    public boolean isTerminationScheduled() {
+        return status == RentalStatus.ACTIVE && terminationNoticeDate != null && endDate != null;
+    }
+
+    /**
      * Qué se hizo con la fianza al cerrar el contrato. Nulo = todavía no se ha
      * decidido: el contrato sigue vivo, o se cerró antes de que esto existiera.
      * FALSE = se retiene entera; TRUE = se devuelve, toda o parte, y cuánto lo

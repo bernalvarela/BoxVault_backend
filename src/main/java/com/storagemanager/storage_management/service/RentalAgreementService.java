@@ -164,6 +164,8 @@ public class RentalAgreementService {
         requireNoOverlap(agreement.getStorageUnit(), agreement.getId(), request.getStartDate(), request.getEndDate());
         agreement.setStartDate(request.getStartDate());
         agreement.setEndDate(request.getEndDate());
+        // Sin fecha de fin no hay baja que esperar.
+        if (request.getEndDate() == null) agreement.setTerminationNoticeDate(null);
         agreement.setBillingDayOfMonth(request.getBillingDayOfMonth() != null ? request.getBillingDayOfMonth() : 1);
         agreement.setMonthlyRent(request.getMonthlyRent());
         agreement.setSecurityDeposit(request.getSecurityDeposit());
@@ -196,12 +198,16 @@ public class RentalAgreementService {
     @Transactional
     public RentalAgreement reactivate(Long id) {
         RentalAgreement agreement = getAgreementById(id);
-        if (agreement.getStatus() == RentalStatus.ACTIVE) {
+        // Uno en vigor con la baja dada sí se puede "reactivar": es anular la
+        // baja, porque el inquilino al final se queda.
+        boolean cancellingNotice = agreement.isTerminationScheduled();
+        if (agreement.getStatus() == RentalStatus.ACTIVE && !cancellingNotice) {
             throw new BadRequestException("El contrato " + agreement.getAgreementNumber() + " ya está en vigor");
         }
 
         StorageUnit unit = agreement.getStorageUnit();
         rentalAgreementRepository.findByStorageUnitIdAndStatus(unit.getId(), RentalStatus.ACTIVE)
+                .filter(other -> !other.getId().equals(agreement.getId()))
                 .ifPresent(other -> {
                     throw new BadRequestException("La unidad " + unit.getUnitNumber() + " ya tiene el contrato "
                             + other.getAgreementNumber() + " en vigor (" + other.getClient().getFullName()
@@ -216,6 +222,7 @@ public class RentalAgreementService {
         // Un contrato en vigor no tiene fecha de fin: si se dejara, BillingService
         // dejaría de generarle mensualidades a partir de ella.
         agreement.setEndDate(null);
+        agreement.setTerminationNoticeDate(null);
         // Si se cerró por error, la fianza no se llegó a devolver. El contrato de
         // salida que se hubiera generado se queda entre sus documentos: si se
         // vuelve a cerrar, el nuevo lo sustituye.
@@ -225,7 +232,8 @@ public class RentalAgreementService {
         unit.setStatus(UnitStatus.OCCUPIED);
         storageUnitRepository.save(unit);
 
-        log.info("Contrato {} reactivado; unidad {} vuelve a ocupada",
+        log.info(cancellingNotice ? "Anulada la baja del contrato {}; unidad {} sigue ocupada"
+                        : "Contrato {} reactivado; unidad {} vuelve a ocupada",
                 agreement.getAgreementNumber(), unit.getUnitNumber());
         return rentalAgreementRepository.save(agreement);
     }
@@ -465,14 +473,34 @@ public class RentalAgreementService {
     public RentalAgreement terminateAgreement(Long id, TerminationRequest request) {
         RentalAgreement agreement = getAgreementById(id);
         applyTermination(agreement, request);
-        agreement.setStatus(RentalStatus.TERMINATED);
 
-        // Free up the storage unit if no other active agreement exists
+        // Baja dada con antelación: hasta su fecha de fin sigue en vigor -se le
+        // cobra y la unidad sigue ocupada-, sólo queda marcado. Lo cierra
+        // RentalClosingService cuando la fecha pasa.
+        if (agreement.getEndDate().isAfter(LocalDate.now())) {
+            if (agreement.getStatus() != RentalStatus.ACTIVE) {
+                throw new BadRequestException("El contrato " + agreement.getAgreementNumber()
+                        + " ya está finalizado: para darle una baja futura, reactívalo primero");
+            }
+            // Si ya tenía la baja dada y sólo se cambia la fecha, el aviso es el de entonces.
+            if (agreement.getTerminationNoticeDate() == null) {
+                agreement.setTerminationNoticeDate(LocalDate.now());
+            }
+            log.info("Baja programada del contrato {} para el {}",
+                    agreement.getAgreementNumber(), agreement.getEndDate());
+            return rentalAgreementRepository.save(agreement);
+        }
+
+        close(agreement);
+        return rentalAgreementRepository.save(agreement);
+    }
+
+    /** Lo pasa a terminado y deja libre su unidad. No guarda el contrato. */
+    public void close(RentalAgreement agreement) {
+        agreement.setStatus(RentalStatus.TERMINATED);
         StorageUnit unit = agreement.getStorageUnit();
         unit.setStatus(UnitStatus.AVAILABLE);
         storageUnitRepository.save(unit);
-
-        return rentalAgreementRepository.save(agreement);
     }
 
     /**
