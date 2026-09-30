@@ -9,15 +9,18 @@ import java.util.List;
  * (procedimiento VI436A), sacados del alquiler para copiarlos en la sede de la
  * Xunta sin ir a buscarlos a tres pantallas.
  *
- * @param landlord         quien deposita: el emisor de la unidad (la comunidad
- *                         de bienes en los trasteros, el propietario en un piso)
+ * Solo existe para los pisos: las fianzas de los trasteros y locales no se
+ * depositan en el IGVS.
+ *
+ * @param landlord         quien deposita: el propietario principal del piso
  * @param owners           todos los propietarios que arriendan, con su NIF
- * @param use              "Vivienda" o "Uso distinto de vivienda"; de ello
- *                         depende cuántas mensualidades son de fianza
- * @param monthlyRentBase  la renta sin IVA: la fianza de uso distinto son dos
- *                         mensualidades SIN IVA
- * @param expectedDeposit  lo que debería ser la fianza según la ley (una o dos
- *                         mensualidades), para ver si la del contrato cuadra
+ * @param use              el uso que se declara ("Vivienda")
+ * @param monthlyRentBase  la renta sin IVA (en vivienda coincide con la renta)
+ * @param deposit          todo lo que entregó el inquilino al firmar
+ * @param lodgeAmount      lo que se deposita en el IGVS: la fianza legal, una
+ *                         mensualidad (o lo entregado, si fue menos)
+ * @param guaranteeAmount  el resto: depósito de garantía adicional, que no se
+ *                         deposita y lo guardan los propietarios
  * @param deadline         hasta cuándo hay para depositarla: un mes desde el
  *                         inicio del contrato
  */
@@ -35,8 +38,8 @@ public record DepositFormDTO(
         BigDecimal monthlyRent,
         BigDecimal monthlyRentBase,
         BigDecimal deposit,
-        int expectedMonths,
-        BigDecimal expectedDeposit,
+        BigDecimal lodgeAmount,
+        BigDecimal guaranteeAmount,
         LocalDate deadline) {
 
     /** Una persona o entidad con lo que el formulario pide de ella. */

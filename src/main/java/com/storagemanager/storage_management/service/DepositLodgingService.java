@@ -25,9 +25,9 @@ import java.util.List;
  * La fianza depositada en el IGVS: apuntar el depósito y su devolución, y
  * preparar los datos que pide el formulario de la Xunta.
  * <p>
- * En Galicia la fianza en metálico se deposita en el Instituto Galego da
- * Vivenda e Solo en el plazo de un mes desde la firma, en vivienda y en uso
- * distinto de vivienda. No depositarla se sanciona con una multa no inferior al
+ * En Galicia la fianza en metálico de los pisos se deposita en el Instituto
+ * Galego da Vivenda e Solo en el plazo de un mes desde la firma; la de los
+ * trasteros y locales no. No depositarla se sanciona con una multa no inferior al
  * doble del depósito; regularizarla antes de que lo requieran evita la sanción.
  * El trámite es manual y no tiene API, así que la aplicación no lo hace: lo
  * apunta, y con eso la bandeja de avisos sabe qué falta.
@@ -51,6 +51,10 @@ public class DepositLodgingService {
         RentalAgreement rental = rentals.getAgreementById(rentalId);
         LocalDate today = LocalDate.now();
 
+        // Borrar un apunte siempre se puede: es como se arregla uno hecho en la
+        // unidad que no era. Apuntar, solo en los pisos.
+        if (request.getLodgedOn() != null) requireDwelling(rental);
+
         if (request.getLodgedOn() == null) {
             clear(rental);
             log.info("Borrado el depósito en el IGVS de la fianza del contrato {}", rental.getAgreementNumber());
@@ -61,9 +65,16 @@ public class DepositLodgingService {
         if (lodgedOn.isAfter(today)) {
             throw new BadRequestException("La fecha del depósito no puede ser posterior a hoy");
         }
-        BigDecimal amount = request.getLodgedAmount() != null ? request.getLodgedAmount() : rental.getSecurityDeposit();
+        // Sin importe, lo normal: la fianza legal, una mensualidad. El resto de lo
+        // entregado es garantía adicional y no se deposita.
+        BigDecimal amount = request.getLodgedAmount() != null ? request.getLodgedAmount() : lodgeAmount(rental);
         if (amount == null || amount.signum() <= 0) {
             throw new BadRequestException("Indica cuánto se depositó en el IGVS");
+        }
+        BigDecimal deposit = rental.getSecurityDeposit();
+        if (deposit != null && amount.compareTo(deposit) > 0) {
+            throw new BadRequestException("No se pueden haber depositado " + amount + " €: el inquilino entregó "
+                    + deposit + " € entre fianza y garantía");
         }
 
         LocalDate requested = request.getRefundRequestedOn();
@@ -103,14 +114,13 @@ public class DepositLodgingService {
     /** Lo que pide el formulario VI436A, sacado del alquiler. */
     public DepositFormDTO form(Long rentalId) {
         RentalAgreement rental = rentals.getAgreementById(rentalId);
+        requireDwelling(rental);
         StorageUnit unit = rental.getStorageUnit();
         InvoiceIssuer.Issuer issuer = issuers.forUnit(unit);
 
-        boolean vatApplicable = unit != null && unit.isVatApplicable();
-        VatUtils.Breakdown rent = VatUtils.breakdown(rental.getMonthlyRent(), vatApplicable);
-        boolean dwelling = unit != null && unit.getKind() == UnitKind.APARTMENT;
-        // Vivienda: una mensualidad. Uso distinto: dos, sin IVA (art. 36 LAU).
-        int months = dwelling ? 1 : 2;
+        VatUtils.Breakdown rent = VatUtils.breakdown(rental.getMonthlyRent(), unit.isVatApplicable());
+        BigDecimal deposit = rental.getSecurityDeposit() == null ? BigDecimal.ZERO : rental.getSecurityDeposit();
+        BigDecimal lodge = lodgeAmount(rental);
 
         List<DepositFormDTO.Person> owners = issuer.owners().stream()
                 .map(DepositLodgingService::person)
@@ -123,19 +133,41 @@ public class DepositLodgingService {
                 new DepositFormDTO.Person(issuer.name(), issuer.taxId(), joinAddress(issuer.address(), issuer.city())),
                 owners,
                 tenants,
-                unit == null ? null : unit.getName(),
-                unit == null ? null : unit.getLocation(),
-                unit == null ? null : unit.getCadastralReference(),
-                dwelling ? "Vivienda" : "Uso distinto de vivienda",
+                unit.getName(),
+                unit.getLocation(),
+                unit.getCadastralReference(),
+                "Vivienda",
                 rental.getAgreementNumber(),
                 rental.getStartDate(),
                 rental.getEndDate(),
                 rent.total(),
                 rent.base(),
-                rental.getSecurityDeposit(),
-                months,
-                rent.base().multiply(BigDecimal.valueOf(months)).setScale(2, RoundingMode.HALF_UP),
+                deposit,
+                lodge,
+                deposit.subtract(lodge).max(BigDecimal.ZERO),
                 rental.getStartDate() == null ? null : rental.getStartDate().plusMonths(1));
+    }
+
+    /**
+     * Lo que se deposita en el IGVS: la fianza legal de una vivienda, una
+     * mensualidad (art. 36 LAU). Lo que el inquilino entregue por encima es
+     * depósito de garantía adicional, que se queda en manos de los propietarios.
+     * Si entregó menos de una mensualidad, se deposita lo entregado.
+     */
+    private static BigDecimal lodgeAmount(RentalAgreement rental) {
+        BigDecimal rent = rental.getMonthlyRent() == null ? BigDecimal.ZERO : rental.getMonthlyRent();
+        BigDecimal deposit = rental.getSecurityDeposit();
+        BigDecimal lodge = deposit == null ? rent : rent.min(deposit);
+        return lodge.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /** Solo las fianzas de los pisos se depositan en el IGVS; las de los trasteros y locales, no. */
+    private static void requireDwelling(RentalAgreement rental) {
+        StorageUnit unit = rental.getStorageUnit();
+        if (unit == null || unit.getKind() != UnitKind.APARTMENT) {
+            throw new BadRequestException("La fianza de " + (unit == null ? "esta unidad" : unit.getName())
+                    + " no se deposita en el IGVS: solo se depositan las de los pisos");
+        }
     }
 
     private static void clear(RentalAgreement rental) {

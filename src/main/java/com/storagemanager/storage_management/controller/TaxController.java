@@ -7,6 +7,8 @@ import com.storagemanager.storage_management.dto.Modelo303PresentationRequest;
 import com.storagemanager.storage_management.dto.TaxFilingDTO;
 import com.storagemanager.storage_management.dto.TaxFilingRequest;
 import com.storagemanager.storage_management.model.enums.TaxModel;
+import com.storagemanager.storage_management.dto.FilingDriftDTO;
+import com.storagemanager.storage_management.service.FilingDriftService;
 import com.storagemanager.storage_management.service.Modelo303FileService;
 import com.storagemanager.storage_management.service.Modelo303PresentationService;
 import com.storagemanager.storage_management.service.TaxFilingService;
@@ -40,6 +42,7 @@ public class TaxController {
     private final TaxFilingService taxFilingService;
     private final Modelo303FileService modelo303FileService;
     private final Modelo303PresentationService modelo303PresentationService;
+    private final FilingDriftService filingDriftService;
 
     private static int yearOrCurrent(Integer year) {
         return year != null ? year : Year.now().getValue();
@@ -119,6 +122,16 @@ public class TaxController {
             @RequestParam(required = false) TaxModel model,
             @RequestParam(required = false) Integer year) {
         return ResponseEntity.ok(taxFilingService.getFilings(model, year));
+    }
+
+    /**
+     * Las declaraciones presentadas cuyas cifras ya no coinciden con lo que se
+     * calcula hoy: alguien tocó un cobro o un gasto de un periodo ya declarado.
+     */
+    @PreAuthorize("@access.can('IMPUESTOS','LEER')")
+    @GetMapping("/filings/drift")
+    public ResponseEntity<List<FilingDriftDTO>> getFilingDrifts() {
+        return ResponseEntity.ok(filingDriftService.drifts());
     }
 
     @PreAuthorize("@access.can('IMPUESTOS','LEER')")

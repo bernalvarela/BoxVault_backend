@@ -16,8 +16,9 @@ import org.springframework.aot.hint.RuntimeHintsRegistrar;
  *   <li>{@code seed-data.json}, read through {@code ClassPathResource} by the
  *       {@link DataSeeder}, must be bundled as a resource;</li>
  *   <li>the tax report DTOs are serialised to JSON by the seeder (snapshots of the
- *       filed returns) outside any controller, so their reflection metadata is
- *       registered explicitly (the registrar walks nested types and generics).</li>
+ *       filed returns), and read back from those snapshots by FilingDriftService,
+ *       outside any controller, so their reflection metadata is registered
+ *       explicitly (the registrar walks nested types and generics).</li>
  * </ul>
  * Registered from {@code StorageManagementApplication} via {@code @ImportRuntimeHints}.
  */
