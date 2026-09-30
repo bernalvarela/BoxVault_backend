@@ -169,7 +169,9 @@ class ContractMarkupTest {
         assertTrue(text.contains("Ana Gómez Pérez"), "el inquilino: " + text);
         assertTrue(text.contains("660,00 €"), "la renta anual, calculada: " + text);
         assertTrue(text.contains("20,00 €"), "la comunidad, del contrato: " + text);
-        assertTrue(text.contains("120,00 €"), "el IBI, del contrato: " + text);
+        // Los gastos van al mes y se suman a la renta: 55 + 20 + 10.
+        assertTrue(text.contains("10,00 € mensuales"), "el IBI, del contrato y al mes: " + text);
+        assertTrue(text.contains("85,00 €"), "lo que se paga cada mes, renta más gastos: " + text);
         assertTrue(text.contains("lavabo con espejo"), "el inventario, de la ficha del piso: " + text);
         assertTrue(text.contains("LOS ARRENDADORES"), "el pie de firmas a medida: " + text);
         // "LA PARTE ARRENDATARIA" y no "LA ARRENDATARIA": la misma plantilla sirve
