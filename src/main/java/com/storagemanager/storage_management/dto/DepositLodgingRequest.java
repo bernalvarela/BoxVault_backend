@@ -6,16 +6,26 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
- * Lo que se apunta del depósito de la fianza en el IGVS. Se manda entero cada
- * vez: un campo nulo se borra. Sin fecha de depósito no queda nada de lo demás.
+ * Todo lo de la fianza de un contrato, tal como se guarda desde su pestaña:
+ * cuánto se entregó y cuánto de eso es garantía, si está cobrada, y su depósito
+ * en el IGVS (solo pisos). Se manda entero cada vez: un campo nulo se borra.
  */
 @Data
 public class DepositLodgingRequest {
 
-    /** Cuándo se depositó; nulo = no consta depositada. */
+    /** Total entregado (fianza más garantía); nulo = no se cambia. */
+    private BigDecimal securityDeposit;
+
+    /** Parte del total que es depósito de garantía; nulo = no se ha separado. */
+    private BigDecimal guaranteeDeposit;
+
+    /** Si el inquilino la ha pagado; nulo = no se cambia. */
+    private Boolean depositPaid;
+
+    /** Cuándo se depositó en el IGVS; nulo = no consta depositada. */
     private LocalDate lodgedOn;
 
-    /** Cuánto se depositó; nulo con fecha = la fianza del contrato. */
+    /** Cuánto se depositó; nulo con fecha = la fianza legal. */
     private BigDecimal lodgedAmount;
 
     /** Número de expediente o de justificante del IGVS. */

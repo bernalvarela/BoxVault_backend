@@ -145,9 +145,11 @@ public class BillingService {
     }
 
     private static MonthlyChargeDTO charge(RentalAgreement rental, YearMonth ym, Payment payment, YearMonth currentMonth) {
+        // Sin cobro registrado, la mensualidad es la renta más los gastos que paga
+        // el inquilino (comunidad e IBI), no solo la renta.
         BigDecimal due = payment != null && payment.getAmountDue() != null
                 ? payment.getAmountDue()
-                : rental.getMonthlyRent();
+                : rental.getMonthlyCharge();
         if (due == null) due = BigDecimal.ZERO;
         BigDecimal paid = payment != null && payment.getAmountPaid() != null ? payment.getAmountPaid() : BigDecimal.ZERO;
 
@@ -163,8 +165,16 @@ public class BillingService {
                         ? COLLECTED
                         : ym.isBefore(currentMonth) ? OVERDUE : PENDING;
 
+        // El desglose solo si el contrato cobra gastos y el importe del mes sigue
+        // siendo su suma: un mes corregido a mano ya no se sabe cómo se reparte.
+        boolean hasFees = rental.getCommunityFee() != null || rental.getPropertyTax() != null;
+        boolean splittable = hasFees && !waived && due.compareTo(rental.getMonthlyCharge()) == 0;
+
         return MonthlyChargeDTO.builder()
                 .id(key(rental.getId(), ym.getYear(), ym.getMonthValue()))
+                .rentPart(splittable ? rental.getMonthlyRent() : null)
+                .communityFeePart(splittable ? rental.getCommunityFee() : null)
+                .propertyTaxPart(splittable ? rental.getPropertyTax() : null)
                 .rentalAgreementId(rental.getId())
                 .agreementNumber(rental.getAgreementNumber())
                 .storageUnit(payment != null && payment.getStorageUnit() != null

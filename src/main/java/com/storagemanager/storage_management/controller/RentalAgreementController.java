@@ -103,19 +103,21 @@ public class RentalAgreementController {
     }
 
     /**
-     * Apunta el depósito de la fianza en el IGVS y su devolución. El trámite se
-     * hace en la sede de la Xunta; aquí sólo queda constancia.
+     * Guarda la fianza del contrato desde su pestaña: el total entregado, la
+     * parte de garantía, si está cobrada y su depósito en el IGVS con la
+     * devolución. El trámite del IGVS se hace en la sede de la Xunta; aquí solo
+     * queda constancia.
      */
     @PreAuthorize("@access.can('ALQUILERES','ESCRIBIR')")
-    @PutMapping("/{id}/deposit-lodging")
-    public ResponseEntity<RentalAgreement> updateDepositLodging(@PathVariable Long id,
-                                                                @RequestBody DepositLodgingRequest request) {
+    @PutMapping("/{id}/deposit")
+    public ResponseEntity<RentalAgreement> updateDeposit(@PathVariable Long id,
+                                                         @RequestBody DepositLodgingRequest request) {
         return ResponseEntity.ok(depositLodging.update(id, request));
     }
 
     /** Los datos del alquiler que pide el formulario VI436A del IGVS. */
     @PreAuthorize("@access.can('ALQUILERES','LEER')")
-    @GetMapping("/{id}/deposit-lodging/form")
+    @GetMapping("/{id}/deposit/igvs-form")
     public ResponseEntity<DepositFormDTO> depositLodgingForm(@PathVariable Long id) {
         return ResponseEntity.ok(depositLodging.form(id));
     }

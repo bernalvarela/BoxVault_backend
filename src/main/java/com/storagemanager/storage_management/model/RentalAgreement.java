@@ -96,17 +96,42 @@ public class RentalAgreement {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal monthlyRent;
 
+    /**
+     * Todo lo que entregó el inquilino al firmar como garantía: la fianza y, en
+     * su caso, el depósito de garantía adicional. Es lo que se le devuelve al
+     * terminar.
+     */
     @Column(precision = 10, scale = 2)
     private BigDecimal securityDeposit;
 
     /**
-     * Gastos que este inquilino asume aparte de la renta: la cuota de comunidad
-     * (al mes) y el IBI (al año).
+     * La parte de {@link #securityDeposit} que es depósito de garantía
+     * adicional: la guardan los propietarios y no se deposita en el IGVS. Nulo
+     * = no se ha separado, y todo cuenta como fianza.
+     */
+    @Column(precision = 10, scale = 2)
+    private BigDecimal guaranteeDeposit;
+
+    /** La fianza legal: lo entregado menos el depósito de garantía. Nunca negativa. */
+    public BigDecimal getLegalDeposit() {
+        if (securityDeposit == null) return null;
+        if (guaranteeDeposit == null) return securityDeposit;
+        return securityDeposit.subtract(guaranteeDeposit).max(BigDecimal.ZERO);
+    }
+
+    /**
+     * Gastos que este inquilino paga aparte de la renta, los dos AL MES: la cuota
+     * de comunidad y el IBI. Se cobran con cada mensualidad, sumados a la renta
+     * ({@link #getMonthlyCharge()}).
      * <p>
      * Van en el contrato y no en la unidad porque son una cláusula, no un hecho
      * del piso: el mismo piso puede alquilarse con los gastos incluidos o con
-     * ellos aparte, y eso se pacta con cada inquilino. Nulo = no se pactó nada y
-     * el contrato no dice nada de ellos.
+     * ellos aparte, y eso se pacta con cada inquilino. Cualquiera de los dos, o
+     * ninguno. Nulo = no se pactó y el contrato no dice nada de él.
+     * <p>
+     * La renta ({@link #monthlyRent}) es solo la renta: 560 € y no 590 €. Si se
+     * metieran los gastos dentro, el contrato generado diría una renta que no se
+     * pactó y la fianza del IGVS se calcularía sobre ella.
      */
     @Column(precision = 10, scale = 2)
     private BigDecimal communityFee;
@@ -230,6 +255,17 @@ public class RentalAgreement {
     /** Nunca null: un contrato sin marcar no factura. */
     public boolean invoices() {
         return Boolean.TRUE.equals(generatesInvoices);
+    }
+
+    /**
+     * Lo que se cobra cada mes: la renta más los gastos que paga el inquilino
+     * (comunidad e IBI, si se pactaron). Es el importe de cada mensualidad.
+     */
+    public BigDecimal getMonthlyCharge() {
+        BigDecimal total = monthlyRent == null ? BigDecimal.ZERO : monthlyRent;
+        if (communityFee != null) total = total.add(communityFee);
+        if (propertyTax != null) total = total.add(propertyTax);
+        return total;
     }
 
     /** Los arrendatarios, en orden; el primero es el titular. */

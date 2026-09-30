@@ -44,8 +44,21 @@ public class MonthlyChargeDTO {
     /** Día de cobro pactado en el contrato, dentro de ese mes. */
     private LocalDate dueDate;
 
-    /** Renta del periodo: la del cobro si existe, si no la del contrato. */
+    /**
+     * Lo que se debe del periodo: lo del cobro si existe; si no, lo del contrato
+     * (la renta más los gastos que paga el inquilino).
+     */
     private BigDecimal amountDue;
+
+    /**
+     * El desglose de {@code amountDue} cuando el contrato cobra gastos aparte:
+     * renta, comunidad e IBI del mes. Nulos si no hay gastos, o si el importe del
+     * mes se corrigió a mano y ya no es la suma del contrato (no se inventa un
+     * reparto que nadie hizo).
+     */
+    private BigDecimal rentPart;
+    private BigDecimal communityFeePart;
+    private BigDecimal propertyTaxPart;
     private BigDecimal amountPaid;
     /** Lo que falta por cobrar del periodo (nunca negativo). */
     private BigDecimal outstanding;

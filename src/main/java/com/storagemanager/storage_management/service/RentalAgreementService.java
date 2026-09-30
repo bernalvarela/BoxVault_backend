@@ -169,6 +169,13 @@ public class RentalAgreementService {
         agreement.setBillingDayOfMonth(request.getBillingDayOfMonth() != null ? request.getBillingDayOfMonth() : 1);
         agreement.setMonthlyRent(request.getMonthlyRent());
         agreement.setSecurityDeposit(request.getSecurityDeposit());
+        // La garantía es una parte del total: si el total baja por debajo de
+        // ella, se para aquí en vez de dejar una fianza legal negativa.
+        if (agreement.getGuaranteeDeposit() != null && (request.getSecurityDeposit() == null
+                || agreement.getGuaranteeDeposit().compareTo(request.getSecurityDeposit()) > 0)) {
+            throw new BadRequestException("Lo entregado no puede ser menos que el depósito de garantía ("
+                    + agreement.getGuaranteeDeposit() + " €). Cámbialo antes en la pestaña de la fianza.");
+        }
         if (request.getDepositPaid() != null) {
             agreement.setDepositPaid(request.getDepositPaid());
         }

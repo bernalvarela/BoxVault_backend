@@ -109,8 +109,14 @@ public final class ContractFields {
             new Field("gastos_comunidad", "Dinero",
                     "Cuota de comunidad mensual que asume el inquilino, si se pactó", "20,00 €"),
             new Field("gastos_ibi", "Dinero",
-                    "IBI anual que asume el inquilino, si se pactó", "120,00 €"),
-            new Field("fianza", "Dinero", "Importe de la fianza", "110,00 €"),
+                    "IBI mensual que asume el inquilino, si se pactó", "10,00 €"),
+            new Field("gastos_total", "Dinero",
+                    "Comunidad más IBI al mes; vacío si no se pactó ninguno (sirve para [[si:gastos_total]])", "30,00 €"),
+            new Field("total_mensual", "Dinero",
+                    "Lo que se paga cada mes: la renta más la comunidad y el IBI, si se pactaron", "85,00 €"),
+            new Field("fianza", "Dinero", "Todo lo entregado al firmar: fianza y, en su caso, depósito de garantía", "110,00 €"),
+            new Field("fianza_legal", "Dinero", "La fianza sin el depósito de garantía (en un piso, la que se deposita en el IGVS)", "55,00 €"),
+            new Field("deposito_garantia", "Dinero", "El depósito de garantía adicional, si se separó; vacío si no", "55,00 €"),
             new Field("fianza_texto", "Dinero", "Frase hecha con la fianza; dice que no hay si no la hay",
                     "EL ARRENDATARIO entrega a EL ARRENDADOR la cantidad de 110,00 € en concepto de fianza."),
 
@@ -223,8 +229,17 @@ public final class ContractFields {
                 ? orMissing(null) : Pdfs.euros(rental.getCommunityFee()));
         values.put("gastos_ibi", rental.getPropertyTax() == null
                 ? orMissing(null) : Pdfs.euros(rental.getPropertyTax()));
+        boolean hasFees = rental.getCommunityFee() != null || rental.getPropertyTax() != null;
+        values.put("gastos_total", hasFees
+                ? Pdfs.euros(rental.getMonthlyCharge().subtract(
+                        rental.getMonthlyRent() == null ? BigDecimal.ZERO : rental.getMonthlyRent()))
+                : "");
+        values.put("total_mensual", Pdfs.euros(rental.getMonthlyCharge()));
 
         values.put("fianza", deposit == null ? Pdfs.euros(BigDecimal.ZERO) : Pdfs.euros(deposit));
+        values.put("fianza_legal", Pdfs.euros(rental.getLegalDeposit()));
+        values.put("deposito_garantia", rental.getGuaranteeDeposit() == null || rental.getGuaranteeDeposit().signum() == 0
+                ? "" : Pdfs.euros(rental.getGuaranteeDeposit()));
         values.put("fianza_texto", deposit == null || deposit.signum() == 0
                 ? "No se establece fianza."
                 : "EL ARRENDATARIO entrega a EL ARRENDADOR la cantidad de " + Pdfs.euros(deposit)
@@ -328,7 +343,8 @@ public final class ContractFields {
                 .client(tenant).coClient(coTenant).guarantor(guarantor)
                 .startDate(start).endDate(start.plusYears(1)).billingDayOfMonth(1)
                 .monthlyRent(new BigDecimal("55.00")).securityDeposit(new BigDecimal("110.00"))
-                .communityFee(new BigDecimal("20.00")).propertyTax(new BigDecimal("120.00"))
+                .guaranteeDeposit(new BigDecimal("55.00"))
+                .communityFee(new BigDecimal("20.00")).propertyTax(new BigDecimal("10.00"))
                 // El cierre, para que una plantilla de salida también se pueda
                 // revisar: devolución parcial, que es la que enseña todos los
                 // campos (lo devuelto, lo retenido y el motivo).

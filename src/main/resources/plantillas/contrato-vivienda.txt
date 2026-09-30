@@ -63,10 +63,10 @@ El impago de la renta o de cualquiera de las cantidades asimiladas facultará a 
 1. **Gastos de comunidad:** la cantidad fija de {{gastos_comunidad}} mensuales.
 [[fin]]
 [[si:gastos_ibi]]
-1. **Impuesto sobre Bienes Inmuebles (IBI):** la cantidad de {{gastos_ibi}} anuales, que se abonará prorrateada mensualmente, previa acreditación documental de su importe, cuando la parte arrendataria lo solicite de forma expresa.
+1. **Impuesto sobre Bienes Inmuebles (IBI):** la cantidad fija de {{gastos_ibi}} mensuales, correspondiente a la parte proporcional del recibo anual, cuyo justificante se facilitará a la parte arrendataria cuando lo solicite de forma expresa.
 [[fin]]
-[[si:gastos_comunidad]]
-Estos conceptos tendrán la consideración de gastos fijos y __no__ estarán incluidos en la renta.
+[[si:gastos_total]]
+Estos conceptos tendrán la consideración de gastos fijos y __no__ estarán incluidos en la renta. Se abonarán junto con ella, de modo que el importe total a pagar cada mes será de **{{total_mensual}}**.
 [[fin]]
 
 Asimismo, serán de cuenta y cargo de la parte arrendataria los gastos derivados del uso de la vivienda, tales como agua, electricidad, gas, teléfono, internet y cualesquiera otros suministros o servicios que puedan individualizarse mediante contadores u otros sistemas de medición.

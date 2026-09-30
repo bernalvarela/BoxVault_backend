@@ -19,6 +19,9 @@ import java.util.List;
  *   fichas de clientes anteriores a ese cambio pueden llevarlo todavía.
  * CONTRATO_SALIDA: el contrato de salida (finiquito) que se firma al cerrar
  *   el alquiler: fecha de entrega, estado de la unidad y devolución de la fianza.
+ * IGVS_ARRENDADOR / IGVS_ARRENDATARIO: los dos justificantes que da el IGVS al
+ *   depositar la fianza de un piso; el del arrendatario es el que se le entrega.
+ * IGVS_DEVOLUCION: el resguardo de la devolución de la fianza por el IGVS.
  * ANEXO: anexo o adenda al contrato (subida de precio, cambio de unidad...).
  * FACTURA: la factura de una mensualidad, con su número de serie y el desglose
  *   del IVA. La genera la propia aplicación y se archiva en el alquiler, que es
@@ -41,6 +44,9 @@ public enum DocumentType {
     FOTO,
     CONTRATO_ALQUILER,
     CONTRATO_SALIDA,
+    IGVS_ARRENDADOR,
+    IGVS_ARRENDATARIO,
+    IGVS_DEVOLUCION,
     ANEXO,
     FACTURA,
     JUSTIFICANTE,
@@ -51,7 +57,7 @@ public enum DocumentType {
             List.of(DNI, CONTRATO_TRABAJO, NOMINA, FOTO, JUSTIFICANTE, OTRO);
 
     private static final List<DocumentType> FOR_RENTAL =
-            List.of(CONTRATO_ALQUILER, CONTRATO_SALIDA, ANEXO, FACTURA, FOTO, JUSTIFICANTE, OTRO);
+            List.of(CONTRATO_ALQUILER, CONTRATO_SALIDA, IGVS_ARRENDADOR, IGVS_ARRENDATARIO, IGVS_DEVOLUCION, ANEXO, FACTURA, FOTO, JUSTIFICANTE, OTRO);
 
     private static final List<DocumentType> FOR_TAX_FILING = List.of(JUSTIFICANTE, DECLARACION, OTRO);
 

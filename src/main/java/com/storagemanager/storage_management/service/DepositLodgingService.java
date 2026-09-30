@@ -42,22 +42,27 @@ public class DepositLodgingService {
     private final InvoiceIssuer issuers;
 
     /**
-     * Apunta el depósito y su devolución. Se manda todo cada vez; sin fecha de
-     * depósito se borra lo que hubiera, que es como se corrige un apunte hecho
-     * en el alquiler que no era.
+     * Guarda todo lo de la fianza: el total entregado y cuánto de él es
+     * garantía, si está cobrada, y el depósito en el IGVS con su devolución.
+     * Se manda todo cada vez; sin fecha de depósito se borra el apunte del IGVS,
+     * que es como se corrige uno hecho en el alquiler que no era.
      */
     @Transactional
     public RentalAgreement update(Long rentalId, DepositLodgingRequest request) {
         RentalAgreement rental = rentals.getAgreementById(rentalId);
         LocalDate today = LocalDate.now();
 
+        applyAmounts(rental, request);
+
         // Borrar un apunte siempre se puede: es como se arregla uno hecho en la
         // unidad que no era. Apuntar, solo en los pisos.
         if (request.getLodgedOn() != null) requireDwelling(rental);
 
         if (request.getLodgedOn() == null) {
+            if (rental.getDepositLodgedOn() != null) {
+                log.info("Borrado el depósito en el IGVS de la fianza del contrato {}", rental.getAgreementNumber());
+            }
             clear(rental);
-            log.info("Borrado el depósito en el IGVS de la fianza del contrato {}", rental.getAgreementNumber());
             return rentalRepository.save(rental);
         }
 
@@ -149,16 +154,45 @@ public class DepositLodgingService {
     }
 
     /**
-     * Lo que se deposita en el IGVS: la fianza legal de una vivienda, una
-     * mensualidad (art. 36 LAU). Lo que el inquilino entregue por encima es
-     * depósito de garantía adicional, que se queda en manos de los propietarios.
-     * Si entregó menos de una mensualidad, se deposita lo entregado.
+     * Lo que se deposita en el IGVS: la fianza legal. Si ya se separó la
+     * garantía, es lo que queda de lo entregado; si no, se supone una
+     * mensualidad de renta (art. 36 LAU), o lo entregado si fue menos.
      */
     private static BigDecimal lodgeAmount(RentalAgreement rental) {
+        if (rental.getGuaranteeDeposit() != null && rental.getLegalDeposit() != null) {
+            return rental.getLegalDeposit().setScale(2, RoundingMode.HALF_UP);
+        }
         BigDecimal rent = rental.getMonthlyRent() == null ? BigDecimal.ZERO : rental.getMonthlyRent();
         BigDecimal deposit = rental.getSecurityDeposit();
         BigDecimal lodge = deposit == null ? rent : rent.min(deposit);
         return lodge.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * El total entregado, la parte que es garantía y si está cobrada. La
+     * garantía no puede ser más que el total, y en un trastero no hay garantía
+     * aparte: todo es fianza.
+     */
+    private static void applyAmounts(RentalAgreement rental, DepositLodgingRequest request) {
+        if (request.getSecurityDeposit() != null) {
+            if (request.getSecurityDeposit().signum() < 0) {
+                throw new BadRequestException("La fianza no puede ser negativa");
+            }
+            rental.setSecurityDeposit(request.getSecurityDeposit().setScale(2, RoundingMode.HALF_UP));
+        }
+        if (request.getDepositPaid() != null) rental.setDepositPaid(request.getDepositPaid());
+
+        BigDecimal guarantee = request.getGuaranteeDeposit();
+        if (guarantee != null && guarantee.signum() > 0) {
+            BigDecimal total = rental.getSecurityDeposit() == null ? BigDecimal.ZERO : rental.getSecurityDeposit();
+            if (guarantee.compareTo(total) > 0) {
+                throw new BadRequestException("El depósito de garantía (" + guarantee + " €) no puede ser más que lo "
+                        + "entregado en total (" + total + " €)");
+            }
+            rental.setGuaranteeDeposit(guarantee.setScale(2, RoundingMode.HALF_UP));
+        } else {
+            rental.setGuaranteeDeposit(null);
+        }
     }
 
     /** Solo las fianzas de los pisos se depositan en el IGVS; las de los trasteros y locales, no. */
