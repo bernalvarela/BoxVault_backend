@@ -1,10 +1,13 @@
 package com.storagemanager.storage_management.controller;
 
+import com.storagemanager.storage_management.dto.DepositFormDTO;
+import com.storagemanager.storage_management.dto.DepositLodgingRequest;
 import com.storagemanager.storage_management.dto.RentalAgreementRequest;
 import com.storagemanager.storage_management.dto.TerminationRequest;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.enums.RentalStatus;
 import com.storagemanager.storage_management.service.ContractService;
+import com.storagemanager.storage_management.service.DepositLodgingService;
 import com.storagemanager.storage_management.service.RentalAgreementService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +34,7 @@ public class RentalAgreementController {
 
     private final RentalAgreementService rentalAgreementService;
     private final ContractService contractService;
+    private final DepositLodgingService depositLodging;
 
     @PreAuthorize("@access.can('ALQUILERES','LEER')")
     @GetMapping
@@ -96,6 +100,24 @@ public class RentalAgreementController {
         TerminationRequest termination = request != null ? request : new TerminationRequest();
         if (termination.getTerminationDate() == null) termination.setTerminationDate(terminationDate);
         return ResponseEntity.ok(contractService.terminate(id, termination));
+    }
+
+    /**
+     * Apunta el depósito de la fianza en el IGVS y su devolución. El trámite se
+     * hace en la sede de la Xunta; aquí sólo queda constancia.
+     */
+    @PreAuthorize("@access.can('ALQUILERES','ESCRIBIR')")
+    @PutMapping("/{id}/deposit-lodging")
+    public ResponseEntity<RentalAgreement> updateDepositLodging(@PathVariable Long id,
+                                                                @RequestBody DepositLodgingRequest request) {
+        return ResponseEntity.ok(depositLodging.update(id, request));
+    }
+
+    /** Los datos del alquiler que pide el formulario VI436A del IGVS. */
+    @PreAuthorize("@access.can('ALQUILERES','LEER')")
+    @GetMapping("/{id}/deposit-lodging/form")
+    public ResponseEntity<DepositFormDTO> depositLodgingForm(@PathVariable Long id) {
+        return ResponseEntity.ok(depositLodging.form(id));
     }
 
     /**

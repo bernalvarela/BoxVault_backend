@@ -193,6 +193,32 @@ public class RentalAgreement {
     private String depositReturnNotes;
 
     /**
+     * El depósito de la fianza en el IGVS, obligatorio en Galicia en el plazo
+     * de un mes desde la firma. Nulo = no consta depositada.
+     * <p>
+     * El trámite se hace en la sede de la Xunta y no tiene API: aquí sólo se
+     * apunta, para poder avisar de lo que falta. El justificante se archiva
+     * entre los documentos del alquiler.
+     */
+    private LocalDate depositLodgedOn;
+
+    @Column(precision = 10, scale = 2)
+    private BigDecimal depositLodgedAmount;
+
+    /** El número de expediente o de justificante que da el IGVS. */
+    @Column(length = 60)
+    private String depositLodgingReference;
+
+    /** Si se entregó al inquilino su copia del justificante (el IGVS emite dos). */
+    private Boolean depositReceiptDelivered;
+
+    /** Cuándo se pidió al IGVS la devolución (VI436B), al terminar el contrato. */
+    private LocalDate depositRefundRequestedOn;
+
+    /** Cuándo la reintegró el IGVS. */
+    private LocalDate depositRefundedOn;
+
+    /**
      * El contrato de salida (finiquito) que generó la aplicación al cerrar el
      * alquiler, si se generó. Como {@link #contractDocument}: se guarda para
      * poder rehacerlo sin dejar borradores apilados.
