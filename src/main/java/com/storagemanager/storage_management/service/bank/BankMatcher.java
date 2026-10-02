@@ -112,8 +112,9 @@ public class BankMatcher {
         if (!line.isIncome() && TextMatch.containsAny(TextMatch.normalize(line.getConcept()),
                 List.of("PRESTAMO", "HIPOTECA", "HIPOTECARIO"))) {
             line.setAction(BankLineAction.NONE);
-            line.setReason("Cuota de un préstamo: si es de los pisos, solo los intereses son gasto deducible, no la amortización. "
-                    + "Apunta los intereses del cuadro de amortización en Gastos; esta fila no crea nada");
+            line.setReason("Cuota de un préstamo: no crea nada, porque mezcla intereses y capital. Una vez al año, apunta en Gastos "
+                    + "los intereses del certificado del banco (categoría «Intereses de financiación», en su unidad). "
+                    + "Si la marcas como «Nada» y la recuerdas, los meses siguientes saldrá ignorada");
             return;
         }
 

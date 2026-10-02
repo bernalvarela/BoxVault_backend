@@ -68,6 +68,10 @@ public class TaxService {
             ExpenseCategory.REPARACIONES,
             ExpenseCategory.SEGUROS,
             ExpenseCategory.COMUNIDAD,
+            // Los intereses del préstamo de la unidad (art. 23.1.a LIRPF). Ojo: la
+            // ley limita intereses + reparaciones a los ingresos de esa unidad en el
+            // año, y lo que exceda se arrastra cuatro años; ese límite no se aplica aquí.
+            ExpenseCategory.INTERESES,
             ExpenseCategory.OTROS);
 
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
