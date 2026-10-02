@@ -6,6 +6,7 @@ import com.storagemanager.storage_management.model.BankImportLineSplit;
 import com.storagemanager.storage_management.model.BankMatchRule;
 import com.storagemanager.storage_management.model.BankMatchRuleSplit;
 import com.storagemanager.storage_management.model.Client;
+import com.storagemanager.storage_management.model.Expense;
 import com.storagemanager.storage_management.model.Owner;
 import com.storagemanager.storage_management.model.Ownership;
 import com.storagemanager.storage_management.model.Payment;
@@ -19,6 +20,7 @@ import com.storagemanager.storage_management.model.enums.CommunityEntryType;
 import com.storagemanager.storage_management.model.enums.ExpenseCategory;
 import com.storagemanager.storage_management.model.enums.PaymentStatus;
 import com.storagemanager.storage_management.repository.BankMatchRuleRepository;
+import com.storagemanager.storage_management.repository.ExpenseRepository;
 import com.storagemanager.storage_management.repository.OwnershipRepository;
 import com.storagemanager.storage_management.repository.PaymentRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
@@ -63,6 +65,14 @@ public class BankMatcher {
 
     /** Días de margen para dar un cobro por "ya apuntado a mano". */
     private static final int ALREADY_RECORDED_DAYS = 7;
+    /**
+     * Días de margen para un pago de varios meses apuntado a mano como varios
+     * cobros del mismo día: que sumen justo el importe ya es una señal fuerte, y
+     * es fácil apuntarlos con la fecha en que se registraron, no la del banco.
+     */
+    private static final int MULTI_MONTH_DAYS = 31;
+    /** Días de margen para dar un gasto por "ya apuntado a mano": el IBI se apunta a veces con la fecha del recibo. */
+    private static final int EXPENSE_RECORDED_DAYS = 10;
     /** Hasta cuántos meses atrás se busca una mensualidad sin cobrar. */
     private static final int MONTHS_BACK = 6;
 
@@ -70,16 +80,18 @@ public class BankMatcher {
     private final PaymentRepository payments;
     private final BankMatchRuleRepository rules;
     private final OwnershipRepository ownerships;
+    private final ExpenseRepository expenses;
 
     /**
      * Lo que hace falta para proponer, cargado una vez por extracto.
      *
      * @param claimedPayments los cobros hechos a mano que ya se han dado por
      *                        "esta fila es este cobro": uno no puede tapar dos filas
+     * @param claimedExpenses lo mismo con los gastos
      */
     public record Context(List<RentalAgreement> rentals, Map<Long, List<Payment>> paymentsByRental,
                          List<Payment> paidPayments, List<BankMatchRule> rules, List<Ownership> ownerships,
-                         Set<Long> claimedPayments) {}
+                         Set<Long> claimedPayments, List<Expense> expenses, Set<Long> claimedExpenses) {}
 
     public Context load() {
         List<Payment> all = payments.findAll();
@@ -93,7 +105,8 @@ public class BankMatcher {
         List<BankMatchRule> sorted = rules.findAll().stream()
                 .sorted(Comparator.comparingInt((BankMatchRule r) -> r.getPattern().split(" ").length).reversed())
                 .toList();
-        return new Context(rentals.findAll(), byRental, paid, sorted, ownerships.findAll(), new java.util.HashSet<>());
+        return new Context(rentals.findAll(), byRental, paid, sorted, ownerships.findAll(), new java.util.HashSet<>(),
+                expenses.findAll(), new java.util.HashSet<>());
     }
 
     /** Deja en la línea la propuesta y su motivo. */
@@ -102,7 +115,17 @@ public class BankMatcher {
         Set<String> words = TextMatch.words(line.getConcept());
 
         for (BankMatchRule rule : ctx.rules()) {
-            if (TextMatch.matchesRule(rule.getPattern(), words) && applyRule(line, rule, profile, ctx)) return;
+            if (TextMatch.matchesRule(rule.getPattern(), words) && applyRule(line, rule, profile, ctx)) {
+                if (line.getAction() == BankLineAction.EXPENSE) markExpenseRecorded(line, ctx);
+                return;
+            }
+        }
+
+        // Un cargo que ya está apuntado a mano como gasto (el IBI, un recibo que
+        // se metió antes de importar) no se vuelve a apuntar.
+        if (!line.isIncome() && profile.getContext() == BankProfileContext.PROPIETARIOS
+                && markExpenseRecorded(line, ctx)) {
+            return;
         }
 
         // La cuota de un préstamo no es un gasto entero: si financia los pisos, sus
@@ -164,7 +187,12 @@ public class BankMatcher {
                         .min(Comparator.comparingLong(p -> Math.abs(p.getPaymentDate().toEpochDay() - line.getDate().toEpochDay())))
                         .orElse(null);
                 if (recorded != null) {
-                    markRecorded(line, recorded, ctx, " (por una regla aprendida)");
+                    markRecorded(line, List.of(recorded), ctx, " (por una regla aprendida)");
+                    return true;
+                }
+                List<Payment> group = recordedMultiMonth(line, rental, ctx);
+                if (!group.isEmpty()) {
+                    markRecorded(line, group, ctx, " (por una regla aprendida)");
                     return true;
                 }
                 proposePayment(line, rental, why, ctx);
@@ -304,6 +332,11 @@ public class BankMatcher {
      * (110 € con una mensualidad de 55 € son dos) y desde qué mes. El mes es el
      * que nombre el concepto ("OCTUBRE 2026", "septiembre y octubre") o, si no
      * nombra ninguno, la mensualidad más antigua sin cobrar.
+     * <p>
+     * Si esos meses ya están cobrados, el pago ya está apuntado: se da por
+     * registrado. Si lo están solo algunos, o el concepto no dice el mes y no
+     * queda ninguno sin cobrar hasta la fecha, no se adivina: se deja sin mes
+     * para que se elija (puede ser un pago adelantado o el mismo pago otra vez).
      */
     private void proposePayment(BankImportLine line, RentalAgreement rental, String why, Context ctx) {
         List<Payment> paid = ctx.paymentsByRental().getOrDefault(rental.getId(), List.of());
@@ -311,11 +344,35 @@ public class BankMatcher {
         line.setRentalAgreement(rental);
 
         int count = monthsCovered(rental, line);
+        line.setPeriodCount(count);
         YearMonth named = namedPeriod(line);
         YearMonth period = named != null ? named : firstOpenPeriod(rental, line.getDate(), paid);
+        if (period == null) {
+            YearMonth current = YearMonth.from(line.getDate());
+            line.setReason(truncate(why + ". Las mensualidades hasta " + monthText(current)
+                    + " ya están cobradas: si es un pago adelantado, elige el mes; si es el cobro ya apuntado, descarta la fila"));
+            return;
+        }
+
+        Map<YearMonth, Payment> byPeriod = byPeriod(paid);
+        List<YearMonth> covered = new ArrayList<>();
+        for (int i = 0; i < count; i++) covered.add(period.plusMonths(i));
+        List<YearMonth> closed = covered.stream().filter(ym -> isClosed(byPeriod.get(ym))).toList();
+        if (!closed.isEmpty() && closed.size() == covered.size()
+                && closed.stream().allMatch(ym -> isSettled(byPeriod.get(ym)))) {
+            markRecorded(line, covered.stream().map(byPeriod::get).toList(), ctx,
+                    " (" + (closed.size() == 1 ? "ese mes ya está cobrado" : "esos meses ya están cobrados") + ")");
+            return;
+        }
+        if (!closed.isEmpty()) {
+            line.setReason(truncate(why + ". " + capitalize(monthsText(closed))
+                    + (closed.size() == 1 ? " ya está cobrado o no se cobra" : " ya están cobrados o no se cobran")
+                    + ": elige el mes y el número de meses, o descarta la fila si es un cobro ya apuntado"));
+            return;
+        }
+
         line.setPeriodYear(period.getYear());
         line.setPeriodMonth(period.getMonthValue());
-        line.setPeriodCount(count);
 
         StringBuilder reason = new StringBuilder(why);
         if (count > 1) {
@@ -385,9 +442,36 @@ public class BankMatcher {
                         && p.getRentalAgreement().getId().equals(payer.rental().getId()))
                 .min(Comparator.comparingLong(p -> Math.abs(p.getPaymentDate().toEpochDay() - line.getDate().toEpochDay())))
                 .orElse(null);
-        if (recorded == null) return false;
-        markRecorded(line, recorded, ctx, "");
+        if (recorded != null) {
+            markRecorded(line, List.of(recorded), ctx, "");
+            return true;
+        }
+        List<Payment> group = recordedMultiMonth(line, payer.rental(), ctx);
+        if (group.isEmpty()) return false;
+        markRecorded(line, group, ctx, "");
         return true;
+    }
+
+    /**
+     * Un pago de varios meses apuntado a mano: varios cobros del contrato con la
+     * misma fecha de pago, cerca del movimiento, que suman justo su importe
+     * (julio y agosto, 55 + 55, por una transferencia de 110 €). Si hay varios
+     * grupos así, el de la fecha más cercana.
+     */
+    private static List<Payment> recordedMultiMonth(BankImportLine line, RentalAgreement rental, Context ctx) {
+        Map<LocalDate, List<Payment>> byDate = ctx.paidPayments().stream()
+                .filter(p -> !ctx.claimedPayments().contains(p.getId()))
+                .filter(p -> p.getRentalAgreement() != null && p.getRentalAgreement().getId().equals(rental.getId()))
+                .filter(p -> Math.abs(p.getPaymentDate().toEpochDay() - line.getDate().toEpochDay()) <= MULTI_MONTH_DAYS)
+                .collect(Collectors.groupingBy(Payment::getPaymentDate));
+        return byDate.entrySet().stream()
+                .filter(e -> e.getValue().size() > 1)
+                .filter(e -> e.getValue().stream().map(Payment::getAmountPaid)
+                        .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add)
+                        .compareTo(line.getAmount()) == 0)
+                .min(Comparator.comparingLong(e -> Math.abs(e.getKey().toEpochDay() - line.getDate().toEpochDay())))
+                .map(Map.Entry::getValue)
+                .orElse(List.of());
     }
 
     /**
@@ -398,7 +482,7 @@ public class BankMatcher {
     private boolean markRecordedByAmount(BankImportLine line, Context ctx) {
         List<Payment> candidates = recordedCandidates(line, ctx);
         if (candidates.size() != 1) return false;
-        markRecorded(line, candidates.get(0), ctx, " (por importe y fecha: compruébalo)");
+        markRecorded(line, List.of(candidates.get(0)), ctx, " (por importe y fecha: compruébalo)");
         return true;
     }
 
@@ -411,29 +495,149 @@ public class BankMatcher {
                 .toList();
     }
 
-    private static void markRecorded(BankImportLine line, Payment payment, Context ctx, String note) {
+    /**
+     * La fila es uno o varios cobros ya apuntados (varios si pagó varios meses
+     * de una vez): queda enlazada al primero y se ignora al aplicar.
+     */
+    private static void markRecorded(BankImportLine line, List<Payment> recorded, Context ctx, String note) {
+        List<Payment> sorted = recorded.stream()
+                .sorted(Comparator.comparing(BankMatcher::periodOf, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+        Payment first = sorted.get(0);
         clearProposal(line);
-        ctx.claimedPayments().add(payment.getId());
+        sorted.forEach(p -> ctx.claimedPayments().add(p.getId()));
         line.setAction(BankLineAction.RENT_PAYMENT);
-        line.setRentalAgreement(payment.getRentalAgreement());
-        line.setPeriodYear(payment.getBillingPeriodYear());
-        line.setPeriodMonth(payment.getBillingPeriodMonth());
-        line.setPaymentId(payment.getId());
+        line.setRentalAgreement(first.getRentalAgreement());
+        line.setPeriodYear(first.getBillingPeriodYear());
+        line.setPeriodMonth(first.getBillingPeriodMonth());
+        line.setPeriodCount(sorted.size());
+        line.setPaymentId(first.getId());
         line.setAlreadyRecorded(true);
         line.setStatus(BankLineStatus.DISCARDED);
-        line.setReason(truncate("Ya registrado a mano: el cobro de "
-                + Pdfs.monthOf(payment.getBillingPeriodYear(), payment.getBillingPeriodMonth()).toLowerCase()
-                + " del " + Pdfs.day(payment.getPaymentDate()) + note + ". Se ignora para no contarlo dos veces"));
+        List<YearMonth> months = sorted.stream().map(BankMatcher::periodOf).filter(Objects::nonNull).toList();
+        String when = first.getPaymentDate() == null ? "" : " del " + Pdfs.day(first.getPaymentDate());
+        line.setReason(truncate("Ya registrado a mano: el cobro de " + monthsText(months) + when + note
+                + ". Se ignora para no contarlo dos veces"));
     }
 
-    /** La mensualidad más antigua sin cobrar de los últimos meses; si no hay, la del movimiento. */
-    private static YearMonth firstOpenPeriod(RentalAgreement rental, LocalDate date, List<Payment> paid) {
+    // ------------------------------------------------------------- Gastos ya apuntados
+
+    /**
+     * Un cargo que ya está apuntado a mano como gasto: mismo importe y fecha a
+     * pocos días, o varios gastos del mismo día que suman el cargo (uno
+     * repartido a mano entre unidades). Si hay varios, manda el de la misma
+     * categoría que la propuesta y después el de la fecha más cercana.
+     *
+     * @return si la fila era un gasto ya apuntado
+     */
+    private boolean markExpenseRecorded(BankImportLine line, Context ctx) {
+        if (line.isIncome()) return false;
+        java.math.BigDecimal total = line.getAmount().abs();
+        LocalDate date = line.getDate();
+        ExpenseCategory proposed = line.getExpenseCategory();
+        List<Expense> near = ctx.expenses().stream()
+                .filter(e -> !ctx.claimedExpenses().contains(e.getId()))
+                .filter(e -> e.getExpenseDate() != null && e.getAmount() != null)
+                .filter(e -> Math.abs(e.getExpenseDate().toEpochDay() - date.toEpochDay()) <= EXPENSE_RECORDED_DAYS)
+                .toList();
+        Comparator<Expense> preference = Comparator
+                .comparing((Expense e) -> proposed == null || e.getCategory() != proposed)
+                .thenComparingLong(e -> Math.abs(e.getExpenseDate().toEpochDay() - date.toEpochDay()));
+
+        List<Expense> match = near.stream()
+                .filter(e -> e.getAmount().compareTo(total) == 0)
+                .min(preference)
+                .map(List::of)
+                .orElseGet(() -> near.stream()
+                        .collect(Collectors.groupingBy(Expense::getExpenseDate))
+                        .values().stream()
+                        .filter(group -> group.size() > 1)
+                        .filter(group -> group.stream().map(Expense::getAmount)
+                                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add).compareTo(total) == 0)
+                        .min(Comparator.comparingLong(group ->
+                                Math.abs(group.get(0).getExpenseDate().toEpochDay() - date.toEpochDay())))
+                        .orElse(List.of()));
+        if (match.isEmpty()) return false;
+
+        Expense first = match.get(0);
+        clearProposal(line);
+        match.forEach(e -> ctx.claimedExpenses().add(e.getId()));
+        line.setAction(BankLineAction.EXPENSE);
+        line.setExpenseCategory(first.getCategory());
+        line.setStorageUnit(first.getStorageUnit());
+        line.setExpenseId(first.getId());
+        line.setAlreadyRecorded(true);
+        line.setStatus(BankLineStatus.DISCARDED);
+        String what = match.size() == 1
+                ? "el gasto de " + categoryText(first.getCategory()) + " del " + Pdfs.day(first.getExpenseDate())
+                    + (first.getStorageUnit() == null ? "" : " (" + first.getStorageUnit().getName() + ")")
+                : match.size() + " gastos del " + Pdfs.day(first.getExpenseDate()) + " que suman el cargo";
+        line.setReason(truncate("Ya registrado a mano: " + what + ". Se ignora para no contarlo dos veces"));
+        return true;
+    }
+
+    // ------------------------------------------------------------- Meses
+
+    private static YearMonth periodOf(Payment p) {
+        return p.getBillingPeriodYear() == null || p.getBillingPeriodMonth() == null
+                ? null : YearMonth.of(p.getBillingPeriodYear(), p.getBillingPeriodMonth());
+    }
+
+    private static Map<YearMonth, Payment> byPeriod(List<Payment> payments) {
         Map<YearMonth, Payment> byPeriod = new HashMap<>();
-        for (Payment p : paid) {
-            if (p.getBillingPeriodYear() != null && p.getBillingPeriodMonth() != null) {
-                byPeriod.put(YearMonth.of(p.getBillingPeriodYear(), p.getBillingPeriodMonth()), p);
-            }
+        for (Payment p : payments) {
+            YearMonth ym = periodOf(p);
+            if (ym != null) byPeriod.put(ym, p);
         }
+        return byPeriod;
+    }
+
+    /** Cobrada entera: lo pagado llega a lo debido. */
+    private static boolean isSettled(Payment p) {
+        return p != null && p.getStatus() != PaymentStatus.CANCELLED
+                && p.getAmountPaid() != null && p.getAmountDue() != null
+                && p.getAmountPaid().compareTo(p.getAmountDue()) >= 0;
+    }
+
+    /** Un mes en el que ya no cabe cobrar nada: cobrado entero o marcado como no cobrable. */
+    private static boolean isClosed(Payment p) {
+        return p != null && (p.getStatus() == PaymentStatus.CANCELLED || isSettled(p));
+    }
+
+    /** "julio de 2026" */
+    private static String monthText(YearMonth ym) {
+        return Pdfs.monthOf(ym.getYear(), ym.getMonthValue()).toLowerCase();
+    }
+
+    /** "julio de 2026", "julio y agosto de 2026", "noviembre, diciembre de 2026 y enero de 2027". */
+    public static String monthsText(List<YearMonth> months) {
+        if (months.isEmpty()) return "?";
+        List<String> parts = new ArrayList<>();
+        for (int i = 0; i < months.size(); i++) {
+            YearMonth ym = months.get(i);
+            boolean sameYearAsNext = i + 1 < months.size() && months.get(i + 1).getYear() == ym.getYear();
+            String text = monthText(ym);
+            parts.add(sameYearAsNext ? text.substring(0, text.lastIndexOf(" de ")) : text);
+        }
+        if (parts.size() == 1) return parts.get(0);
+        return String.join(", ", parts.subList(0, parts.size() - 1)) + " y " + parts.get(parts.size() - 1);
+    }
+
+    private static String capitalize(String text) {
+        return text.isEmpty() ? text : Character.toUpperCase(text.charAt(0)) + text.substring(1);
+    }
+
+    private static String categoryText(ExpenseCategory category) {
+        return category == null ? "otros" : category.name().toLowerCase().replace('_', ' ');
+    }
+
+    /**
+     * La mensualidad más antigua sin cobrar de los últimos meses. Null si están
+     * todas cobradas hasta el mes del movimiento: entonces no se sabe si es un
+     * pago adelantado o el mismo cobro otra vez, y no se adivina.
+     */
+    private static YearMonth firstOpenPeriod(RentalAgreement rental, LocalDate date, List<Payment> paid) {
+        Map<YearMonth, Payment> byPeriod = byPeriod(paid);
         YearMonth current = YearMonth.from(date);
         YearMonth from = current.minusMonths(MONTHS_BACK);
         if (rental.getStartDate() != null && YearMonth.from(rental.getStartDate()).isAfter(from)) {
@@ -441,15 +645,12 @@ public class BankMatcher {
         }
         YearMonth until = rental.getEndDate() != null && YearMonth.from(rental.getEndDate()).isBefore(current)
                 ? YearMonth.from(rental.getEndDate()) : current;
+        // Paga antes de entrar: el primer mes del contrato.
+        if (from.isAfter(until)) return isClosed(byPeriod.get(from)) ? null : from;
         for (YearMonth ym = from; !ym.isAfter(until); ym = ym.plusMonths(1)) {
-            Payment p = byPeriod.get(ym);
-            boolean open = p == null
-                    || (p.getStatus() != PaymentStatus.CANCELLED
-                        && (p.getAmountPaid() == null || p.getAmountDue() == null
-                            || p.getAmountPaid().compareTo(p.getAmountDue()) < 0));
-            if (open) return ym;
+            if (!isClosed(byPeriod.get(ym))) return ym;
         }
-        return current;
+        return null;
     }
 
     // ------------------------------------------------------------- Gastos

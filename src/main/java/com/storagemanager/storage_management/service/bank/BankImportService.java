@@ -273,6 +273,7 @@ public class BankImportService {
         if (Boolean.TRUE.equals(line.getAlreadyRecorded())) {
             line.setAlreadyRecorded(false);
             line.setPaymentId(null);
+            line.setExpenseId(null);
         }
 
         if (request.getAction() != null) {
@@ -538,8 +539,15 @@ public class BankImportService {
                 throw new BadRequestException(Pdfs.monthOf(year, month) + " está marcado como no cobrable en "
                         + rental.getAgreementNumber() + ": elige otro mes");
             }
-            RecordPaymentRequest record = new RecordPaymentRequest();
             BigDecimal before = existing.getAmountPaid() == null ? BigDecimal.ZERO : existing.getAmountPaid();
+            // Sumar a un mes ya cobrado entero lo contaría dos veces: casi siempre
+            // es el mismo pago, ya apuntado a mano.
+            if (existing.getAmountDue() != null && before.compareTo(existing.getAmountDue()) >= 0) {
+                throw new BadRequestException(Pdfs.monthOf(year, month) + " ya está cobrado en "
+                        + rental.getAgreementNumber() + ": si este movimiento es ese cobro, descarta la fila; "
+                        + "si es de otro mes, cámbialo");
+            }
+            RecordPaymentRequest record = new RecordPaymentRequest();
             record.setAmountPaid(before.add(amount));
             record.setPaymentMethod(PaymentMethod.BANK_TRANSFER);
             record.setPaymentDate(line.getDate());
@@ -755,9 +763,12 @@ public class BankImportService {
     /** Lo que va a crear la fila, o lo que creó, en una frase. */
     private static String outcomeOf(BankImportLine l) {
         if (Boolean.TRUE.equals(l.getAlreadyRecorded()) && l.getRentalAgreement() != null) {
-            return "Ya existe: cobro de " + (l.getPeriodYear() == null ? "?"
-                    : Pdfs.monthOf(l.getPeriodYear(), l.getPeriodMonth()).toLowerCase())
-                    + " · " + rentalLabel(l.getRentalAgreement());
+            return "Ya existe: cobro de " + periodsText(l) + " · " + rentalLabel(l.getRentalAgreement());
+        }
+        if (Boolean.TRUE.equals(l.getAlreadyRecorded()) && l.getAction() == BankLineAction.EXPENSE) {
+            return "Ya existe: gasto · " + (l.getExpenseCategory() == null ? "?"
+                    : l.getExpenseCategory().name().toLowerCase().replace('_', ' '))
+                    + (l.getStorageUnit() == null ? "" : " · " + l.getStorageUnit().getName());
         }
         String verb = l.getStatus() == BankLineStatus.APPLIED ? "Creado: " : "";
         return switch (l.getAction()) {
