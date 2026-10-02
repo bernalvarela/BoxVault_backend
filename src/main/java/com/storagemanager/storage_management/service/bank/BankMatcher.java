@@ -349,6 +349,15 @@ public class BankMatcher {
         YearMonth period = named != null ? named : firstOpenPeriod(rental, line.getDate(), paid);
         if (period == null) {
             YearMonth current = YearMonth.from(line.getDate());
+            // Varios meses seguidos ya cobrados que llegan más allá del mes del
+            // movimiento: nadie paga agosto y septiembre a 6 de julio salvo con un
+            // pago adelantado, y ese pago de tantos meses es esta transferencia,
+            // aunque cada cobro se apuntase con otra fecha.
+            List<Payment> ahead = settledRunReachingFuture(paid, current, count, ctx);
+            if (!ahead.isEmpty()) {
+                markRecorded(line, ahead, ctx, " (pago adelantado: esos meses ya están cobrados)");
+                return;
+            }
             line.setReason(truncate(why + ". Las mensualidades hasta " + monthText(current)
                     + " ya están cobradas: si es un pago adelantado, elige el mes; si es el cobro ya apuntado, descarta la fila"));
             return;
@@ -590,6 +599,27 @@ public class BankMatcher {
             if (ym != null) byPeriod.put(ym, p);
         }
         return byPeriod;
+    }
+
+    /**
+     * Los cobros de {@code count} meses seguidos, todos cobrados y sin casar con
+     * otra fila, que incluyen el mes del movimiento o uno anterior y terminan
+     * después de él. Con un solo mes no vale: pagar el mes siguiente unos días
+     * antes es normal, y no se distingue de un cobro repetido.
+     */
+    private static List<Payment> settledRunReachingFuture(List<Payment> paid, YearMonth current, int count, Context ctx) {
+        if (count < 2) return List.of();
+        Map<YearMonth, Payment> byPeriod = byPeriod(paid);
+        for (YearMonth start = current.minusMonths(count - 2); !start.isAfter(current); start = start.plusMonths(1)) {
+            List<Payment> run = new ArrayList<>();
+            for (int i = 0; i < count; i++) {
+                Payment p = byPeriod.get(start.plusMonths(i));
+                if (!isSettled(p) || ctx.claimedPayments().contains(p.getId())) break;
+                run.add(p);
+            }
+            if (run.size() == count) return run;
+        }
+        return List.of();
     }
 
     /** Cobrada entera: lo pagado llega a lo debido. */

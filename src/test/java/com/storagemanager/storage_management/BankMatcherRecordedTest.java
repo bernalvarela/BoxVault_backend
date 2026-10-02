@@ -122,6 +122,22 @@ class BankMatcherRecordedTest {
     }
 
     @Test
+    void aPrepaymentRecordedMonthByMonthIsRecognised() {
+        RentalAgreement rental = trastero("4", "50.00", LocalDate.of(2026, 7, 1));
+        Payment july = paid(rental, YearMonth.of(2026, 7), LocalDate.of(2026, 7, 1));
+        paid(rental, YearMonth.of(2026, 8), LocalDate.of(2026, 8, 1));
+        paid(rental, YearMonth.of(2026, 9), LocalDate.of(2026, 9, 1));
+        BankMatcher matcher = matcher();
+
+        BankImportLine line = line(LocalDate.of(2026, 7, 6), "TRANSFERENCIAS pago de trastero número 4", "150.00");
+        match(matcher, matcher.load(), line, trasteros());
+
+        assertTrue(line.getAlreadyRecorded(), line.getReason());
+        assertEquals(july.getId(), line.getPaymentId());
+        assertEquals(3, line.getPeriodCount());
+    }
+
+    @Test
     void withoutAMonthAndEverythingPaidItAsksInsteadOfGuessing() {
         RentalAgreement rental = trastero("4", "50.00", LocalDate.of(2026, 7, 1));
         paid(rental, YearMonth.of(2026, 7), LocalDate.of(2026, 7, 1));

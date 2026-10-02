@@ -23,7 +23,8 @@ public class BankImportLineSplit {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    // EAGER: la imagen nativa no puede crear proxies de Hibernate (ver UnitPriceHistory).
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
     @JoinColumn(name = "line_id", nullable = false)
     private BankImportLine line;
 
