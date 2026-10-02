@@ -343,6 +343,8 @@ public class BankMatcher {
         line.setAction(BankLineAction.RENT_PAYMENT);
         line.setRentalAgreement(rental);
 
+        if (entryWithDeposit(line, rental, paid, why, ctx)) return;
+
         int count = monthsCovered(rental, line);
         line.setPeriodCount(count);
         YearMonth named = namedPeriod(line);
@@ -393,6 +395,98 @@ public class BankMatcher {
         }
         if (named != null) reason.append(". El mes, del concepto");
         line.setReason(truncate(reason.toString()));
+    }
+
+    /**
+     * El pago de entrada: al firmar se paga la fianza y el primer mes (o los
+     * primeros) en una sola transferencia. 150 € en un trastero de 50 € con
+     * 100 € de fianza no son tres meses: son julio y la fianza. Solo cerca del
+     * inicio del contrato y si el importe es justo la fianza más meses enteros.
+     * <p>
+     * Si esos meses ya están cobrados, la fila es ese cobro. Si no, se deja sin
+     * decidir: un cobro del banco no puede llevarse la fianza dentro, que no es
+     * una mensualidad ni un ingreso.
+     * <p>
+     * Pero la fianza no siempre pasa por el banco (a veces se entrega en mano, o
+     * se usa para devolver la de otro inquilino): si el importe entero son meses
+     * ya apuntados, julio, agosto y septiembre por 150 €, manda eso, y la fianza
+     * ni se menciona.
+     *
+     * @return si la fila era un pago de entrada
+     */
+    private boolean entryWithDeposit(BankImportLine line, RentalAgreement rental, List<Payment> paid, String why, Context ctx) {
+        java.math.BigDecimal deposit = rental.getSecurityDeposit();
+        java.math.BigDecimal charge = rental.getMonthlyCharge();
+        LocalDate start = rental.getStartDate();
+        if (deposit == null || deposit.signum() <= 0 || charge.signum() <= 0 || start == null) return false;
+        if (line.getDate().isBefore(start.minusDays(30)) || line.getDate().isAfter(start.plusDays(45))) return false;
+        if (allMonthsRecorded(line, rental, paid, ctx)) return false;
+        java.math.BigDecimal rest = line.getAmount().subtract(deposit);
+        if (rest.signum() < 0) return false;
+        java.math.BigDecimal[] division = rest.divideAndRemainder(charge);
+        if (division[1].signum() != 0 || division[0].intValue() > 12) return false;
+        int months = division[0].intValue();
+
+        String depositText = "la fianza de " + Pdfs.euros(deposit);
+        // Lo que queda por hacer con la fianza: nada si ya consta como cobrada.
+        boolean depositPaid = Boolean.TRUE.equals(rental.getDepositPaid());
+        String depositTodo = depositPaid
+                ? "la fianza ya consta como cobrada en el contrato"
+                : "márcala como cobrada en la pestaña Fianza del contrato";
+        if (months == 0) {
+            line.setAction(BankLineAction.NONE);
+            line.setStatus(BankLineStatus.DISCARDED);
+            line.setReason(truncate(why + ". Es " + depositText + ": no es una mensualidad; " + depositTodo));
+            return true;
+        }
+
+        Map<YearMonth, Payment> byPeriod = byPeriod(paid);
+        YearMonth first = YearMonth.from(start);
+        List<Payment> recorded = new ArrayList<>();
+        for (int i = 0; i < months; i++) {
+            Payment p = byPeriod.get(first.plusMonths(i));
+            if (isSettled(p) && !ctx.claimedPayments().contains(p.getId())) recorded.add(p);
+        }
+        if (recorded.size() == months) {
+            markRecorded(line, recorded, ctx, " más " + depositText
+                    + " (pago de entrada; " + depositTodo + ")");
+            return true;
+        }
+        List<YearMonth> covered = new ArrayList<>();
+        for (int i = 0; i < months; i++) covered.add(first.plusMonths(i));
+        line.setAction(BankLineAction.NONE);
+        line.setRentalAgreement(null);
+        StringBuilder reason = new StringBuilder(why).append(". Puede ser el pago de entrada: ")
+                .append(monthsText(covered)).append(" más ").append(depositText);
+        int asMonths = monthsCovered(rental, line);
+        if (asMonths > 1) {
+            List<YearMonth> alternative = new ArrayList<>();
+            for (int i = 0; i < asMonths; i++) alternative.add(first.plusMonths(i));
+            reason.append(", o ").append(monthsText(alternative)).append(" si la fianza no pasó por el banco");
+        }
+        reason.append(depositPaid
+                ? ". Elige el cobro o, si lleva la fianza (ya consta como cobrada), apunta el mes en Cobros y descarta la fila"
+                : ". Elige el cobro o, si lleva fianza, apunta el mes en Cobros y la fianza en su pestaña, y descarta la fila");
+        line.setReason(truncate(reason.toString()));
+        return true;
+    }
+
+    /**
+     * Si el importe entero son mensualidades ya cobradas desde el inicio del
+     * contrato (y sin casar con otra fila): 150 € = julio, agosto y septiembre.
+     */
+    private static boolean allMonthsRecorded(BankImportLine line, RentalAgreement rental, List<Payment> paid, Context ctx) {
+        int count = monthsCovered(rental, line);
+        if (count < 1 || line.getAmount().compareTo(rental.getMonthlyCharge().multiply(java.math.BigDecimal.valueOf(count))) != 0) {
+            return false;
+        }
+        Map<YearMonth, Payment> byPeriod = byPeriod(paid);
+        YearMonth first = YearMonth.from(rental.getStartDate());
+        for (int i = 0; i < count; i++) {
+            Payment p = byPeriod.get(first.plusMonths(i));
+            if (!isSettled(p) || ctx.claimedPayments().contains(p.getId())) return false;
+        }
+        return true;
     }
 
     /** Cuántas mensualidades enteras son el importe: 1 si no es un múltiplo exacto. */

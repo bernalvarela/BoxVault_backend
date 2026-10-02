@@ -138,6 +138,54 @@ class BankMatcherRecordedTest {
     }
 
     @Test
+    void theEntryPaymentIsTheFirstMonthPlusTheDeposit() {
+        // Trastero 4: entra en julio, 50 € al mes y 100 € de fianza. Paga 150 € al
+        // firmar (julio + fianza) y después agosto y septiembre por separado.
+        RentalAgreement rental = trastero("4", "50.00", LocalDate.of(2026, 7, 1));
+        rental.setSecurityDeposit(new BigDecimal("100.00"));
+        Payment july = paid(rental, YearMonth.of(2026, 7), LocalDate.of(2026, 7, 6));
+        paid(rental, YearMonth.of(2026, 8), LocalDate.of(2026, 8, 5));
+        paid(rental, YearMonth.of(2026, 9), LocalDate.of(2026, 9, 8));
+        BankMatcher matcher = matcher();
+        BankMatcher.Context ctx = matcher.load();
+
+        BankImportLine entry = line(LocalDate.of(2026, 7, 6), "TRANSFERENCIAS pago de trastero número 4", "150.00");
+        BankImportLine august = line(LocalDate.of(2026, 8, 5), "trastero 4", "50.00");
+        BankImportLine september = line(LocalDate.of(2026, 9, 8), "trastero 4", "50.00");
+        // Como la importación: primero la pasada por quien paga, luego la propuesta.
+        List<BankImportLine> all = List.of(entry, august, september);
+        List<BankImportLine> left = all.stream().filter(l -> !matcher.markRecordedByPayer(l, trasteros(), ctx)).toList();
+        left.forEach(l -> matcher.propose(l, trasteros(), ctx));
+
+        assertTrue(entry.getAlreadyRecorded(), entry.getReason());
+        assertEquals(july.getId(), entry.getPaymentId());
+        assertEquals(1, entry.getPeriodCount());
+        assertTrue(entry.getReason().contains("fianza"), entry.getReason());
+        assertTrue(august.getAlreadyRecorded());
+        assertTrue(september.getAlreadyRecorded());
+    }
+
+    @Test
+    void whenTheDepositDidNotGoThroughTheBankTheMonthsWin() {
+        // La misma entrada, pero la fianza se entregó en mano: los 150 € son
+        // julio, agosto y septiembre, apuntados cada uno con su fecha.
+        RentalAgreement rental = trastero("4", "50.00", LocalDate.of(2026, 7, 1));
+        rental.setSecurityDeposit(new BigDecimal("100.00"));
+        Payment july = paid(rental, YearMonth.of(2026, 7), LocalDate.of(2026, 7, 6));
+        paid(rental, YearMonth.of(2026, 8), LocalDate.of(2026, 8, 5));
+        paid(rental, YearMonth.of(2026, 9), LocalDate.of(2026, 9, 8));
+        BankMatcher matcher = matcher();
+
+        BankImportLine line = line(LocalDate.of(2026, 7, 6), "TRANSFERENCIAS pago de trastero número 4", "150.00");
+        match(matcher, matcher.load(), line, trasteros());
+
+        assertTrue(line.getAlreadyRecorded(), line.getReason());
+        assertEquals(july.getId(), line.getPaymentId());
+        assertEquals(3, line.getPeriodCount());
+        assertFalse(line.getReason().contains("fianza"), line.getReason());
+    }
+
+    @Test
     void withoutAMonthAndEverythingPaidItAsksInsteadOfGuessing() {
         RentalAgreement rental = trastero("4", "50.00", LocalDate.of(2026, 7, 1));
         paid(rental, YearMonth.of(2026, 7), LocalDate.of(2026, 7, 1));
