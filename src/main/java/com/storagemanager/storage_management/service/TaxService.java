@@ -72,6 +72,9 @@ public class TaxService {
             // ley limita intereses + reparaciones a los ingresos de esa unidad en el
             // año, y lo que exceda se arrastra cuatro años; ese límite no se aplica aquí.
             ExpenseCategory.INTERESES,
+            // La cuota de la hipoteca: solo cuentan sus intereses (Expense.irpfAmount);
+            // la amortización de capital va a lo excluido. Mismo límite que arriba.
+            ExpenseCategory.HIPOTECA,
             ExpenseCategory.OTROS);
 
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
@@ -366,7 +369,7 @@ public class TaxService {
         for (Expense e : expenseRepository.findByExpenseDateBetween(LocalDate.of(year, 1, 1), LocalDate.of(year, 12, 31))) {
             if (!DEDUCTIBLE_CATEGORIES.contains(e.getCategory()) || e.getStorageUnit() == null) continue;
             addExpense(byUnit.computeIfAbsent(e.getStorageUnit().getId(), k -> new TreeMap<>()),
-                    e.getCategory(), e.netAmount());
+                    e.getCategory(), e.irpfAmount());
         }
         return byUnit;
     }
@@ -601,12 +604,16 @@ public class TaxService {
         for (Expense e : expenseRepository.findByExpenseDateBetween(LocalDate.of(year, 1, 1), LocalDate.of(year, 12, 31))) {
             if (!DEDUCTIBLE_CATEGORIES.contains(e.getCategory())) {
                 addExpense(excluded, e.getCategory(), e.getAmount());
-            } else if (e.getStorageUnit() == null) {
-                unassigned = unassigned.add(money(e.netAmount()));
+                continue;
+            }
+            // El capital de una cuota de hipoteca se pagó pero no es gasto.
+            if (e.irpfExcludedAmount().signum() != 0) addExpense(excluded, e.getCategory(), e.irpfExcludedAmount());
+            if (e.getStorageUnit() == null) {
+                unassigned = unassigned.add(money(e.irpfAmount()));
             } else {
                 // Sin el IVA soportado: esa cuota se deduce en el 303, y volver a
                 // restarla aquí sería descontar dos veces lo mismo.
-                addExpense(unitExpenses.computeIfAbsent(e.getStorageUnit().getId(), k -> new TreeMap<>()), e.getCategory(), e.netAmount());
+                addExpense(unitExpenses.computeIfAbsent(e.getStorageUnit().getId(), k -> new TreeMap<>()), e.getCategory(), e.irpfAmount());
             }
         }
 

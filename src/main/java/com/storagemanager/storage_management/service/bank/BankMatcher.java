@@ -128,16 +128,18 @@ public class BankMatcher {
             return;
         }
 
-        // La cuota de un préstamo no es un gasto entero: si financia los pisos, sus
-        // intereses sí son deducibles en el IRPF del alquiler, pero la amortización
-        // de capital no, y el extracto solo trae la cuota. Se deja a la vista, sin
-        // proponer nada, para que se apunten los intereses del cuadro de amortización.
-        if (!line.isIncome() && TextMatch.containsAny(TextMatch.normalize(line.getConcept()),
+        // La cuota de una hipoteca o un préstamo: se apunta entera como gasto
+        // «Hipoteca», y en el gasto se dicen después los intereses de ese mes (del
+        // cuadro de amortización), que son lo único deducible en el IRPF.
+        if (!line.isIncome() && profile.getContext() == BankProfileContext.PROPIETARIOS
+                && TextMatch.containsAny(TextMatch.normalize(line.getConcept()),
                 List.of("PRESTAMO", "HIPOTECA", "HIPOTECARIO"))) {
-            line.setAction(BankLineAction.NONE);
-            line.setReason("Cuota de un préstamo: no crea nada, porque mezcla intereses y capital. Una vez al año, apunta en Gastos "
-                    + "los intereses del certificado del banco (categoría «Intereses de financiación», en su unidad). "
-                    + "Si la marcas como «Nada» y la recuerdas, los meses siguientes saldrá ignorada");
+            line.setAction(BankLineAction.EXPENSE);
+            line.setExpenseCategory(ExpenseCategory.HIPOTECA);
+            line.setStorageUnit(profile.getDefaultUnit());
+            line.setReason("Cuota de hipoteca o préstamo" + (line.getStorageUnit() == null ? ": elige la unidad" : "")
+                    + ". Después, en Gastos, pon los intereses de la cuota (del cuadro de amortización): "
+                    + "es lo único deducible en el IRPF");
             return;
         }
 

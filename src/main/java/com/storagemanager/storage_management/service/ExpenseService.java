@@ -173,6 +173,13 @@ public class ExpenseService {
             throw new BadRequestException("El IVA soportado no puede ser mayor que el importe del gasto");
         }
         expense.setVatAmount(vat != null && vat.signum() != 0 ? vat : null);
+        // Los intereses solo tienen sentido en la cuota de una hipoteca, y van
+        // dentro de ella: lo demás de la cuota es capital.
+        BigDecimal interest = request.getCategory() == ExpenseCategory.HIPOTECA ? request.getInterestAmount() : null;
+        if (interest != null && interest.compareTo(request.getAmount()) > 0) {
+            throw new BadRequestException("Los intereses no pueden ser más que la cuota de la hipoteca");
+        }
+        expense.setInterestAmount(interest);
         expense.setDescription(request.getDescription().trim());
         expense.setCategory(request.getCategory());
         expense.setExpenseDate(request.getExpenseDate());

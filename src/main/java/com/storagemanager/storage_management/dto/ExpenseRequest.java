@@ -24,6 +24,13 @@ public class ExpenseRequest {
     @DecimalMin(value = "0.00", message = "VAT amount cannot be negative")
     private BigDecimal vatAmount;
 
+    /**
+     * Solo en la cuota de una hipoteca: la parte que son intereses, la del cuadro
+     * de amortización. Es lo que se deduce en el IRPF; se ignora en las demás categorías.
+     */
+    @DecimalMin(value = "0.00", message = "Interest amount cannot be negative")
+    private BigDecimal interestAmount;
+
     @NotBlank(message = "Description is required")
     @Size(max = 255, message = "Description must be at most 255 characters")
     private String description;

@@ -60,6 +60,15 @@ public class Expense {
     @Column(name = "vat_amount", precision = 10, scale = 2)
     private BigDecimal vatAmount;
 
+    /**
+     * Solo en la cuota de una hipoteca ({@link ExpenseCategory#HIPOTECA}): la
+     * parte de {@link #amount} que son intereses, la del cuadro de amortización
+     * para ese mes. Es lo único deducible de la cuota en el IRPF. Nula = no se
+     * ha dicho, y no se deduce nada.
+     */
+    @Column(name = "interest_amount", precision = 10, scale = 2)
+    private BigDecimal interestAmount;
+
     @Column(nullable = false, length = 255)
     private String description;
 
@@ -96,5 +105,21 @@ public class Expense {
      */
     public BigDecimal netAmount() {
         return amount == null ? BigDecimal.ZERO.setScale(2) : amount.subtract(deductibleVat());
+    }
+
+    /**
+     * Lo que cuenta como gasto en el IRPF: de la cuota de una hipoteca, solo sus
+     * intereses; de lo demás, el importe sin el IVA que se deduce en el 303.
+     */
+    public BigDecimal irpfAmount() {
+        if (category == ExpenseCategory.HIPOTECA) {
+            return interestAmount == null ? BigDecimal.ZERO.setScale(2) : interestAmount;
+        }
+        return netAmount();
+    }
+
+    /** Lo que se pagó y no es gasto en el IRPF: la amortización de capital de una hipoteca. */
+    public BigDecimal irpfExcludedAmount() {
+        return category == ExpenseCategory.HIPOTECA ? netAmount().subtract(irpfAmount()) : BigDecimal.ZERO.setScale(2);
     }
 }

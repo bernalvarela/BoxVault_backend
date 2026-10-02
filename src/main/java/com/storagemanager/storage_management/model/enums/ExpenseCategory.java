@@ -14,6 +14,10 @@ package com.storagemanager.storage_management.model.enums;
  *   (el del 3º E). Solo los intereses: la amortización de capital no es gasto.
  *   Se apuntan una vez al año con el certificado del banco, porque la cuota
  *   mensual del extracto mezcla las dos cosas.
+ * HIPOTECA: la cuota mensual de la hipoteca o del préstamo de una unidad (la
+ *   del 3º I), entera, como sale del banco. Lleva dentro los intereses de ese
+ *   mes (Expense.interestAmount, del cuadro de amortización): solo esa parte
+ *   es deducible en el IRPF; la amortización de capital no es gasto.
  * OTROS: llaves y cualquier otro gasto.
  */
 public enum ExpenseCategory {
@@ -26,5 +30,6 @@ public enum ExpenseCategory {
     RESTAURACION_COMPRAS,
     REPARTO_BENEFICIOS,
     INTERESES,
+    HIPOTECA,
     OTROS
 }
