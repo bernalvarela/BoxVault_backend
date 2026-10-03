@@ -315,6 +315,20 @@ class BankMatcherRecordedTest {
     }
 
     @Test
+    void theRecordingDateDoesNotMatterOnlyTheMonth() {
+        // Octubre de 2024 apuntado a mano en enero de 2025, al ponerse al día.
+        RentalAgreement rental = trastero("1", "45.00", LocalDate.of(2024, 1, 1));
+        Payment october = paid(rental, YearMonth.of(2024, 10), LocalDate.of(2025, 1, 15));
+        BankMatcher matcher = matcher();
+
+        BankImportLine line = line(LocalDate.of(2024, 10, 10), "ALQUILER TRASTERO 1", "45.00");
+        match(matcher, matcher.load(), line, trasteros());
+
+        assertTrue(line.getAlreadyRecorded(), line.getReason());
+        assertEquals(october.getId(), line.getPaymentId());
+    }
+
+    @Test
     void aPaymentAlreadyLinkedToAnotherStatementIsNotTakenAgain() {
         // Septiembre y octubre ya se casaron con sus transferencias en un extracto
         // anterior: otro ingreso del 15 de octubre no es ninguno de los dos otra vez.

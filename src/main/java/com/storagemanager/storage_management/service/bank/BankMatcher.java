@@ -605,18 +605,15 @@ public class BankMatcher {
         return true;
     }
 
-    /** Cuántos días puede haber entre el cobro apuntado y el movimiento para casarlos por el mes. */
-    private static final int SAME_MONTH_DAYS = 45;
-
     /** Hasta qué día del mes un ingreso se casa con el cobro de ese mismo mes. */
     private static final int SAME_MONTH_LAST_DAY = 20;
 
     /**
-     * El cobro apuntado a mano de ese contrato para el mes del movimiento (o el
+     * El cobro de ese contrato para el mes y el año del movimiento (o el mes
      * anterior, si se paga con retraso), por el mismo importe y todavía sin casar
-     * con ningún movimiento, de este extracto o de otro. Para cuando el cobro se
-     * apuntó con la fecha del vencimiento (el día 1) y el dinero llegó días
-     * después: la fecha no coincide, pero quien paga, el mes y el importe sí.
+     * con ningún movimiento, de este extracto o de otro. Da igual con qué fecha se
+     * apuntó (el día 1, el vencimiento, el día que se metió a mano): el cobro es
+     * el de ese mes.
      * <p>
      * El mismo mes solo hasta el día 20: un ingreso de finales de mes con ese mes
      * ya cobrado puede ser el siguiente por adelantado, y entonces se pregunta.
@@ -625,11 +622,11 @@ public class BankMatcher {
         YearMonth month = YearMonth.from(line.getDate());
         List<YearMonth> months = line.getDate().getDayOfMonth() <= SAME_MONTH_LAST_DAY
                 ? List.of(month, month.minusMonths(1)) : List.of(month.minusMonths(1));
+        // Lo que cuenta es el mes y el año del cobro, no la fecha con que se apuntó.
         List<Payment> candidates = ctx.paidPayments().stream()
                 .filter(p -> !ctx.claimedPayments().contains(p.getId()))
                 .filter(p -> p.getRentalAgreement() != null && p.getRentalAgreement().getId().equals(rental.getId()))
                 .filter(p -> p.getAmountPaid().compareTo(line.getAmount()) == 0)
-                .filter(p -> Math.abs(p.getPaymentDate().toEpochDay() - line.getDate().toEpochDay()) <= SAME_MONTH_DAYS)
                 .toList();
         for (YearMonth ym : months) {
             for (Payment p : candidates) {
