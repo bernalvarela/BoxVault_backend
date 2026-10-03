@@ -19,6 +19,7 @@ import com.storagemanager.storage_management.model.enums.BankProfileContext;
 import com.storagemanager.storage_management.model.enums.CommunityEntryType;
 import com.storagemanager.storage_management.model.enums.ExpenseCategory;
 import com.storagemanager.storage_management.model.enums.PaymentStatus;
+import com.storagemanager.storage_management.repository.BankImportLineRepository;
 import com.storagemanager.storage_management.repository.BankMatchRuleRepository;
 import com.storagemanager.storage_management.repository.ExpenseRepository;
 import com.storagemanager.storage_management.repository.OwnershipRepository;
@@ -81,6 +82,7 @@ public class BankMatcher {
     private final BankMatchRuleRepository rules;
     private final OwnershipRepository ownerships;
     private final ExpenseRepository expenses;
+    private final BankImportLineRepository importedLines;
 
     /**
      * Lo que hace falta para proponer, cargado una vez por extracto.
@@ -105,7 +107,9 @@ public class BankMatcher {
         List<BankMatchRule> sorted = rules.findAll().stream()
                 .sorted(Comparator.comparingInt((BankMatchRule r) -> r.getPattern().split(" ").length).reversed())
                 .toList();
-        return new Context(rentals.findAll(), byRental, paid, sorted, ownerships.findAll(), new java.util.HashSet<>(),
+        // Los cobros casados con movimientos de extractos anteriores ya tienen el suyo.
+        Set<Long> claimed = new java.util.HashSet<>(importedLines.findLinkedPaymentIds());
+        return new Context(rentals.findAll(), byRental, paid, sorted, ownerships.findAll(), claimed,
                 expenses.findAll(), new java.util.HashSet<>());
     }
 
@@ -194,6 +198,11 @@ public class BankMatcher {
                 List<Payment> group = recordedMultiMonth(line, rental, ctx);
                 if (!group.isEmpty()) {
                     markRecorded(line, group, ctx, " (por una regla aprendida)");
+                    return true;
+                }
+                Payment ofMonth = recordedForMonth(line, rental, ctx);
+                if (ofMonth != null) {
+                    markRecorded(line, List.of(ofMonth), ctx, " (por una regla aprendida; apuntado con otra fecha)");
                     return true;
                 }
                 proposePayment(line, rental, why, ctx);
@@ -586,9 +595,48 @@ public class BankMatcher {
             return true;
         }
         List<Payment> group = recordedMultiMonth(line, payer.rental(), ctx);
-        if (group.isEmpty()) return false;
-        markRecorded(line, group, ctx, "");
+        if (!group.isEmpty()) {
+            markRecorded(line, group, ctx, "");
+            return true;
+        }
+        Payment ofMonth = recordedForMonth(line, payer.rental(), ctx);
+        if (ofMonth == null) return false;
+        markRecorded(line, List.of(ofMonth), ctx, " (apuntado con otra fecha)");
         return true;
+    }
+
+    /** Cuántos días puede haber entre el cobro apuntado y el movimiento para casarlos por el mes. */
+    private static final int SAME_MONTH_DAYS = 45;
+
+    /** Hasta qué día del mes un ingreso se casa con el cobro de ese mismo mes. */
+    private static final int SAME_MONTH_LAST_DAY = 20;
+
+    /**
+     * El cobro apuntado a mano de ese contrato para el mes del movimiento (o el
+     * anterior, si se paga con retraso), por el mismo importe y todavía sin casar
+     * con ningún movimiento, de este extracto o de otro. Para cuando el cobro se
+     * apuntó con la fecha del vencimiento (el día 1) y el dinero llegó días
+     * después: la fecha no coincide, pero quien paga, el mes y el importe sí.
+     * <p>
+     * El mismo mes solo hasta el día 20: un ingreso de finales de mes con ese mes
+     * ya cobrado puede ser el siguiente por adelantado, y entonces se pregunta.
+     */
+    private static Payment recordedForMonth(BankImportLine line, RentalAgreement rental, Context ctx) {
+        YearMonth month = YearMonth.from(line.getDate());
+        List<YearMonth> months = line.getDate().getDayOfMonth() <= SAME_MONTH_LAST_DAY
+                ? List.of(month, month.minusMonths(1)) : List.of(month.minusMonths(1));
+        List<Payment> candidates = ctx.paidPayments().stream()
+                .filter(p -> !ctx.claimedPayments().contains(p.getId()))
+                .filter(p -> p.getRentalAgreement() != null && p.getRentalAgreement().getId().equals(rental.getId()))
+                .filter(p -> p.getAmountPaid().compareTo(line.getAmount()) == 0)
+                .filter(p -> Math.abs(p.getPaymentDate().toEpochDay() - line.getDate().toEpochDay()) <= SAME_MONTH_DAYS)
+                .toList();
+        for (YearMonth ym : months) {
+            for (Payment p : candidates) {
+                if (ym.equals(periodOf(p))) return p;
+            }
+        }
+        return null;
     }
 
     /**

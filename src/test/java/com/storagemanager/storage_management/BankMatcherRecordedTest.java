@@ -11,6 +11,7 @@ import com.storagemanager.storage_management.model.enums.BankLineStatus;
 import com.storagemanager.storage_management.model.enums.BankProfileContext;
 import com.storagemanager.storage_management.model.enums.ExpenseCategory;
 import com.storagemanager.storage_management.model.enums.PaymentStatus;
+import com.storagemanager.storage_management.repository.BankImportLineRepository;
 import com.storagemanager.storage_management.repository.BankMatchRuleRepository;
 import com.storagemanager.storage_management.repository.ExpenseRepository;
 import com.storagemanager.storage_management.repository.OwnershipRepository;
@@ -40,6 +41,8 @@ class BankMatcherRecordedTest {
     private final List<RentalAgreement> rentals = new ArrayList<>();
     private final List<Payment> payments = new ArrayList<>();
     private final List<Expense> expenses = new ArrayList<>();
+    /** Cobros ya casados con movimientos de extractos anteriores. */
+    private final java.util.Set<Long> linkedPayments = new java.util.HashSet<>();
     private long nextId = 100;
 
     private BankMatcher matcher() {
@@ -53,7 +56,9 @@ class BankMatcherRecordedTest {
         when(ruleRepo.findAll()).thenReturn(List.of());
         when(ownershipRepo.findAll()).thenReturn(List.of());
         when(expenseRepo.findAll()).thenReturn(expenses);
-        return new BankMatcher(rentalRepo, paymentRepo, ruleRepo, ownershipRepo, expenseRepo);
+        BankImportLineRepository lineRepo = mock(BankImportLineRepository.class);
+        when(lineRepo.findLinkedPaymentIds()).thenReturn(linkedPayments);
+        return new BankMatcher(rentalRepo, paymentRepo, ruleRepo, ownershipRepo, expenseRepo, lineRepo);
     }
 
     private static BankImportProfile trasteros() {
@@ -292,6 +297,39 @@ class BankMatcherRecordedTest {
         assertEquals(BankLineAction.NONE, line.getAction());
         assertEquals(BankLineStatus.PENDING, line.getStatus());
         assertTrue(line.getReason().contains("ya tienen cobrado"), line.getReason());
+    }
+
+    @Test
+    void aPaymentRecordedOnTheDueDateIsFoundByItsMonth() {
+        // Nélida: el cobro se apunta con fecha del día 1 y el dinero llega el 10.
+        RentalAgreement rental = trastero("1", "45.00", LocalDate.of(2024, 1, 1));
+        paid(rental, YearMonth.of(2024, 9), LocalDate.of(2024, 9, 1));
+        Payment october = paid(rental, YearMonth.of(2024, 10), LocalDate.of(2024, 10, 1));
+        BankMatcher matcher = matcher();
+
+        BankImportLine line = line(LocalDate.of(2024, 10, 10), "INGRESO EN EFECTIVO alquiler trastero 1", "45.00");
+        match(matcher, matcher.load(), line, trasteros());
+
+        assertTrue(line.getAlreadyRecorded(), line.getReason());
+        assertEquals(october.getId(), line.getPaymentId());
+    }
+
+    @Test
+    void aPaymentAlreadyLinkedToAnotherStatementIsNotTakenAgain() {
+        // Septiembre y octubre ya se casaron con sus transferencias en un extracto
+        // anterior: otro ingreso del 15 de octubre no es ninguno de los dos otra vez.
+        RentalAgreement rental = trastero("1", "45.00", LocalDate.of(2024, 1, 1));
+        for (int m = 4; m <= 8; m++) paid(rental, YearMonth.of(2024, m), LocalDate.of(2024, m, 1));
+        Payment september = paid(rental, YearMonth.of(2024, 9), LocalDate.of(2024, 9, 1));
+        Payment october = paid(rental, YearMonth.of(2024, 10), LocalDate.of(2024, 10, 1));
+        linkedPayments.add(september.getId());
+        linkedPayments.add(october.getId());
+        BankMatcher matcher = matcher();
+
+        BankImportLine line = line(LocalDate.of(2024, 10, 15), "alquiler trastero 1", "45.00");
+        match(matcher, matcher.load(), line, trasteros());
+
+        assertFalse(line.getAlreadyRecorded(), line.getReason());
     }
 
     @Test

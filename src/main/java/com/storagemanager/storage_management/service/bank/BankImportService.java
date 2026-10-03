@@ -217,14 +217,25 @@ public class BankImportService {
         // Primera pasada: los ingresos que ya están apuntados a mano y cuyo
         // pagador se reconoce por el nombre. Va antes que nada para que un ingreso
         // sin nombre no se quede con el cobro de otro que paga lo mismo.
+        // Por fecha, de la más antigua a la más nueva, y no en el orden del fichero
+        // (el BBVA lo da al revés): así cada cobro apuntado se lo queda el primer
+        // movimiento que pudo pagarlo, y un pago adelantado de finales de mes no le
+        // quita el suyo a la transferencia de principios.
         List<BankImportLine> fresh = bankImport.getLines().stream()
-                .filter(l -> !Boolean.TRUE.equals(l.getDuplicate())).toList();
+                .filter(l -> !Boolean.TRUE.equals(l.getDuplicate()))
+                .sorted(java.util.Comparator.comparing(BankImportLine::getDate)
+                        .thenComparing(BankImportLine::getLineNumber))
+                .toList();
         Set<BankImportLine> recorded = new java.util.HashSet<>();
         for (BankImportLine line : fresh) {
             if (matcher.markRecordedByPayer(line, profile, ctx)) recorded.add(line);
         }
-        // Segunda pasada: la propuesta de todo lo demás.
-        for (BankImportLine line : bankImport.getLines()) {
+        // Segunda pasada: la propuesta de todo lo demás, también por fecha.
+        List<BankImportLine> byDate = bankImport.getLines().stream()
+                .sorted(java.util.Comparator.comparing(BankImportLine::getDate)
+                        .thenComparing(BankImportLine::getLineNumber))
+                .toList();
+        for (BankImportLine line : byDate) {
             if (recorded.contains(line)) continue;
             if (Boolean.TRUE.equals(line.getDuplicate())) {
                 // Sin propuesta: no debe quedarse con ningún cobro apuntado a mano.

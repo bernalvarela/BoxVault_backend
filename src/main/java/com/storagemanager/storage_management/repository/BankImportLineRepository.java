@@ -24,4 +24,12 @@ public interface BankImportLineRepository extends JpaRepository<BankImportLine, 
                                      @Param("discarded") BankLineStatus discarded);
 
     List<BankImportLine> findByBankImportIdOrderByLineNumberAsc(Long importId);
+
+    /**
+     * Los cobros que ya están casados con un movimiento de otro extracto, porque
+     * se crearon al aplicarlo o porque se dio por "ya registrado": no pueden ser
+     * también el de un movimiento nuevo.
+     */
+    @Query("SELECT DISTINCT l.paymentId FROM BankImportLine l WHERE l.paymentId IS NOT NULL")
+    Set<Long> findLinkedPaymentIds();
 }
