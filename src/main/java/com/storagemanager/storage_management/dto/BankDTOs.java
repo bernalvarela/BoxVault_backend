@@ -128,6 +128,8 @@ public final class BankDTOs {
         private Long id;
         private Long profileId;
         private String profileName;
+        /** La cuenta del perfil ("ES12 … 3456"), para distinguir dos perfiles del mismo banco. */
+        private String profileAccountLabel;
         private String fileName;
         private String status;
         private LocalDateTime createdAt;

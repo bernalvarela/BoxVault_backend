@@ -683,6 +683,7 @@ public class BankImportService {
                 .id(i.getId())
                 .profileId(i.getProfile().getId())
                 .profileName(i.getProfile().getName())
+                .profileAccountLabel(i.getProfile().getAccountLabel())
                 .fileName(i.getFileName())
                 .status(i.getStatus())
                 .createdAt(i.getCreatedAt())
