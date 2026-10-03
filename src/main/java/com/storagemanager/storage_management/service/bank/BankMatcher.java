@@ -284,10 +284,10 @@ public class BankMatcher {
                     .filter(Objects::nonNull)
                     .toList();
             if (free.size() == 1) {
-                boolean named = mentionsUnitOf(line, free.get(0).getRentalAgreement());
+                boolean unitInConcept = mentionsUnitOf(line, free.get(0).getRentalAgreement());
                 markRecorded(line, free, ctx, " (por el importe: es el único contrato de " + Pdfs.euros(line.getAmount())
-                        + " con ese cobro sin casar con otro movimiento" + (named ? ", y el concepto nombra su número de unidad)"
-                        : "; compruébalo)"), !named);
+                        + " con ese cobro sin casar con otro movimiento" + (unitInConcept ? ", y el concepto nombra su número de unidad)"
+                        : "; compruébalo)"), !unitInConcept);
                 return;
             }
         }

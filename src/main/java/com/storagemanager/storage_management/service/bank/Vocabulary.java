@@ -57,7 +57,7 @@ public final class Vocabulary {
 
     private Vocabulary(Map<BankVocabularyList, List<Entry>> lists) {
         Map<BankVocabularyList, List<Entry>> all = new EnumMap<>(BankVocabularyList.class);
-        all.putAll(DEFAULTS == null ? Map.of() : DEFAULTS);
+        all.putAll(DEFAULTS);
         all.putAll(lists);
 
         this.months = new LinkedHashMap<>();
