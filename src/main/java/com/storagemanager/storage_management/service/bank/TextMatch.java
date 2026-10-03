@@ -34,7 +34,7 @@ public final class TextMatch {
             "TRANSFERENCIA", "TRANSFERENCIAS", "TRANSF", "TRF", "TRANS", "INMEDIATA", "SEPA", "BIZUM",
             "RECIBO", "RECIBOS", "ADEUDO", "ADEUDOS", "ABONO", "ABONOS", "CARGO", "CARGOS", "COBRO", "PAGO",
             "SU", "CONCEPTO", "ORDENANTE", "BENEFICIARIO", "FAVOR", "REF",
-            "REFERENCIA", "N", "NO", "NUM", "NUMERO", "ES", "EUR", "EUROS", "MES", "MENSUALIDAD",
+            "REFERENCIA", "N", "NO", "NR", "NRO", "NMR", "NMRO", "NUM", "NUMR", "NUMERO", "ES", "EUR", "EUROS", "MES", "MENSUALIDAD",
             "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE",
             "SETIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE",
             // Los meses en gallego que no se escriben igual que en castellano.
@@ -123,11 +123,13 @@ public final class TextMatch {
      * "TRASTERO 8", "Trasteiro 7", "trastero número 4", "Baixo 7", "piso 3": lo que
      * de verdad escribe quien paga, mucho más a menudo que su nombre. Entre la
      * palabra y el número puede haber "nº", "número" (o lo que quede de él si el
-     * banco se comió la tilde: "n.mero").
+     * banco se comió la tilde: "n.mero") o una abreviatura ("nr", "nmr").
+     * "Trastero" se reconoce también pegado a la palabra de antes
+     * ("PAGOTRASTERO NMR 4"): es lo bastante largo para no salir dentro de otra.
      */
     private static final Pattern UNIT_REFERENCE = Pattern.compile(
-            "\\b(?:TRASTERO|TRASTEIRO|TRAST|BAIXO|BAJO|PISO|LOCAL|PLAZA|GARAJE|UNIDAD)"
-            + "(?:\\s+(?:N|NO|NUM|NUMERO|NRO|MERO))*\\s+(\\d{1,3}[A-Z]?)\\b");
+            "(?:\\b(?:TRAST|BAIXO|BAJO|PISO|LOCAL|PLAZA|GARAJE|UNIDAD)|TRASTERO|TRASTEIRO)"
+            + "(?:\\s+(?:N|NO|NR|NRO|NMR|NMRO|NUM|NUMR|NUMERO|MERO))*\\s+(\\d{1,3}[A-Z]?)\\b");
 
     /** Los números de unidad que se nombran en el concepto, en orden: "TRASTERO 8" -> ["8"]. */
     public static List<String> unitReferences(String concept) {

@@ -17,6 +17,7 @@ import com.storagemanager.storage_management.repository.OwnershipRepository;
 import com.storagemanager.storage_management.repository.PaymentRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 import com.storagemanager.storage_management.service.bank.BankMatcher;
+import com.storagemanager.storage_management.service.bank.TextMatch;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -249,6 +250,48 @@ class BankMatcherRecordedTest {
         matcher.propose(second, trasteros(), ctx);
         assertFalse(second.getAlreadyRecorded());
         assertEquals(BankLineAction.EXPENSE, second.getAction());
+    }
+
+    @Test
+    void aUnitGluedToTheWordBeforeAndAbbreviatedIsStillRecognised() {
+        assertEquals(List.of("4"), TextMatch.unitReferences("TRANSFERENCIAS · Pagotrastero nmr 4 Av de Oza"));
+        assertEquals(List.of("7"), TextMatch.unitReferences("trastero nº 7"));
+        assertEquals(List.of("3"), TextMatch.unitReferences("PAGO TRASTERO NR 3"));
+    }
+
+    @Test
+    void byAmountOnlyRentalsThatStillOweTheMonthCount() {
+        // Tres trasteros de 50 €: dos ya tienen noviembre cobrado.
+        LocalDate start = LocalDate.of(2024, 11, 1);
+        RentalAgreement a = trastero("1", "50.00", start);
+        RentalAgreement b = trastero("2", "50.00", start);
+        RentalAgreement c = trastero("3", "50.00", start);
+        paid(a, YearMonth.of(2024, 11), LocalDate.of(2024, 11, 25));
+        paid(c, YearMonth.of(2024, 11), LocalDate.of(2024, 11, 25));
+        BankMatcher matcher = matcher();
+
+        BankImportLine line = line(LocalDate.of(2024, 11, 4), "TRANSFERENCIAS Av de Oza", "50.00");
+        match(matcher, matcher.load(), line, trasteros());
+
+        assertEquals(BankLineAction.RENT_PAYMENT, line.getAction());
+        assertEquals(b.getId(), line.getRentalAgreement().getId());
+        assertEquals(11, line.getPeriodMonth());
+        assertTrue(line.getReason().contains("único de los 3"), line.getReason());
+    }
+
+    @Test
+    void byAmountWhenEveryoneHasPaidItAsks() {
+        LocalDate start = LocalDate.of(2024, 11, 1);
+        paid(trastero("1", "50.00", start), YearMonth.of(2024, 11), LocalDate.of(2024, 11, 25));
+        paid(trastero("2", "50.00", start), YearMonth.of(2024, 11), LocalDate.of(2024, 11, 25));
+        BankMatcher matcher = matcher();
+
+        BankImportLine line = line(LocalDate.of(2024, 11, 4), "TRANSFERENCIAS Av de Oza", "50.00");
+        match(matcher, matcher.load(), line, trasteros());
+
+        assertEquals(BankLineAction.NONE, line.getAction());
+        assertEquals(BankLineStatus.PENDING, line.getStatus());
+        assertTrue(line.getReason().contains("ya tienen cobrado"), line.getReason());
     }
 
     @Test

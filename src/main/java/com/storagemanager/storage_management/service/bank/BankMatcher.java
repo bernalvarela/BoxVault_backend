@@ -249,12 +249,19 @@ public class BankMatcher {
             return;
         }
 
-        // Por el importe, si solo hay un contrato en vigor que cobre eso.
+        // Por el importe: los contratos en vigor ese mes que cobran eso y todavía
+        // deben ese mes (o, si el concepto no lo dice, alguno de los últimos). Uno
+        // que ya lo tiene cobrado no puede ser quien paga.
         List<RentalAgreement> byAmount = ctx.rentals().stream()
                 .filter(r -> inForceAround(r, date) && sameAmount(r, line))
                 .toList();
-        if (byAmount.size() == 1) {
-            proposePayment(line, byAmount.get(0), "Por el importe (no sale ningún nombre conocido): compruébalo", ctx);
+        YearMonth named = namedPeriod(line);
+        List<RentalAgreement> owing = byAmount.stream().filter(r -> owes(r, line, named, ctx)).toList();
+        if (owing.size() == 1) {
+            proposePayment(line, owing.get(0), "Por el importe (no sale ningún nombre conocido)"
+                    + (byAmount.size() > 1 ? ": es el único de los " + byAmount.size() + " contratos de "
+                        + Pdfs.euros(line.getAmount()) + " con " + (named != null ? monthText(named) : "una mensualidad")
+                        + " sin cobrar" : "") + ". Compruébalo", ctx);
             return;
         }
 
@@ -265,9 +272,37 @@ public class BankMatcher {
             // «Ignoradas» por si acaso.
             line.setStatus(BankLineStatus.DISCARDED);
             line.setReason("Ingreso sin reconocer: si es un cobro del alquiler, recupéralo y elige el contrato");
+        } else if (owing.isEmpty()) {
+            line.setReason(truncate(byAmount.size() == 1
+                    ? "El único contrato de " + Pdfs.euros(line.getAmount()) + " (" + rentalShort(byAmount.get(0))
+                        + ") ya tiene cobrado " + (named != null ? monthText(named) : "todo hasta este mes")
+                        + ": ¿es un cobro ya apuntado? Si no, elige el contrato y el mes"
+                    : "Los " + byAmount.size() + " contratos de " + Pdfs.euros(line.getAmount()) + " ya tienen cobrado "
+                        + (named != null ? monthText(named) : "todo hasta este mes")
+                        + ": ¿es un cobro ya apuntado? Si no, elige el contrato y el mes"));
         } else {
-            line.setReason(byAmount.size() + " contratos cobran " + Pdfs.euros(line.getAmount()) + ": elige cuál es");
+            line.setReason(truncate(owing.size() + " contratos de " + Pdfs.euros(line.getAmount())
+                    + " tienen la mensualidad sin cobrar: " + owing.stream().map(BankMatcher::rentalShort)
+                        .collect(Collectors.joining(", ")) + ". Elige cuál es"));
         }
+    }
+
+    /**
+     * Si al contrato le falta por cobrar el mes que nombra el concepto o, si no
+     * nombra ninguno, alguno de los últimos meses hasta el del movimiento.
+     */
+    private static boolean owes(RentalAgreement rental, BankImportLine line, YearMonth named, Context ctx) {
+        List<Payment> paid = ctx.paymentsByRental().getOrDefault(rental.getId(), List.of());
+        if (named == null) return firstOpenPeriod(rental, line.getDate(), paid) != null;
+        if (rental.getStartDate() != null && named.isBefore(YearMonth.from(rental.getStartDate()))) return false;
+        if (rental.getEndDate() != null && named.isAfter(YearMonth.from(rental.getEndDate()))) return false;
+        return !isClosed(byPeriod(paid).get(named));
+    }
+
+    /** "RNT-2026-015 (Trastero 4)", para nombrar un contrato en un motivo. */
+    private static String rentalShort(RentalAgreement rental) {
+        return rental.getAgreementNumber()
+                + (rental.getStorageUnit() == null ? "" : " (" + rental.getStorageUnit().getName() + ")");
     }
 
     /** A quién se le reconoce el pago y por qué. */
