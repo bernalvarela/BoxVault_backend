@@ -37,7 +37,8 @@ public class RentalParty {
      * el contrato, y de vuelta sería un bucle infinito en el JSON.
      */
     @JsonIgnore
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    // EAGER: la imagen nativa no puede crear proxies de Hibernate (ver UnitPriceHistory).
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
     @JoinColumn(name = "rental_agreement_id", nullable = false)
     private RentalAgreement rentalAgreement;
 
