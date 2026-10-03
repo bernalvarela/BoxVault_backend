@@ -402,8 +402,12 @@ class BankMatcherRecordedTest {
         assertEquals(february.getId(), line.getPaymentId());
         assertFalse(line.getReviewSuggested(), line.getReason());
 
-        // Y "trstr" ya es una palabra de unidad: se reconoce el trastero directamente.
-        assertEquals(List.of("1"), TextMatch.unitReferences("Alqulr trstr Pasaxe num 1."));
+        // "trstr" ya es una palabra de unidad: "trstr num 1" es el trastero 1.
+        assertEquals(List.of("1"), TextMatch.unitReferences("Alqulr trstr num 1."));
+        // Pero no se saltan palabras entre la unidad y el número: "Pasaxe 29" es
+        // la calle, no el trastero 29. Ahí es el "1" suelto el que confirma el cobro.
+        assertEquals(List.of(), TextMatch.unitReferences("Alqulr trstr Pasaxe num 1."));
+        assertEquals(List.of(), TextMatch.unitReferences("trastero Pasaxe 29"));
     }
 
     @Test
