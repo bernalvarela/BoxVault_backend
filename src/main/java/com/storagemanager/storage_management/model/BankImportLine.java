@@ -74,6 +74,15 @@ public class BankImportLine {
     @Builder.Default
     private Boolean alreadyRecorded = false;
 
+    /**
+     * Se dio por ya registrado con poca seguridad (solo por el importe y la
+     * fecha, sin nada en el concepto que diga quién paga): conviene que una
+     * persona lo mire. Las demás ya registradas no hay que revisarlas.
+     */
+    @Builder.Default
+    @Column(name = "review_suggested")
+    private Boolean reviewSuggested = false;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default

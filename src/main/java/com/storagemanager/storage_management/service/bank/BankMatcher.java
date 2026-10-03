@@ -285,7 +285,7 @@ public class BankMatcher {
                     .toList();
             if (free.size() == 1) {
                 markRecorded(line, free, ctx, " (por el importe: es el único contrato de " + Pdfs.euros(line.getAmount())
-                        + " con ese cobro sin casar con otro movimiento; compruébalo)");
+                        + " con ese cobro sin casar con otro movimiento; compruébalo)", true);
                 return;
             }
         }
@@ -692,7 +692,7 @@ public class BankMatcher {
     private boolean markRecordedByAmount(BankImportLine line, Context ctx) {
         List<Payment> candidates = recordedCandidates(line, ctx);
         if (candidates.size() != 1) return false;
-        markRecorded(line, List.of(candidates.get(0)), ctx, " (por importe y fecha: compruébalo)");
+        markRecorded(line, List.of(candidates.get(0)), ctx, " (por importe y fecha: compruébalo)", true);
         return true;
     }
 
@@ -710,6 +710,14 @@ public class BankMatcher {
      * de una vez): queda enlazada al primero y se ignora al aplicar.
      */
     private static void markRecorded(BankImportLine line, List<Payment> recorded, Context ctx, String note) {
+        markRecorded(line, recorded, ctx, note, false);
+    }
+
+    /**
+     * @param doubtful si se casó solo por el importe, sin nada en el concepto que
+     *                 diga quién paga: queda en «Para revisar»
+     */
+    private static void markRecorded(BankImportLine line, List<Payment> recorded, Context ctx, String note, boolean doubtful) {
         List<Payment> sorted = recorded.stream()
                 .sorted(Comparator.comparing(BankMatcher::periodOf, Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
@@ -723,6 +731,7 @@ public class BankMatcher {
         line.setPeriodCount(sorted.size());
         line.setPaymentId(first.getId());
         line.setAlreadyRecorded(true);
+        line.setReviewSuggested(doubtful);
         line.setStatus(BankLineStatus.DISCARDED);
         List<YearMonth> months = sorted.stream().map(BankMatcher::periodOf).filter(Objects::nonNull).toList();
         String when = first.getPaymentDate() == null ? "" : " del " + Pdfs.day(first.getPaymentDate());
@@ -979,6 +988,7 @@ public class BankMatcher {
         line.setReason(null);
         line.setPaymentId(null);
         line.setAlreadyRecorded(false);
+        line.setReviewSuggested(false);
         if (!Boolean.TRUE.equals(line.getDuplicate())) line.setStatus(BankLineStatus.PENDING);
     }
 

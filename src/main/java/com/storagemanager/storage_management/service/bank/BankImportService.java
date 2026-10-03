@@ -273,6 +273,13 @@ public class BankImportService {
         if (line.getStatus() == BankLineStatus.APPLIED) {
             throw new BadRequestException("Esta fila ya está aplicada: lo que creó se corrige en su pantalla");
         }
+        if (Boolean.TRUE.equals(request.getConfirmRecorded())) {
+            if (!Boolean.TRUE.equals(line.getAlreadyRecorded())) {
+                throw new BadRequestException("Solo se confirma una fila que se dio por ya registrada");
+            }
+            line.setReviewSuggested(false);
+            return toDTO(lines.save(line));
+        }
         if (request.getStatus() == BankLineStatus.DISCARDED) {
             line.setStatus(BankLineStatus.DISCARDED);
             return toDTO(lines.save(line));
@@ -283,6 +290,7 @@ public class BankImportService {
         // estaba: deja de apuntar a aquel cobro y se apuntará como uno nuevo.
         if (Boolean.TRUE.equals(line.getAlreadyRecorded())) {
             line.setAlreadyRecorded(false);
+            line.setReviewSuggested(false);
             line.setPaymentId(null);
             line.setExpenseId(null);
         }
@@ -718,6 +726,7 @@ public class BankImportService {
                 .balance(l.getBalance())
                 .duplicate(Boolean.TRUE.equals(l.getDuplicate()))
                 .alreadyRecorded(Boolean.TRUE.equals(l.getAlreadyRecorded()))
+                .reviewSuggested(Boolean.TRUE.equals(l.getReviewSuggested()))
                 .status(l.getStatus())
                 .action(l.getAction())
                 .reason(l.getReason())

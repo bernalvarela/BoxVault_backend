@@ -177,6 +177,8 @@ public final class BankDTOs {
         private boolean duplicate;
         /** El ingreso ya estaba apuntado a mano como cobro ({@code paymentId}): se ignora. */
         private boolean alreadyRecorded;
+        /** Ya registrada, pero casada solo por el importe: conviene mirarla. */
+        private boolean reviewSuggested;
         private BankLineStatus status;
         private BankLineAction action;
         private String reason;
@@ -225,6 +227,11 @@ public final class BankDTOs {
         private CommunityEntryType communityEntryType;
         /** Recordarlo para los próximos extractos. Por defecto, sí. */
         private Boolean learn;
+        /**
+         * Visto: el cobro o el gasto con que se casó una fila ya registrada es el
+         * bueno. Sale de «Para revisar» sin cambiar nada más.
+         */
+        private Boolean confirmRecorded;
     }
 
     /** Lo que pasó al aplicar un extracto. */

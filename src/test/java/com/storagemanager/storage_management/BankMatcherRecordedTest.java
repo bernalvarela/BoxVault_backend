@@ -109,6 +109,7 @@ class BankMatcherRecordedTest {
         assertEquals(july.getId(), line.getPaymentId());
         assertEquals(2, line.getPeriodCount());
         assertTrue(line.getReason().contains("julio y agosto de 2026"), line.getReason());
+        assertFalse(line.getReviewSuggested(), "el trastero y los meses lo dicen: no hay que revisarla");
     }
 
     @Test
@@ -383,6 +384,7 @@ class BankMatcherRecordedTest {
 
         assertTrue(line.getAlreadyRecorded(), line.getReason());
         assertEquals(b.getId(), line.getPaymentId());
+        assertTrue(line.getReviewSuggested(), "casada solo por el importe: queda para revisar");
     }
 
     @Test
