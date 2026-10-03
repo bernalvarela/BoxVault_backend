@@ -284,8 +284,10 @@ public class BankMatcher {
                     .filter(Objects::nonNull)
                     .toList();
             if (free.size() == 1) {
+                boolean named = mentionsUnitOf(line, free.get(0).getRentalAgreement());
                 markRecorded(line, free, ctx, " (por el importe: es el único contrato de " + Pdfs.euros(line.getAmount())
-                        + " con ese cobro sin casar con otro movimiento; compruébalo)", true);
+                        + " con ese cobro sin casar con otro movimiento" + (named ? ", y el concepto nombra su número de unidad)"
+                        : "; compruébalo)"), !named);
                 return;
             }
         }
@@ -692,8 +694,25 @@ public class BankMatcher {
     private boolean markRecordedByAmount(BankImportLine line, Context ctx) {
         List<Payment> candidates = recordedCandidates(line, ctx);
         if (candidates.size() != 1) return false;
-        markRecorded(line, List.of(candidates.get(0)), ctx, " (por importe y fecha: compruébalo)", true);
+        Payment found = candidates.get(0);
+        if (mentionsUnitOf(line, found.getRentalAgreement())) {
+            markRecorded(line, List.of(found), ctx, " (por importe y fecha, y el concepto nombra su número de unidad)");
+        } else {
+            markRecorded(line, List.of(found), ctx, " (por importe y fecha: compruébalo)", true);
+        }
         return true;
+    }
+
+    /**
+     * Si el concepto lleva, suelto, el número de la unidad del contrato: "Alqulr
+     * trstr Pasaxe num 1." con el cobro del trastero 1. No basta para saber de
+     * quién es un pago (un "1" puede ser cualquier cosa), pero sí para confirmar
+     * el que ya se encontró por el importe y la fecha.
+     */
+    private static boolean mentionsUnitOf(BankImportLine line, RentalAgreement rental) {
+        if (rental == null || rental.getStorageUnit() == null || rental.getStorageUnit().getUnitNumber() == null) return false;
+        String number = TextMatch.normalize(rental.getStorageUnit().getUnitNumber());
+        return !number.isEmpty() && TextMatch.containsAny(TextMatch.normalize(line.getConcept()), List.of(number));
     }
 
     /** Los cobros apuntados a mano con ese importe, a pocos días y sin casar todavía con otra fila. */

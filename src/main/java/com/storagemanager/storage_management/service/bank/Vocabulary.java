@@ -150,7 +150,7 @@ public final class Vocabulary {
     private static Map<BankVocabularyList, List<Entry>> factoryDefaults() {
         Map<BankVocabularyList, List<Entry>> d = new EnumMap<>(BankVocabularyList.class);
         d.put(BankVocabularyList.UNIT_WORD, plain(
-                "TRASTERO", "TRASTEIRO", "TRAST", "BAIXO", "BAJO", "PISO", "LOCAL", "PLAZA", "GARAJE", "UNIDAD"));
+                "TRASTERO", "TRASTEIRO", "TRAST", "TRSTR", "BAIXO", "BAJO", "PISO", "LOCAL", "PLAZA", "GARAJE", "UNIDAD"));
         d.put(BankVocabularyList.NUMBER_MARKER, plain(
                 "N", "NO", "NR", "NRO", "NMR", "NMRO", "NUM", "NUMR", "NUMERO", "MERO"));
 
@@ -189,7 +189,7 @@ public final class Vocabulary {
         d.put(BankVocabularyList.EXPENSE_WORD, List.copyOf(expense));
 
         d.put(BankVocabularyList.GENERIC, plain(
-                "TRASTERO", "TRASTEIRO", "TRAST", "BAIXO", "BAJO", "PISO", "LOCAL", "PLAZA", "GARAJE", "UNIDAD",
+                "TRASTERO", "TRASTEIRO", "TRAST", "TRSTR", "BAIXO", "BAJO", "PISO", "LOCAL", "PLAZA", "GARAJE", "UNIDAD",
                 "ALQUILER", "ALUGUER", "ARRENDAMIENTO", "RENTA", "MENSUALIDADE", "CUOTA", "PAGO", "NUMERO", "MERO",
                 "AV", "AVDA", "AVENIDA", "PASAXE", "PASAJE", "PASAX", "PONTE", "IZDA", "DCHA", "IZQUIERDA", "DERECHA"));
         d.put(BankVocabularyList.NOISE, plain(

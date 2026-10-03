@@ -388,6 +388,25 @@ class BankMatcherRecordedTest {
     }
 
     @Test
+    void anAmountMatchConfirmedByTheUnitNumberNeedsNoReview() {
+        // "Alquiler Pasaxe num 1.": ninguna palabra de unidad, pero el "1" es el
+        // del trastero cuyo cobro se encontró por el importe y la fecha.
+        RentalAgreement one = trastero("1", "55.00", LocalDate.of(2025, 1, 1));
+        Payment february = paid(one, YearMonth.of(2026, 2), LocalDate.of(2026, 2, 3));
+        BankMatcher matcher = matcher();
+
+        BankImportLine line = line(LocalDate.of(2026, 2, 3), "TRANSFERENCIAS Alquiler Pasaxe num 1.", "55.00");
+        match(matcher, matcher.load(), line, trasteros());
+
+        assertTrue(line.getAlreadyRecorded(), line.getReason());
+        assertEquals(february.getId(), line.getPaymentId());
+        assertFalse(line.getReviewSuggested(), line.getReason());
+
+        // Y "trstr" ya es una palabra de unidad: se reconoce el trastero directamente.
+        assertEquals(List.of("1"), TextMatch.unitReferences("Alqulr trstr Pasaxe num 1."));
+    }
+
+    @Test
     void monthListsReadLikeAPerson() {
         assertEquals("julio de 2026", BankMatcher.monthsText(List.of(YearMonth.of(2026, 7))));
         assertEquals("julio y agosto de 2026",
