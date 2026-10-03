@@ -160,8 +160,11 @@ public class BankMatcher {
         // Un ingreso que ya está apuntado a mano como cobro no se vuelve a apuntar.
         // Los reconocidos por el trastero o el nombre se casaron en la primera
         // pasada (markRecordedByPayer) y los de una regla, justo arriba; aquí
-        // queda el caso sin nada que lo identifique, solo por importe y fecha.
+        // queda el caso sin nada que lo identifique, solo por importe y fecha. Si
+        // el concepto sí dice quién paga ("TRASTERO 3"), el cobro de otro que pague
+        // lo mismo esos días no puede ser el suyo.
         if (line.isIncome() && profile.getContext() == BankProfileContext.PROPIETARIOS
+                && identify(line, words, profile, ctx) == null
                 && markRecordedByAmount(line, ctx)) {
             return;
         }
@@ -273,6 +276,20 @@ public class BankMatcher {
             return;
         }
 
+        // Nadie debe ese mes: será un cobro ya apuntado. Si solo uno de esos
+        // contratos tiene el cobro de ese mes sin casar con otro movimiento, es ese.
+        if (owing.isEmpty() && !byAmount.isEmpty()) {
+            List<Payment> free = byAmount.stream()
+                    .map(r -> named != null ? freePaymentOf(r, named, line, ctx) : recordedForMonth(line, r, ctx))
+                    .filter(Objects::nonNull)
+                    .toList();
+            if (free.size() == 1) {
+                markRecorded(line, free, ctx, " (por el importe: es el único contrato de " + Pdfs.euros(line.getAmount())
+                        + " con ese cobro sin casar con otro movimiento; compruébalo)");
+                return;
+            }
+        }
+
         line.setAction(BankLineAction.NONE);
         if (byAmount.isEmpty()) {
             // Ni nombre, ni unidad, ni un contrato que cobre eso: casi siempre algo
@@ -305,6 +322,15 @@ public class BankMatcher {
         if (rental.getStartDate() != null && named.isBefore(YearMonth.from(rental.getStartDate()))) return false;
         if (rental.getEndDate() != null && named.isAfter(YearMonth.from(rental.getEndDate()))) return false;
         return !isClosed(byPeriod(paid).get(named));
+    }
+
+    /** El cobro de ese contrato y ese mes, por ese importe, si está cobrado y sin casar con ningún movimiento. */
+    private static Payment freePaymentOf(RentalAgreement rental, YearMonth month, BankImportLine line, Context ctx) {
+        return ctx.paidPayments().stream()
+                .filter(p -> !ctx.claimedPayments().contains(p.getId()))
+                .filter(p -> p.getRentalAgreement() != null && p.getRentalAgreement().getId().equals(rental.getId()))
+                .filter(p -> month.equals(periodOf(p)) && p.getAmountPaid().compareTo(line.getAmount()) == 0)
+                .findFirst().orElse(null);
     }
 
     /** "RNT-2026-015 (Trastero 4)", para nombrar un contrato en un motivo. */

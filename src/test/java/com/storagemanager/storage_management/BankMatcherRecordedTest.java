@@ -347,6 +347,45 @@ class BankMatcherRecordedTest {
     }
 
     @Test
+    void aNamedUnitIsNeverMatchedToAnotherTenantsPayment() {
+        // "TRASTERO 3" con su cobro ya casado en otro extracto no puede quedarse
+        // con el cobro del trastero 6, aunque sea del mismo importe y de esos días.
+        RentalAgreement three = trastero("3", "55.00", LocalDate.of(2025, 1, 1));
+        RentalAgreement six = trastero("6", "55.00", LocalDate.of(2024, 1, 1));
+        for (int m = 3; m <= 9; m++) {
+            Payment p = paid(three, YearMonth.of(2026, m), LocalDate.of(2026, m, 5));
+            linkedPayments.add(p.getId());
+        }
+        paid(six, YearMonth.of(2026, 10), LocalDate.of(2026, 9, 14));
+        BankMatcher matcher = matcher();
+
+        BankImportLine line = line(LocalDate.of(2026, 9, 7), "MENSUALIDAD MES TRASTERO 3", "55.00");
+        match(matcher, matcher.load(), line, trasteros());
+
+        assertFalse(line.getAlreadyRecorded(), line.getReason());
+        assertEquals(three.getId(), line.getRentalAgreement().getId());
+    }
+
+    @Test
+    void byAmountTheOnlyContractWithAFreePaymentThatMonthIsThePayer() {
+        // "TRASTERO MES AGOSTO", 55 €: tres contratos de 55 € tienen agosto
+        // cobrado, pero dos ya están casados con sus transferencias.
+        LocalDate start = LocalDate.of(2026, 8, 1);
+        Payment a = paid(trastero("1", "55.00", start), YearMonth.of(2026, 8), LocalDate.of(2026, 8, 1));
+        Payment b = paid(trastero("2", "55.00", start), YearMonth.of(2026, 8), LocalDate.of(2026, 8, 1));
+        Payment c = paid(trastero("3", "55.00", start), YearMonth.of(2026, 8), LocalDate.of(2026, 8, 1));
+        linkedPayments.add(a.getId());
+        linkedPayments.add(c.getId());
+        BankMatcher matcher = matcher();
+
+        BankImportLine line = line(LocalDate.of(2026, 8, 4), "TRANSFERENCIAS TRASTERO MES AGOSTO", "55.00");
+        match(matcher, matcher.load(), line, trasteros());
+
+        assertTrue(line.getAlreadyRecorded(), line.getReason());
+        assertEquals(b.getId(), line.getPaymentId());
+    }
+
+    @Test
     void monthListsReadLikeAPerson() {
         assertEquals("julio de 2026", BankMatcher.monthsText(List.of(YearMonth.of(2026, 7))));
         assertEquals("julio y agosto de 2026",

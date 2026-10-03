@@ -16,10 +16,13 @@ import java.util.Set;
 public interface BankImportLineRepository extends JpaRepository<BankImportLine, Long> {
 
     /**
-     * Las huellas que ya están en otro extracto y no se descartaron: un
-     * movimiento con una de ellas es un duplicado.
+     * Las huellas que ya están en otro extracto y no se descartaron a mano: un
+     * movimiento con una de ellas es un duplicado. Las que se dieron por "ya
+     * registradas" cuentan aunque queden descartadas: ese movimiento ya está
+     * casado con su cobro o su gasto.
      */
-    @Query("SELECT l.fingerprint FROM BankImportLine l WHERE l.fingerprint IN :fingerprints AND l.status <> :discarded")
+    @Query("SELECT l.fingerprint FROM BankImportLine l WHERE l.fingerprint IN :fingerprints "
+            + "AND (l.status <> :discarded OR l.alreadyRecorded = true)")
     Set<String> findLiveFingerprints(@Param("fingerprints") Collection<String> fingerprints,
                                      @Param("discarded") BankLineStatus discarded);
 
