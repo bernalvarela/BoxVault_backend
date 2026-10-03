@@ -9,7 +9,11 @@ import com.storagemanager.storage_management.dto.BankDTOs.LineUpdateRequest;
 import com.storagemanager.storage_management.dto.BankDTOs.ProfileDTO;
 import com.storagemanager.storage_management.dto.BankDTOs.ProfileRequest;
 import com.storagemanager.storage_management.dto.BankDTOs.RuleDTO;
+import com.storagemanager.storage_management.dto.BankDTOs.VocabularyListDTO;
+import com.storagemanager.storage_management.dto.BankDTOs.VocabularySaveRequest;
+import com.storagemanager.storage_management.model.enums.BankVocabularyList;
 import com.storagemanager.storage_management.service.bank.BankImportService;
+import com.storagemanager.storage_management.service.bank.BankVocabularyService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -33,6 +37,7 @@ import java.util.List;
 public class BankImportController {
 
     private final BankImportService service;
+    private final BankVocabularyService vocabulary;
 
     // ------------------------------------------------------------- Perfiles
 
@@ -116,5 +121,27 @@ public class BankImportController {
     public ResponseEntity<Void> deleteRule(@PathVariable Long id) {
         service.deleteRule(id);
         return ResponseEntity.noContent().build();
+    }
+
+    // ------------------------------------------------------------- Vocabulario
+
+    @PreAuthorize("@access.can('PAGOS','LEER')")
+    @GetMapping("/vocabulary")
+    public ResponseEntity<List<VocabularyListDTO>> vocabulary() {
+        return ResponseEntity.ok(vocabulary.lists());
+    }
+
+    /** Cambia cómo se leen todos los extractos a partir de ahora: solo quien administra. */
+    @PreAuthorize("@access.can('PAGOS','ADMINISTRAR')")
+    @PutMapping("/vocabulary/{list}")
+    public ResponseEntity<List<VocabularyListDTO>> saveVocabulary(@PathVariable BankVocabularyList list,
+                                                                  @Valid @RequestBody VocabularySaveRequest request) {
+        return ResponseEntity.ok(vocabulary.save(list, request.getEntries()));
+    }
+
+    @PreAuthorize("@access.can('PAGOS','ADMINISTRAR')")
+    @PostMapping("/vocabulary/{list}/reset")
+    public ResponseEntity<List<VocabularyListDTO>> resetVocabulary(@PathVariable BankVocabularyList list) {
+        return ResponseEntity.ok(vocabulary.reset(list));
     }
 }

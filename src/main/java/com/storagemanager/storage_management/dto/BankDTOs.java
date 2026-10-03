@@ -3,6 +3,7 @@ package com.storagemanager.storage_management.dto;
 import com.storagemanager.storage_management.model.enums.BankLineAction;
 import com.storagemanager.storage_management.model.enums.BankLineStatus;
 import com.storagemanager.storage_management.model.enums.BankProfileContext;
+import com.storagemanager.storage_management.model.enums.BankVocabularyList;
 import com.storagemanager.storage_management.model.enums.CommunityEntryType;
 import com.storagemanager.storage_management.model.enums.ExpenseCategory;
 import jakarta.validation.constraints.Max;
@@ -271,5 +272,46 @@ public final class BankDTOs {
         private Long storageUnitId;
         private String unitLabel;
         private BigDecimal amount;
+    }
+
+    // ------------------------------------------------------------- Vocabulario
+
+    /** Una palabra de una lista, con su mes o su categoría si la lista los lleva. */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class VocabularyEntryDTO {
+        @NotBlank
+        @Size(max = 80)
+        private String word;
+        @Size(max = 30)
+        private String value;
+    }
+
+    /** Una lista del vocabulario, para verla y editarla. */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class VocabularyListDTO {
+        private BankVocabularyList key;
+        private String label;
+        private String description;
+        /** NONE, MONTH o CATEGORY: qué acompaña a cada palabra. */
+        private BankVocabularyList.ValueKind valueKind;
+        private List<VocabularyEntryDTO> entries;
+        /** Si la lista es la de fábrica, sin cambios. */
+        private boolean factoryDefault;
+    }
+
+    /** Las palabras con que queda una lista: la sustituyen entera. */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class VocabularySaveRequest {
+        @NotEmpty(message = "Una lista no puede quedar vacía: restaura la de fábrica si hace falta")
+        @Size(max = 500)
+        private List<@jakarta.validation.Valid VocabularyEntryDTO> entries;
     }
 }

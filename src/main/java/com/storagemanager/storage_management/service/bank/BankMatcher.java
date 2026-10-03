@@ -132,8 +132,7 @@ public class BankMatcher {
         // «Hipoteca», y en el gasto se dicen después los intereses de ese mes (del
         // cuadro de amortización), que son lo único deducible en el IRPF.
         if (!line.isIncome() && profile.getContext() == BankProfileContext.PROPIETARIOS
-                && TextMatch.containsAny(TextMatch.normalize(line.getConcept()),
-                List.of("PRESTAMO", "HIPOTECA", "HIPOTECARIO"))) {
+                && TextMatch.containsAny(TextMatch.normalize(line.getConcept()), TextMatch.vocabulary().loan())) {
             line.setAction(BankLineAction.EXPENSE);
             line.setExpenseCategory(ExpenseCategory.HIPOTECA);
             line.setStorageUnit(profile.getDefaultUnit());
@@ -145,7 +144,7 @@ public class BankMatcher {
 
         // Una fianza no es una mensualidad ni un gasto: es dinero del inquilino
         // que se le devuelve. Se lleva en la pestaña de la fianza del contrato.
-        if (words.contains("FIANZA") || words.contains("FIANZAS")) {
+        if (TextMatch.containsAny(TextMatch.normalize(line.getConcept()), TextMatch.vocabulary().deposit())) {
             line.setAction(BankLineAction.NONE);
             line.setStatus(BankLineStatus.DISCARDED);
             line.setReason(line.isIncome()
@@ -816,27 +815,9 @@ public class BankMatcher {
 
     // ------------------------------------------------------------- Gastos
 
-    /**
-     * Las palabras que delatan la categoría de un cargo. Las comisiones del banco
-     * van primero: "COMISION MANTENIMIENTO" no es una reparación.
-     */
-    private static final List<Map.Entry<ExpenseCategory, List<String>>> CATEGORY_WORDS = List.of(
-            Map.entry(ExpenseCategory.OTROS, List.of("COMISION", "COMISIONES", "MANTENIMIENTO CUENTA", "CUOTA TARJETA")),
-            // "CARGO POR PAGO DE IMPUESTOS - TRIBUTOS NRC ...": el pago a la AEAT con
-            // su NRC. Va antes que los tributos locales, que también dicen "TRIBUTOS".
-            Map.entry(ExpenseCategory.IMPUESTOS, List.of("AEAT", "AGENCIA TRIBUTARIA", "AGENCIA ESTATAL", "HACIENDA",
-                    "MODELO 303", "MOD 303", "IMPUESTO", "IMPUESTOS", "NRC")),
-            // "TAXA OUTORGAMENTO DE LICENCIAS URBANISTICAS": en gallego, tasa es taxa.
-            Map.entry(ExpenseCategory.TRIBUTOS, List.of("IBI", "AYUNTAMIENTO", "CONCELLO", "RECAUDACION", "TRIBUTOS",
-                    "TASA", "TASAS", "TAXA", "TAXAS", "LICENCIA", "LICENCIAS", "BASURA", "DEPUTACION", "DIPUTACION")),
-            Map.entry(ExpenseCategory.SUMINISTROS, List.of("IGNIS", "IBERDROLA", "ENDESA", "NATURGY", "REPSOL", "EDP", "HOLALUZ",
-                    "TOTALENERGIES", "AQUALIA", "EMALCSA", "AUGAS", "AGUA", "LUZ", "ELECTRICIDAD", "TELEFONICA",
-                    "MOVISTAR", "VODAFONE", "ORANGE", "DIGI", "R CABLE", "FIBRA")),
-            Map.entry(ExpenseCategory.SEGUROS, List.of("SEGURO", "SEGUROS", "MAPFRE", "MUTUA", "ALLIANZ", "AXA", "GENERALI",
-                    "LINEA DIRECTA", "OCASO", "SANTALUCIA", "REALE", "CASER", "ZURICH", "PELAYO")),
-            Map.entry(ExpenseCategory.COMUNIDAD, List.of("COMUNIDAD", "CDAD", "COM PROP", "COMUNIDAD PROPIETARIOS")),
-            Map.entry(ExpenseCategory.REPARACIONES, List.of("REPARACION", "FONTANERO", "FONTANERIA", "ELECTRICISTA",
-                    "PINTURA", "CERRAJERO", "CERRAJERIA", "MANTENIMIENTO", "OBRA", "FERRETERIA", "LEROY")));
+    // Las palabras que delatan la categoría de un cargo están en el vocabulario
+    // (Vocabulary.expenseWords), en el orden en que se prueban: las comisiones
+    // del banco primero, porque "COMISION MANTENIMIENTO" no es una reparación.
 
     private void proposeExpense(BankImportLine line, BankImportProfile profile, Context ctx) {
         String concept = TextMatch.normalize(line.getConcept());
@@ -847,7 +828,7 @@ public class BankMatcher {
         // Con su nombre completo, o con el de pila si el concepto dice que es un
         // traspaso o un reparto: "TRASPASO MENSUAL XIAO".
         Set<String> words = TextMatch.words(line.getConcept());
-        boolean transferToOwner = words.contains("TRASPASO") || words.contains("REPARTO");
+        boolean transferToOwner = TextMatch.containsAny(concept, TextMatch.vocabulary().ownerTransfer());
         for (Ownership share : ctx.ownerships()) {
             Owner owner = share.getOwner();
             if (owner == null || owner.isEntity()) continue;
@@ -860,7 +841,7 @@ public class BankMatcher {
             }
         }
 
-        for (Map.Entry<ExpenseCategory, List<String>> entry : CATEGORY_WORDS) {
+        for (Map.Entry<ExpenseCategory, List<String>> entry : TextMatch.vocabulary().expenseWords().entrySet()) {
             for (String needle : entry.getValue()) {
                 if (TextMatch.containsAny(concept, List.of(needle))) {
                     line.setExpenseCategory(entry.getKey());
