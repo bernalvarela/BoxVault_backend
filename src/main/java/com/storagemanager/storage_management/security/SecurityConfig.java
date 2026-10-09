@@ -91,12 +91,18 @@ public class SecurityConfig {
                     .csrfTokenRequestHandler(csrfHandler)
                     // Entrar y renovar no cambian datos de nadie y llegan antes de
                     // que exista el token antifalsificación.
-                    .ignoringRequestMatchers("/api/auth/login", "/api/auth/refresh"))
+                    .ignoringRequestMatchers("/api/auth/login", "/api/auth/refresh")
+                    // La subida desde el móvil no va con cookies sino con el
+                    // token del QR en una cabecera, que el navegador no pone
+                    // solo: no hay nada que falsificar (ver MobileUploadController).
+                    .ignoringRequestMatchers("/api/mobile-upload"))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                     // La aplicación web y sus recursos: la pantalla de login vive aquí.
                     .requestMatchers("/", "/index.html", "/favicon.ico", "/assets/**", "/vite.svg").permitAll()
                     .requestMatchers("/api/auth/login", "/api/auth/refresh", "/api/auth/logout").permitAll()
+                    // Lo autoriza el token del QR, no una sesión (MobileUploadService).
+                    .requestMatchers("/api/mobile-upload").permitAll()
                     .requestMatchers("/api/**").authenticated()
                     // Cualquier otra ruta la resuelve el index.html de la SPA.
                     .anyRequest().permitAll())
