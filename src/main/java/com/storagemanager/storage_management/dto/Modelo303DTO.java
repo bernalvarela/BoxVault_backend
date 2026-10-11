@@ -123,7 +123,9 @@ public class Modelo303DTO {
         private String status;
         /** Gross amount (paid for PAID payments, due otherwise). */
         private BigDecimal total;
+        /** Unrounded (4 decimals): the lines add up to the quarter base, rounded once. */
         private BigDecimal base;
+        /** Unrounded (4 decimals), 21% of {@link #base}. */
         private BigDecimal vat;
     }
 }

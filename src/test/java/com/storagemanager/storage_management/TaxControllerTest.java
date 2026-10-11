@@ -146,10 +146,14 @@ class TaxControllerTest {
         BigDecimal quarters = BigDecimal.ZERO;
         for (Modelo303DTO.Quarter q : report.getQuarters()) {
             assertEquals(q.getQuarter() + "T " + YEAR, q.getLabel());
-            assertEquals(0, q.getCollectedBase().add(q.getCollectedVat()).compareTo(q.getCollectedTotal()));
-            if (q.getCollectedBase().signum() > 0) {
-                assertTrue(sameMoney(q.getCollectedBase().multiply(new BigDecimal("0.21")), q.getCollectedVat()), q.toString());
-            }
+            // La base sale del total cobrado y la cuota es el 21 % exacto de esa
+            // base, como en [01] y [03]; base + cuota puede quedar a un céntimo del total.
+            assertEquals(0, q.getCollectedTotal().divide(new BigDecimal("1.21"), 2, java.math.RoundingMode.HALF_UP)
+                    .compareTo(q.getCollectedBase()), q.toString());
+            assertEquals(0, q.getCollectedBase().multiply(new BigDecimal("0.21")).setScale(2, java.math.RoundingMode.HALF_UP)
+                    .compareTo(q.getCollectedVat()), q.toString());
+            assertTrue(q.getCollectedBase().add(q.getCollectedVat()).subtract(q.getCollectedTotal()).abs()
+                    .compareTo(new BigDecimal("0.01")) <= 0, q.toString());
             assertEquals(q.getPaidCount(), q.getPayments().stream().filter(p -> "PAID".equals(p.getStatus())).count());
             quarters = quarters.add(q.getCollectedBase());
         }

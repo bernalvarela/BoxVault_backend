@@ -148,16 +148,24 @@ public class TaxService {
         return ids;
     }
 
+    /**
+     * Adds up the gross amounts first and splits base and VAT once, on the total:
+     * splitting each payment and adding the rounded bases loses or gains a cent
+     * every few payments (1740 EUR came out as 1437.99 + 302.01 instead of
+     * 1438.02 + 301.98), and in the 303 the cents have to match.
+     */
     private static Breakdown sum(List<Payment> payments, Predicate<Payment> filter, Function<Payment, BigDecimal> amount) {
-        Breakdown acc = Breakdown.ZERO;
+        BigDecimal withVat = BigDecimal.ZERO;
+        BigDecimal exempt = BigDecimal.ZERO;
         for (Payment p : payments) {
             if (!filter.test(p)) continue;
             BigDecimal value = amount.apply(p);
             if (value == null) continue;
             boolean vat = p.getStorageUnit() == null || p.getStorageUnit().isVatApplicable();
-            acc = acc.plus(VatUtils.breakdown(value, vat));
+            if (vat) withVat = withVat.add(value);
+            else exempt = exempt.add(value);
         }
-        return acc;
+        return VatUtils.declared(withVat, true).plus(VatUtils.declared(exempt, false));
     }
 
     private static boolean isPaid(Payment p) {
@@ -253,7 +261,9 @@ public class TaxService {
                             .thenComparing(p -> p.getStorageUnit().getUnitNumber(), String.CASE_INSENSITIVE_ORDER))
                     .map(p -> {
                         BigDecimal amount = isPaid(p) ? p.getAmountPaid() : p.getAmountDue();
-                        Breakdown b = VatUtils.breakdown(amount, p.getStorageUnit().isVatApplicable());
+                        // Con 4 decimales: así las líneas suman la base del trimestre,
+                        // que se redondea una sola vez sobre el total.
+                        Breakdown b = VatUtils.precise(amount, p.getStorageUnit().isVatApplicable());
                         return Modelo303DTO.PaymentLine.builder()
                                 .paymentId(p.getId())
                                 .unitId(p.getStorageUnit().getId())
