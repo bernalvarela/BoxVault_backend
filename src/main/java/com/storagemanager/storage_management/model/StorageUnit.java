@@ -1,5 +1,6 @@
 package com.storagemanager.storage_management.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.storagemanager.storage_management.model.enums.UnitKind;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
@@ -119,6 +120,8 @@ public class StorageUnit {
      * basta con marcarla en el local para que la lleven sus nueve trasteros.
      */
     @ManyToOne(fetch = FetchType.EAGER)
+    @JsonIgnoreProperties({"description", "storageKey", "sizeBytes", "defaultTemplate",
+            "createdAt", "updatedAt", "createdBy", "updatedBy"})
     @JoinColumn(name = "contract_template_id")
     private ContractTemplate contractTemplate;
 
@@ -129,6 +132,8 @@ public class StorageUnit {
      * salida por defecto": la marca de por defecto es la del contrato de entrada.
      */
     @ManyToOne(fetch = FetchType.EAGER)
+    @JsonIgnoreProperties({"description", "storageKey", "sizeBytes", "defaultTemplate",
+            "createdAt", "updatedAt", "createdBy", "updatedBy"})
     @JoinColumn(name = "exit_contract_template_id")
     private ContractTemplate exitContractTemplate;
 

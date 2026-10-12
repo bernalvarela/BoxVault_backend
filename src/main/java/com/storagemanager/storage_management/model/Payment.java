@@ -1,6 +1,7 @@
 package com.storagemanager.storage_management.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIncludeProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.storagemanager.storage_management.model.enums.PaymentMethod;
 import com.storagemanager.storage_management.model.enums.PaymentStatus;
@@ -31,10 +32,18 @@ public class Payment {
     private Long id;
 
     @ManyToOne(fetch = FetchType.EAGER)
+    // En el JSON, sólo lo que identifica al contrato: entero arrastraba su unidad,
+    // su local, su edificio, su plantilla y su titular en cada cobro (unos 5 KB
+    // por cobro). La pantalla sólo usa el id; el contrato completo está en /rentals.
+    @JsonIncludeProperties({"id", "agreementNumber", "status"})
     @JoinColumn(name = "rental_agreement_id", nullable = false)
     private RentalAgreement rentalAgreement;
 
     @ManyToOne(fetch = FetchType.EAGER)
+    // En el JSON, lo que hace falta para nombrar la unidad y saber dónde está y si
+    // lleva IVA. La ficha entera (descripción, ubicación, referencia catastral...)
+    // está en /storages y no hace falta repetirla en cada cobro.
+    @JsonIncludeProperties({"id", "unitNumber", "name", "kind", "parent", "root", "rootId", "vatApplicable", "premises"})
     @JoinColumn(name = "storage_unit_id", nullable = false)
     private StorageUnit storageUnit;
 

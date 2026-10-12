@@ -1,5 +1,7 @@
 package com.storagemanager.storage_management.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonIncludeProperties;
 import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.model.Payment;
 import com.storagemanager.storage_management.model.StorageUnit;
@@ -32,6 +34,8 @@ public class MonthlyChargeDTO {
 
     private Long rentalAgreementId;
     private String agreementNumber;
+    // Lo justo para nombrarla y saber si lleva IVA, como en Payment.
+    @JsonIncludeProperties({"id", "unitNumber", "name", "kind", "parent", "root", "rootId", "vatApplicable", "premises"})
     private StorageUnit storageUnit;
     /** El titular, que es lo que cabe en una columna estrecha. */
     private Client client;
@@ -70,5 +74,7 @@ public class MonthlyChargeDTO {
     private String status;
 
     /** El cobro recibido, cuando lo hay; null mientras el mes esté sin cobrar. */
+    // Sin su contrato ni su unidad: son los de esta mensualidad, que ya van arriba.
+    @JsonIgnoreProperties({"rentalAgreement", "storageUnit"})
     private Payment payment;
 }
