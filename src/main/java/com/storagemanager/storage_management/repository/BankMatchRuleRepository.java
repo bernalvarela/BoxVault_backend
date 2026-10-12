@@ -13,5 +13,8 @@ public interface BankMatchRuleRepository extends JpaRepository<BankMatchRule, Lo
 
     List<BankMatchRule> findAllByOrderByCreatedAtDescIdDesc();
 
+    /** Las reglas aprendidas que llevan a ese cliente: se van con su ficha. */
+    List<BankMatchRule> findByClientId(Long clientId);
+
     Optional<BankMatchRule> findFirstByPattern(String pattern);
 }

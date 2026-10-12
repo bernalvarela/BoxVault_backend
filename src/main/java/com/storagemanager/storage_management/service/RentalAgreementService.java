@@ -4,13 +4,17 @@ import com.storagemanager.storage_management.dto.RentalAgreementRequest;
 import com.storagemanager.storage_management.dto.TerminationRequest;
 import com.storagemanager.storage_management.exception.BadRequestException;
 import com.storagemanager.storage_management.exception.ResourceNotFoundException;
+import com.storagemanager.storage_management.model.BankImport;
+import com.storagemanager.storage_management.model.BankImportLine;
 import com.storagemanager.storage_management.model.Client;
+import com.storagemanager.storage_management.model.Invoice;
 import com.storagemanager.storage_management.model.Payment;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.RentalDocument;
 import com.storagemanager.storage_management.model.RentalParty;
 import com.storagemanager.storage_management.model.ContractTemplate;
 import com.storagemanager.storage_management.model.StorageUnit;
+import com.storagemanager.storage_management.model.enums.BankLineStatus;
 import com.storagemanager.storage_management.model.enums.PartyRole;
 import com.storagemanager.storage_management.model.enums.RentalStatus;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
@@ -19,6 +23,7 @@ import com.storagemanager.storage_management.repository.ClientRepository;
 import com.storagemanager.storage_management.repository.PaymentRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 import com.storagemanager.storage_management.repository.ContractTemplateRepository;
+import com.storagemanager.storage_management.repository.InvoiceRepository;
 import com.storagemanager.storage_management.repository.RentalDocumentRepository;
 import com.storagemanager.storage_management.repository.RentalPartyRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
@@ -51,6 +56,8 @@ public class RentalAgreementService {
     private final PaymentRepository paymentRepository;
     private final RentalDocumentRepository rentalDocumentRepository;
     private final BankImportLineRepository bankImportLineRepository;
+    private final InvoiceRepository invoiceRepository;
+    private final DocumentService documentService;
     private final ContractTemplateRepository contractTemplateRepository;
     private final UnitScope unitScope;
 
@@ -325,6 +332,79 @@ public class RentalAgreementService {
             storageUnitRepository.save(unit);
         }
         return target;
+    }
+
+    /**
+     * Borra un contrato que no debió existir, con sus mensualidades, sus
+     * documentos y sus partes. Para un contrato que existió de verdad y ya no
+     * sigue, lo que procede es finalizarlo: así se queda con lo cobrado.
+     * <p>
+     * No se borra si alguna mensualidad tiene factura emitida: una factura no
+     * puede desaparecer de la serie (se anula con una rectificativa), y sin su
+     * cobro quedaría colgando.
+     * <p>
+     * Los movimientos del banco casados con el contrato o con sus cobros no se
+     * borran, porque el dinero entró: vuelven a quedar pendientes, sin contrato,
+     * para asignarlos al bueno y aplicar otra vez el extracto.
+     */
+    @Transactional
+    public void deleteAgreement(Long id) {
+        RentalAgreement agreement = getAgreementById(id);
+        List<Payment> payments = paymentRepository.findByRentalAgreementId(id);
+        List<Long> paymentIds = payments.stream().map(Payment::getId).toList();
+
+        List<Invoice> invoices = paymentIds.isEmpty() ? List.of() : invoiceRepository.findByPaymentIdIn(paymentIds);
+        if (!invoices.isEmpty()) {
+            String numbers = invoices.stream().map(Invoice::getNumber).sorted().limit(5)
+                    .collect(Collectors.joining(", "));
+            throw new BadRequestException("El contrato " + agreement.getAgreementNumber() + " tiene "
+                    + (invoices.size() == 1 ? "una factura emitida (" : invoices.size() + " facturas emitidas (")
+                    + numbers + (invoices.size() > 5 ? "..." : "") + ") y una factura no se puede borrar."
+                    + " Finaliza el contrato en vez de borrarlo.");
+        }
+
+        // Los movimientos del banco: sin contrato y pendientes otra vez.
+        List<BankImportLine> bankLines = bankImportLineRepository.findLinkedTo(id,
+                paymentIds.isEmpty() ? List.of(-1L) : paymentIds);
+        for (BankImportLine line : bankLines) {
+            line.setRentalAgreement(null);
+            line.setPaymentId(null);
+            line.setAlreadyRecorded(false);
+            line.setReviewSuggested(false);
+            line.setStatus(BankLineStatus.PENDING);
+            line.setError(null);
+            line.setReason("Era del contrato " + agreement.getAgreementNumber()
+                    + ", que se ha borrado: elige a qué contrato va");
+            line.getBankImport().setStatus(BankImport.REVIEW);
+        }
+        bankImportLineRepository.saveAll(bankLines);
+
+        paymentRepository.deleteAll(payments);
+
+        // Los documentos: primero el contrato deja de apuntar a los que generó la
+        // aplicación, luego se quitan los enlaces y por último las fichas y ficheros.
+        agreement.setContractDocument(null);
+        agreement.setExitContractDocument(null);
+        List<RentalDocument> documents =
+                rentalDocumentRepository.findByRentalAgreementIdOrderByDocumentUploadedAtDescDocumentIdDesc(id);
+        rentalDocumentRepository.deleteAll(documents);
+        rentalDocumentRepository.flush();
+        documents.forEach(link -> documentService.delete(link.getDocument()));
+
+        // Las partes (titulares, fiadores) se van con él en cascada.
+        rentalAgreementRepository.delete(agreement);
+
+        // Si era el que ocupaba la unidad y no queda otro en vigor, la unidad queda libre.
+        StorageUnit unit = agreement.getStorageUnit();
+        boolean otherActive = rentalAgreementRepository.findByStorageUnitId(unit.getId()).stream()
+                .anyMatch(r -> !r.getId().equals(id) && r.getStatus() == RentalStatus.ACTIVE);
+        if (agreement.getStatus() == RentalStatus.ACTIVE && !otherActive) {
+            unit.setStatus(UnitStatus.AVAILABLE);
+            storageUnitRepository.save(unit);
+        }
+
+        log.info("Contrato {} borrado: {} mensualidad(es), {} documento(s); {} movimiento(s) del banco vuelven a pendientes",
+                agreement.getAgreementNumber(), payments.size(), documents.size(), bankLines.size());
     }
 
     /** El periodo facturado de un cobro, para comparar meses entre contratos. */

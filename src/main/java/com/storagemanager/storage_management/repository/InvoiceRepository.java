@@ -19,6 +19,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     /** Las de una mensualidad, la más reciente primero: la ordinaria y sus rectificativas. */
     List<Invoice> findByPaymentIdOrderByIssuedOnDescIdDesc(Long paymentId);
 
+    /** Las de varias mensualidades: antes de borrar un contrato, si alguna está facturada. */
+    List<Invoice> findByPaymentIdIn(java.util.Collection<Long> paymentIds);
+
     /**
      * El último número emitido con ese prefijo ({@code A2026/}, {@code R2026/}),
      * para seguir la serie. Con el ordinal a cuatro cifras y ceros delante, el

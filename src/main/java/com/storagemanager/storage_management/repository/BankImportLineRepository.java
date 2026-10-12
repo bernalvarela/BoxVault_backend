@@ -30,6 +30,11 @@ public interface BankImportLineRepository extends JpaRepository<BankImportLine, 
 
     List<BankImportLine> findByBankImportIdOrderByLineNumberAsc(Long importId);
 
+    /** Los movimientos casados con un contrato, o con alguno de sus cobros. */
+    @Query("SELECT l FROM BankImportLine l WHERE l.rentalAgreement.id = :agreementId OR l.paymentId IN :paymentIds")
+    List<BankImportLine> findLinkedTo(@Param("agreementId") Long agreementId,
+                                      @Param("paymentIds") Collection<Long> paymentIds);
+
     /**
      * Los cobros que ya están casados con un movimiento de otro extracto, porque
      * se crearon al aplicarlo o porque se dio por "ya registrado": no pueden ser

@@ -7,8 +7,10 @@ import com.storagemanager.storage_management.exception.ResourceNotFoundException
 import com.storagemanager.storage_management.model.Building;
 import com.storagemanager.storage_management.model.Client;
 import com.storagemanager.storage_management.model.RentalAgreement;
+import com.storagemanager.storage_management.repository.BankMatchRuleRepository;
 import com.storagemanager.storage_management.repository.BuildingRepository;
 import com.storagemanager.storage_management.repository.ClientRepository;
+import com.storagemanager.storage_management.repository.PaymentRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 import com.storagemanager.storage_management.security.UnitScope;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,8 @@ public class ClientService {
     private final ClientRepository clientRepository;
     private final RentalAgreementRepository rentalAgreementRepository;
     private final ClientDocumentService clientDocumentService;
+    private final PaymentRepository paymentRepository;
+    private final BankMatchRuleRepository bankMatchRules;
     private final RentalAgreementService rentalAgreements;
     private final BuildingRepository buildings;
     private final BuildingService buildingService;
@@ -206,8 +210,18 @@ public class ClientService {
             throw new BadRequestException(client.getFullName() + " firma "
                     + (signed.size() == 1 ? "el contrato " : signed.size() + " contratos (")
                     + numbers + (signed.size() == 1 ? "" : "...)")
-                    + " y no se puede borrar. Si ya no alquila, finaliza sus contratos.");
+                    + " y no se puede borrar. Si el contrato se creó por error, bórralo primero;"
+                    + " si ya no alquila, finaliza sus contratos y su ficha se queda con lo que pagó.");
         }
+        // Un cobro lleva su propio pagador: puede seguir apuntando a esta persona
+        // aunque ya no figure en ningún contrato (se corrigió el titular después).
+        long paid = paymentRepository.findByClientId(id).size();
+        if (paid > 0) {
+            throw new BadRequestException(client.getFullName() + " figura como pagador en " + paid
+                    + (paid == 1 ? " mensualidad" : " mensualidades") + " y no se puede borrar.");
+        }
+        // Las reglas que aprendió el importador del banco para reconocerle.
+        bankMatchRules.deleteAll(bankMatchRules.findByClientId(id));
         // Los documentos archivados van con la ficha: sus filas apuntan al cliente
         // y sus ficheros al almacén, y ninguno de los dos debe sobrevivirle.
         clientDocumentService.deleteByClient(id);

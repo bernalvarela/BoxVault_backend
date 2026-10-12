@@ -87,6 +87,17 @@ public class RentalAgreementController {
     }
 
     /**
+     * Borra un contrato creado por error, con sus mensualidades y documentos.
+     * ADMINISTRAR, como unir: es corregir datos, y no se puede deshacer.
+     */
+    @PreAuthorize("@access.can('ALQUILERES','ADMINISTRAR')")
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteRental(@PathVariable Long id) {
+        rentalAgreementService.deleteAgreement(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
      * Cierra el contrato. El cuerpo, opcional, dice qué pasa con la fianza y si
      * se archiva el contrato de salida; sin cuerpo vale la fecha de la URL, como
      * antes.
