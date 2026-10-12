@@ -54,6 +54,19 @@ public class DepositLodgingService {
 
         applyAmounts(rental, request);
 
+        // Lo que se le devuelve al inquilino. Decidirlo sólo tiene sentido cuando
+        // el contrato acaba; quitar lo decidido (nulo) siempre se puede.
+        if (request.getDepositReturned() != null
+                && rental.getStatus() == RentalStatus.ACTIVE && !rental.isTerminationScheduled()) {
+            throw new BadRequestException("El contrato " + rental.getAgreementNumber()
+                    + " sigue en vigor: lo que se devuelve de la fianza se apunta al terminarlo");
+        }
+        rentals.applyDepositReturn(rental, request.getDepositReturned(), request.getReturnedAmount(), request.getReturnNotes());
+        if (rental.getDepositReturned() != null) {
+            log.info("Devolución de la fianza del contrato {}: {} de {} €", rental.getAgreementNumber(),
+                    rental.getDepositReturnedAmount(), rental.getSecurityDeposit());
+        }
+
         // Borrar un apunte siempre se puede: es como se arregla uno hecho en la
         // unidad que no era. Apuntar, solo en los pisos.
         if (request.getLodgedOn() != null) requireDwelling(rental);

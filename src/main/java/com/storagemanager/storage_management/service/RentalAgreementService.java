@@ -615,33 +615,45 @@ public class RentalAgreementService {
         }
         requireNoOverlap(agreement.getStorageUnit(), agreement.getId(), agreement.getStartDate(), end);
         agreement.setEndDate(end);
+        applyDepositReturn(agreement, request.getDepositReturned(),
+                request.getDepositReturnedAmount(), request.getDepositReturnNotes());
+    }
 
+    /**
+     * Lo que se devuelve de la fianza al inquilino y por qué no entera: lo que se
+     * descuenta por mensualidades sin pagar (lo normal en un trastero) o por
+     * desperfectos y limpieza (en un piso). Se decide al cerrar el contrato y se
+     * puede apuntar o corregir después desde la pestaña de la fianza.
+     * <p>
+     * {@code returned}: TRUE se devuelve, toda o parte ({@code amount}; nulo =
+     * toda); FALSE se retiene entera; null todavía sin decidir. No guarda.
+     */
+    public void applyDepositReturn(RentalAgreement agreement, Boolean returned, BigDecimal amount, String notes) {
         BigDecimal deposit = agreement.getSecurityDeposit();
         // Sin fianza, o sin decidir (una llamada de las de antes, sólo con la
         // fecha), no se apunta nada: nulo es "no consta", no "cero euros".
-        if (deposit == null || deposit.signum() <= 0 || request.getDepositReturned() == null) {
+        if (deposit == null || deposit.signum() <= 0 || returned == null) {
             agreement.setDepositReturned(null);
             agreement.setDepositReturnedAmount(null);
             agreement.setDepositReturnNotes(null);
             return;
         }
 
-        BigDecimal returned;
-        if (Boolean.TRUE.equals(request.getDepositReturned())) {
-            returned = request.getDepositReturnedAmount() != null ? request.getDepositReturnedAmount() : deposit;
-            if (returned.signum() <= 0) {
+        BigDecimal back;
+        if (Boolean.TRUE.equals(returned)) {
+            back = amount != null ? amount : deposit;
+            if (back.signum() <= 0) {
                 throw new BadRequestException("Si no se devuelve nada de la fianza, marca que no se devuelve");
             }
-            if (returned.compareTo(deposit) > 0) {
-                throw new BadRequestException("No se pueden devolver " + returned + " €: la fianza era de "
+            if (back.compareTo(deposit) > 0) {
+                throw new BadRequestException("No se pueden devolver " + back + " €: la fianza era de "
                         + deposit + " €");
             }
         } else {
-            returned = BigDecimal.ZERO;
+            back = BigDecimal.ZERO;
         }
-        agreement.setDepositReturned(request.getDepositReturned());
-        agreement.setDepositReturnedAmount(returned.setScale(2, java.math.RoundingMode.HALF_UP));
-        String notes = request.getDepositReturnNotes();
+        agreement.setDepositReturned(returned);
+        agreement.setDepositReturnedAmount(back.setScale(2, java.math.RoundingMode.HALF_UP));
         agreement.setDepositReturnNotes(notes == null || notes.isBlank() ? null : notes.trim());
     }
 

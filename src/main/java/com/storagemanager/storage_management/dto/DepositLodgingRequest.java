@@ -39,4 +39,17 @@ public class DepositLodgingRequest {
 
     /** Cuándo la reintegró el IGVS. */
     private LocalDate refundedOn;
+
+    /**
+     * Lo que se le devuelve al inquilino al terminar: TRUE se devuelve (toda o
+     * parte, según {@link #returnedAmount}), FALSE se retiene entera, nulo sin
+     * decidir. Sólo en un contrato terminado o con la baja dada.
+     */
+    private Boolean depositReturned;
+
+    /** Cuánto se devuelve; nulo con {@code depositReturned} = la fianza entera. */
+    private BigDecimal returnedAmount;
+
+    /** Por qué no se devuelve entera: mensualidades que cubre, desperfectos, limpieza... */
+    private String returnNotes;
 }
