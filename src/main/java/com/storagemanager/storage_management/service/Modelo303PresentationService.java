@@ -87,7 +87,7 @@ public class Modelo303PresentationService {
                 .build());
 
         TaxFilingDocumentDTO attached = filingDocuments.attach(filing.getId(), file.fileName(), FILE_CONTENT_TYPE,
-                file.content().getBytes(StandardCharsets.ISO_8859_1), DocumentType.OTRO,
+                file.content().getBytes(StandardCharsets.ISO_8859_1), DocumentType.DECLARACION,
                 "Fichero generado para importar en la Sede electrónica");
 
         log.info("Modelo 303 {} presentado por {}: resultado {} EUR, fichero {}",
