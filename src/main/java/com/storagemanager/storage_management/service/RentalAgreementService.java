@@ -14,6 +14,7 @@ import com.storagemanager.storage_management.model.StorageUnit;
 import com.storagemanager.storage_management.model.enums.PartyRole;
 import com.storagemanager.storage_management.model.enums.RentalStatus;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
+import com.storagemanager.storage_management.repository.BankImportLineRepository;
 import com.storagemanager.storage_management.repository.ClientRepository;
 import com.storagemanager.storage_management.repository.PaymentRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
@@ -49,6 +50,7 @@ public class RentalAgreementService {
     private final RentalPartyRepository rentalParties;
     private final PaymentRepository paymentRepository;
     private final RentalDocumentRepository rentalDocumentRepository;
+    private final BankImportLineRepository bankImportLineRepository;
     private final ContractTemplateRepository contractTemplateRepository;
     private final UnitScope unitScope;
 
@@ -246,9 +248,9 @@ public class RentalAgreementService {
     }
 
     /**
-     * Une dos contratos duplicados de la misma unidad: los cobros y los
-     * documentos de {@code sourceId} pasan a {@code targetId}, y el duplicado
-     * desaparece.
+     * Une dos contratos duplicados de la misma unidad: los cobros, los
+     * documentos y los movimientos del banco de {@code sourceId} pasan a
+     * {@code targetId}, y el duplicado desaparece.
      * <p>
      * Es para lo que crea una migración mal hecha: la misma unidad con dos
      * contratos, y las mensualidades registradas en el que no era. Los cobros se
@@ -305,10 +307,15 @@ public class RentalAgreementService {
         documents.forEach(link -> link.setRentalAgreement(target));
         rentalDocumentRepository.saveAll(documents);
 
+        // Lo mismo con los movimientos del banco casados con el duplicado: sus
+        // cobros ya se han ido al bueno, y el movimiento va con ellos.
+        int bankLines = bankImportLineRepository.moveToAgreement(source, target);
+
         rentalAgreementRepository.delete(source);
 
-        log.info("Contrato {} unido a {}: {} cobro(s) y {} documento(s) trasladados; el duplicado se ha borrado",
-                source.getAgreementNumber(), target.getAgreementNumber(), moving.size(), documents.size());
+        log.info("Contrato {} unido a {}: {} cobro(s), {} documento(s) y {} movimiento(s) del banco trasladados;"
+                        + " el duplicado se ha borrado",
+                source.getAgreementNumber(), target.getAgreementNumber(), moving.size(), documents.size(), bankLines);
 
         // La unidad queda libre si el que se ha borrado era el que la ocupaba;
         // reactivar el bueno la vuelve a ocupar.

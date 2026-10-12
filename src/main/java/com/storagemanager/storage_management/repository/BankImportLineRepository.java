@@ -1,8 +1,10 @@
 package com.storagemanager.storage_management.repository;
 
 import com.storagemanager.storage_management.model.BankImportLine;
+import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.enums.BankLineStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -35,4 +37,12 @@ public interface BankImportLineRepository extends JpaRepository<BankImportLine, 
      */
     @Query("SELECT DISTINCT l.paymentId FROM BankImportLine l WHERE l.paymentId IS NOT NULL")
     Set<Long> findLinkedPaymentIds();
+
+    /**
+     * Pasa los movimientos casados con un contrato a otro, al unir un duplicado
+     * con el bueno: si se quedaran apuntando al duplicado, no se podría borrar.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE BankImportLine l SET l.rentalAgreement = :target WHERE l.rentalAgreement = :source")
+    int moveToAgreement(@Param("source") RentalAgreement source, @Param("target") RentalAgreement target);
 }
