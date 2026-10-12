@@ -35,6 +35,10 @@ import java.util.List;
  * De una declaración presentada:
  * DECLARACION: la declaración en sí, tal como se presentó (el PDF del modelo).
  * <p>
+ * De una notificación de la AEAT:
+ * NOTIFICACION: la notificación recibida (requerimiento, propuesta, acuerdo de
+ *   sanción...) o lo que se contestó; el pago va como JUSTIFICANTE.
+ * <p>
  * OTRO: lo que no encaja en las anteriores.
  */
 public enum DocumentType {
@@ -51,6 +55,7 @@ public enum DocumentType {
     FACTURA,
     JUSTIFICANTE,
     DECLARACION,
+    NOTIFICACION,
     OTRO;
 
     private static final List<DocumentType> FOR_CLIENT =
@@ -60,6 +65,8 @@ public enum DocumentType {
             List.of(CONTRATO_ALQUILER, CONTRATO_SALIDA, IGVS_ARRENDADOR, IGVS_ARRENDATARIO, IGVS_DEVOLUCION, ANEXO, FACTURA, FOTO, JUSTIFICANTE, OTRO);
 
     private static final List<DocumentType> FOR_TAX_FILING = List.of(JUSTIFICANTE, DECLARACION, OTRO);
+
+    private static final List<DocumentType> FOR_TAX_NOTICE = List.of(NOTIFICACION, JUSTIFICANTE, OTRO);
 
     /**
      * Lo que se puede archivar en la ficha de un cliente. CONTRATO_ALQUILER no
@@ -83,5 +90,13 @@ public enum DocumentType {
      */
     public static List<DocumentType> forTaxFiling() {
         return FOR_TAX_FILING;
+    }
+
+    /**
+     * Lo que se puede archivar en una notificación de la AEAT: la notificación y
+     * lo que se contestó, el justificante del pago y lo demás.
+     */
+    public static List<DocumentType> forTaxNotice() {
+        return FOR_TAX_NOTICE;
     }
 }

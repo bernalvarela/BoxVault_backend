@@ -18,6 +18,9 @@ package com.storagemanager.storage_management.model.enums;
  *   del 3º I), entera, como sale del banco. Lleva dentro los intereses de ese
  *   mes (Expense.interestAmount, del cuadro de amortización): solo esa parte
  *   es deducible en el IRPF; la amortización de capital no es gasto.
+ * SANCIONES: multas, sanciones y recargos de Hacienda (la sanción por presentar
+ *   tarde el 184, un recargo por extemporaneidad). Nunca son gasto deducible, y
+ *   no son la cuota de un 303 aunque se paguen a la AEAT: van aparte de IMPUESTOS.
  * OTROS: llaves y cualquier otro gasto.
  */
 public enum ExpenseCategory {
@@ -31,5 +34,6 @@ public enum ExpenseCategory {
     REPARTO_BENEFICIOS,
     INTERESES,
     HIPOTECA,
+    SANCIONES,
     OTROS
 }
