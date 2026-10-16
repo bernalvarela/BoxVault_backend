@@ -20,6 +20,8 @@ import com.storagemanager.storage_management.model.enums.RentalStatus;
 import com.storagemanager.storage_management.model.enums.UnitStatus;
 import com.storagemanager.storage_management.repository.BankImportLineRepository;
 import com.storagemanager.storage_management.repository.ClientRepository;
+import com.storagemanager.storage_management.repository.ContractSigningRepository;
+import com.storagemanager.storage_management.model.enums.SigningStatus;
 import com.storagemanager.storage_management.repository.PaymentRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 import com.storagemanager.storage_management.repository.ContractTemplateRepository;
@@ -60,6 +62,7 @@ public class RentalAgreementService {
     private final DocumentService documentService;
     private final ContractTemplateRepository contractTemplateRepository;
     private final UnitScope unitScope;
+    private final ContractSigningRepository signings;
 
     /** Un contrato es de la unidad que alquila: se ve si esa unidad es del usuario. */
     public List<RentalAgreement> getAllAgreements() {
@@ -168,7 +171,15 @@ public class RentalAgreementService {
         // no lo lleva nadie -los cobros son del contrato y los arrendatarios son
         // los del contrato-, así que no hay nada que sincronizar.
         List<Client> before = List.copyOf(agreement.tenants());
+        List<Long> signersBefore = partyIds(agreement);
         applyPeople(agreement, peopleOf(request));
+        // Quien firma ya está decidido: cambiar a los arrendatarios o a los
+        // fiadores a mitad de una firma dejaría firmas de un contrato con otra gente.
+        if (!partyIds(agreement).equals(signersBefore)
+                && signings.existsByRentalAgreementIdAndStatus(id, SigningStatus.EN_CURSO)) {
+            throw new BadRequestException("El contrato " + agreement.getAgreementNumber()
+                    + " se está firmando: cancela la firma antes de cambiar a los arrendatarios o a los fiadores");
+        }
         warnIfPeopleChanged(agreement, before);
         requireNoOverlap(agreement.getStorageUnit(), agreement.getId(), request.getStartDate(), request.getEndDate());
         agreement.setStartDate(request.getStartDate());
@@ -274,6 +285,7 @@ public class RentalAgreementService {
         }
         RentalAgreement target = getAgreementById(targetId);
         RentalAgreement source = getAgreementById(sourceId);
+        requireNoSignings(source, "unir a otro");
 
         if (!target.getStorageUnit().getId().equals(source.getStorageUnit().getId())) {
             throw new BadRequestException("Sólo se unen contratos de la misma unidad: "
@@ -350,6 +362,7 @@ public class RentalAgreementService {
     @Transactional
     public void deleteAgreement(Long id) {
         RentalAgreement agreement = getAgreementById(id);
+        requireNoSignings(agreement, "borrar");
         List<Payment> payments = paymentRepository.findByRentalAgreementId(id);
         List<Long> paymentIds = payments.stream().map(Payment::getId).toList();
 
@@ -405,6 +418,26 @@ public class RentalAgreementService {
 
         log.info("Contrato {} borrado: {} mensualidad(es), {} documento(s); {} movimiento(s) del banco vuelven a pendientes",
                 agreement.getAgreementNumber(), payments.size(), documents.size(), bankLines.size());
+    }
+
+    /** Arrendatarios y fiadores por id, en su orden: lo que cambia la lista de firmantes. */
+    private static List<Long> partyIds(RentalAgreement agreement) {
+        List<Long> ids = new java.util.ArrayList<>();
+        agreement.tenants().forEach(client -> ids.add(client.getId()));
+        ids.add(null); // separa los dos papeles: no es lo mismo pasar de fiador a arrendatario
+        agreement.guarantors().forEach(client -> ids.add(client.getId()));
+        return ids;
+    }
+
+    /**
+     * Un contrato firmado en BoxVault, o a medio firmar, no se une ni se borra:
+     * su firma apunta a él y a su PDF, y es la prueba de lo que se firmó.
+     */
+    private void requireNoSignings(RentalAgreement agreement, String action) {
+        if (!signings.findByRentalAgreementIdOrderByIdDesc(agreement.getId()).isEmpty()) {
+            throw new BadRequestException("El contrato " + agreement.getAgreementNumber()
+                    + " tiene firmas en BoxVault y no se puede " + action + ".");
+        }
     }
 
     /** El periodo facturado de un cobro, para comparar meses entre contratos. */

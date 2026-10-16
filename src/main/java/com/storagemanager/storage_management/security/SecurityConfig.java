@@ -95,7 +95,10 @@ public class SecurityConfig {
                     // La subida desde el móvil no va con cookies sino con el
                     // token del QR en una cabecera, que el navegador no pone
                     // solo: no hay nada que falsificar (ver MobileUploadController).
-                    .ignoringRequestMatchers("/api/mobile-upload"))
+                    .ignoringRequestMatchers("/api/mobile-upload")
+                    // Lo mismo la firma con enlace: el token va en su cabecera
+                    // (ver PublicSigningController).
+                    .ignoringRequestMatchers("/api/signing", "/api/signing/**"))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                     // La aplicación web y sus recursos: la pantalla de login vive aquí.
@@ -103,6 +106,8 @@ public class SecurityConfig {
                     .requestMatchers("/api/auth/login", "/api/auth/refresh", "/api/auth/logout").permitAll()
                     // Lo autoriza el token del QR, no una sesión (MobileUploadService).
                     .requestMatchers("/api/mobile-upload").permitAll()
+                    // La firma desde el móvil del firmante: la autoriza su enlace (ContractSigningService).
+                    .requestMatchers("/api/signing", "/api/signing/**").permitAll()
                     .requestMatchers("/api/**").authenticated()
                     // Cualquier otra ruta la resuelve el index.html de la SPA.
                     .anyRequest().permitAll())

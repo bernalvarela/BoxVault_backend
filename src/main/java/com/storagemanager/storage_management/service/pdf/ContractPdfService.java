@@ -12,12 +12,16 @@ import org.openpdf.text.pdf.PdfPCell;
 import org.openpdf.text.pdf.PdfPTable;
 import org.openpdf.text.pdf.PdfWriter;
 import com.storagemanager.storage_management.config.InvoicingProperties;
+import com.storagemanager.storage_management.model.Client;
+import com.storagemanager.storage_management.model.Owner;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.service.InvoiceIssuer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -126,7 +130,41 @@ public class ContractPdfService {
      */
     public byte[] render(RentalAgreement rental, InvoiceIssuer.Issuer issuer, String template,
                          Function<String, byte[]> images) {
+        return renderForSigning(rental, issuer, template, images, null).content();
+    }
+
+    /**
+     * El hueco de una firma en el PDF compuesto: en qué página y dónde, en
+     * puntos desde la esquina inferior izquierda, como los cuenta el formato.
+     * La firma dibujada se estampa ahí después (ver SignatureSealService).
+     *
+     * @param key quién firma ahí: {@link #signerKey}
+     */
+    public record Slot(String key, int page, float llx, float lly, float urx, float ury) {}
+
+    /** El contrato compuesto y los huecos de firma que ha dejado. */
+    public record Rendered(byte[] content, List<Slot> slots) {}
+
+    /**
+     * Cómo se llama el hueco de cada firmante: el papel y su número, contando
+     * desde 1 — {@code ARRENDADOR:1}, {@code ARRENDATARIO:2}, {@code FIADOR:1}.
+     * Es lo que une el hueco del PDF con el firmante guardado.
+     */
+    public static String signerKey(String role, int number) {
+        return role + ":" + number;
+    }
+
+    /**
+     * Igual que {@link #render}, y además dice dónde quedó cada hueco de firma.
+     *
+     * @param onBehalf cuando la única arrendadora es una comunidad de bienes, el
+     *                 comunero que firma por ella; su nombre sale bajo la firma.
+     *                 Null en cualquier otro caso.
+     */
+    public Rendered renderForSigning(RentalAgreement rental, InvoiceIssuer.Issuer issuer, String template,
+                                     Function<String, byte[]> images, Owner onBehalf) {
         Map<String, String> values = ContractFields.of(rental, issuer);
+        Signers signers = new Signers(rental, issuer, onBehalf, new ArrayList<>());
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         Document pdf = new Document(PageSize.A4, 56, 56, 56, 56);
@@ -168,7 +206,7 @@ public class ContractPdfService {
                     pdf.newPage();
                     continue;
                 }
-                pdf.add(compose(text, images, ordinal));
+                pdf.add(compose(text, images, ordinal, signers));
                 pintado = true;
             }
             // Una plantilla cuyas condiciones no se cumplen ninguna se quedaría
@@ -180,8 +218,14 @@ public class ContractPdfService {
         } finally {
             if (pdf.isOpen()) pdf.close();
         }
-        return out.toByteArray();
+        return new Rendered(out.toByteArray(), List.copyOf(signers.slots()));
     }
+
+    /**
+     * Quién firma el contrato que se está componiendo, y dónde van quedando sus
+     * huecos a medida que se colocan.
+     */
+    private record Signers(RentalAgreement rental, InvoiceIssuer.Issuer issuer, Owner onBehalf, List<Slot> slots) {}
 
     // --- La plantilla ------------------------------------------------------
 
@@ -280,7 +324,7 @@ public class ContractPdfService {
 
     // --- La composición ----------------------------------------------------
 
-    private Element compose(String block, Function<String, byte[]> images, int ordinal) {
+    private Element compose(String block, Function<String, byte[]> images, int ordinal, Signers signers) {
         Styled styled = stripAttributes(block);
         String text = styled.text();
 
@@ -288,7 +332,8 @@ public class ContractPdfService {
         if (firmas.matches()) {
             return signatures(
                     firmas.group(1) == null ? "EL ARRENDADOR" : firmas.group(1).trim(),
-                    firmas.group(2) == null ? "EL ARRENDATARIO" : firmas.group(2).trim());
+                    firmas.group(2) == null ? "EL ARRENDATARIO" : firmas.group(2).trim(),
+                    signers);
         }
 
         Matcher image = IMAGE.matcher(text);
@@ -473,23 +518,111 @@ public class ContractPdfService {
         }
     }
 
-    /** Las dos columnas de firmas, al final, con el rótulo que pida la plantilla. */
-    private Element signatures(String left, String right) {
+    /**
+     * El pie de firmas: un hueco por cada persona que firma, en dos columnas.
+     * Primero los arrendadores, luego los arrendatarios y por último los
+     * fiadores, cada uno con su nombre y su NIF debajo de la raya.
+     * <p>
+     * Antes eran dos huecos fijos, uno por parte, y en un piso de dos
+     * propietarios con dos inquilinos no se sabía quién firmaba dónde. Con un
+     * hueco por persona el papel se firma igual de bien a mano y, además, la
+     * firma en pantalla sabe dónde estampar cada una: cada hueco anota su
+     * página y su posición al colocarse (ver {@link Slot}).
+     *
+     * @param landlord el rótulo de los arrendadores; el de la plantilla o el de siempre
+     * @param tenant   el de los arrendatarios
+     */
+    private Element signatures(String landlord, String tenant, Signers signers) {
+        List<PdfPCell> cells = new ArrayList<>();
+
+        List<Owner> owners = signers.issuer() == null ? List.of() : signers.issuer().owners();
+        if (owners.isEmpty()) {
+            // Sin propietarios en la ficha: firma quien emite, con los datos de respaldo.
+            String name = signers.issuer() == null ? null : signers.issuer().name();
+            String taxId = signers.issuer() == null ? null : signers.issuer().taxId();
+            cells.add(signature(landlord, name, taxId, null, signerKey("ARRENDADOR", 1), signers.slots()));
+        }
+        for (int i = 0; i < owners.size(); i++) {
+            Owner owner = owners.get(i);
+            // Una comunidad de bienes no firma: firma por ella uno de sus comuneros.
+            String byLine = owner.isEntity() && signers.onBehalf() != null
+                    ? named(signers.onBehalf().getFullName(), signers.onBehalf().getDocumentId())
+                    : null;
+            cells.add(signature(landlord, owner.getFullName(), owner.getDocumentId(), byLine,
+                    signerKey("ARRENDADOR", i + 1), signers.slots()));
+        }
+
+        List<Client> tenants = signers.rental().tenants();
+        for (int i = 0; i < tenants.size(); i++) {
+            cells.add(signature(tenant, tenants.get(i).getFullName(), tenants.get(i).getDocumentId(), null,
+                    signerKey("ARRENDATARIO", i + 1), signers.slots()));
+        }
+        List<Client> guarantors = signers.rental().guarantors();
+        for (int i = 0; i < guarantors.size(); i++) {
+            cells.add(signature("EL FIADOR", guarantors.get(i).getFullName(), guarantors.get(i).getDocumentId(), null,
+                    signerKey("FIADOR", i + 1), signers.slots()));
+        }
+
         PdfPTable table = new PdfPTable(2);
         table.setWidthPercentage(100);
         table.setSpacingBefore(36);
-        table.addCell(signature(left));
-        table.addCell(signature(right));
+        cells.forEach(table::addCell);
+        // La tabla sólo pinta filas completas: con un número impar de firmantes,
+        // el último se quedaría fuera sin una celda vacía al lado.
+        if (cells.size() % 2 != 0) table.addCell(Pdfs.plain(new Paragraph(" ")));
         return table;
     }
 
-    private PdfPCell signature(String who) {
+    /**
+     * El hueco de una firma: el espacio en blanco para firmar —que es el que
+     * anota dónde ha quedado—, la raya, el rótulo y quién firma.
+     *
+     * @param byLine quien firma de verdad, si no es el nombre de arriba: el
+     *               comunero que firma por la comunidad de bienes
+     */
+    private PdfPCell signature(String label, String name, String taxId, String byLine, String key, List<Slot> slots) {
+        PdfPCell area = new PdfPCell(new Phrase(" ", Pdfs.BODY));
+        area.setBorder(org.openpdf.text.Rectangle.NO_BORDER);
+        area.setFixedHeight(54);
+        // Se anota al pintarse, no al crearse: es entonces cuando se sabe en qué
+        // página ha caído. Si la tabla pasa entera a la página siguiente, el
+        // hueco se anota allí.
+        area.setCellEvent((cell, position, canvases) -> {
+            slots.removeIf(slot -> slot.key().equals(key));
+            slots.add(new Slot(key, canvases[0].getPdfWriter().getPageNumber(),
+                    position.getLeft(), position.getBottom(), position.getRight(), position.getTop()));
+        });
+
         Paragraph paragraph = new Paragraph();
-        paragraph.add(new Phrase("\n\n\n_______________________________\n", Pdfs.BODY));
-        paragraph.add(new Phrase(who, Pdfs.LABEL));
-        PdfPCell cell = Pdfs.plain(paragraph);
+        paragraph.add(new Phrase("_______________________________\n", Pdfs.BODY));
+        paragraph.add(new Phrase(label, Pdfs.LABEL));
+        String who = named(name, taxId);
+        if (who != null) paragraph.add(new Phrase("\n" + who, SIGNER));
+        if (byLine != null) paragraph.add(new Phrase("\nFirma: " + byLine, SIGNER));
+
+        PdfPTable box = new PdfPTable(1);
+        box.setWidthPercentage(100);
+        box.addCell(area);
+        box.addCell(Pdfs.plain(paragraph));
+
+        PdfPCell cell = new PdfPCell(box);
+        cell.setBorder(org.openpdf.text.Rectangle.NO_BORDER);
+        cell.setPadding(0);
         cell.setPaddingRight(16);
+        cell.setPaddingBottom(18);
         return cell;
+    }
+
+    private static final org.openpdf.text.Font SIGNER = Pdfs.font(8.5f, org.openpdf.text.Font.NORMAL, Pdfs.INK);
+
+    /** "Ana Gómez Pérez · NIF 12345678Z", o lo que haya de ello. */
+    private static String named(String name, String taxId) {
+        boolean hasName = name != null && !name.isBlank() && !name.equals(InvoicingProperties.MISSING);
+        boolean hasTaxId = taxId != null && !taxId.isBlank() && !taxId.equals(InvoicingProperties.MISSING);
+        if (!hasName && !hasTaxId) return null;
+        if (!hasTaxId) return name.trim();
+        if (!hasName) return "NIF " + taxId.trim();
+        return name.trim() + " · NIF " + taxId.trim();
     }
 
 }

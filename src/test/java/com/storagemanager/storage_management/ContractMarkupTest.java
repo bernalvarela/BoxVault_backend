@@ -204,6 +204,40 @@ class ContractMarkupTest {
     }
 
     @Test
+    void everySignerGetsTheirOwnSignatureSlotWithNameAndTaxId() throws IOException {
+        // Dos propietarios, dos arrendatarios y un fiador: cinco huecos, cada uno
+        // con su nombre y su NIF, y cada uno sabe en qué página y dónde ha caído.
+        ContractPdfService.Rendered rendered = pdf.renderForSigning(ContractFields.sampleRental(), ISSUER,
+                "Texto.\n\n[[pagina]]\n\nSegunda página.\n\n[[firmas]]", name -> null, null);
+        String text = flat(textOf(rendered.content(), 2));
+
+        assertEquals(java.util.List.of("ARRENDADOR:1", "ARRENDADOR:2", "ARRENDATARIO:1", "ARRENDATARIO:2", "FIADOR:1"),
+                rendered.slots().stream().map(ContractPdfService.Slot::key).sorted().toList());
+        assertTrue(rendered.slots().stream().allMatch(slot -> slot.page() == 2), "en la página del pie: " + rendered.slots());
+        assertTrue(rendered.slots().stream().allMatch(slot -> slot.urx() > slot.llx() && slot.ury() - slot.lly() >= 50),
+                "huecos con sitio para firmar: " + rendered.slots());
+        assertTrue(text.contains("Bernal Varela Gómez · NIF 46906413Y"), text);
+        assertTrue(text.contains("Xiao Varela Gómez · NIF 46906414F"), text);
+        assertTrue(text.contains("Ana Gómez Pérez · NIF 12345678Z"), text);
+        assertTrue(text.contains("Luis Gómez Pérez · NIF 87654321X"), text);
+        assertTrue(text.contains("EL FIADOR"), text);
+    }
+
+    @Test
+    void aCommunityThatLeasesAloneSignsThroughOneMember() throws IOException {
+        Owner community = Owner.builder().fullName("Comunidad de bienes Pasaxe 29").documentId("E56424500")
+                .type(com.storagemanager.storage_management.model.enums.OwnerType.COMUNIDAD_DE_BIENES).build();
+        InvoiceIssuer.Issuer alone = new InvoiceIssuer.Issuer(community.getFullName(), community.getDocumentId(),
+                null, null, null, null, null, true, community.getFullName(), java.util.List.of(community));
+
+        String text = flat(textOf(pdf.renderForSigning(ContractFields.sampleRental(), alone, "[[firmas]]",
+                name -> null, BERNAL).content(), 1));
+
+        assertTrue(text.contains("Comunidad de bienes Pasaxe 29 · NIF E56424500"), text);
+        assertTrue(text.contains("Firma: Bernal Varela Gómez · NIF 46906413Y"), "quien firma por ella: " + text);
+    }
+
+    @Test
     void aConditionalBlockDisappearsWhenItsFieldIsEmpty() throws IOException {
         String template = "Antes.\n\n[[si:fiador]]\nAvala don Fulano.\n[[fin]]\n\nDespués.";
         String text = textOf(renderWithoutGuarantor(template), 1);

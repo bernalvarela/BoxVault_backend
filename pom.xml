@@ -154,6 +154,33 @@
 			<version>3.0.5</version>
 		</dependency>
 
+		<!--
+		  La firma de los contratos: el sello PAdES del PDF firmado y el sello de
+		  tiempo. OpenPDF los declara opcionales y los usa para las estructuras CMS y
+		  TSP (ASN.1); la criptografía en sí —RSA, SHA-256, el almacén PKCS12— es la
+		  del JDK, sin registrar el proveedor de BouncyCastle, que en la imagen
+		  nativa es lo que da guerra. La versión es la que usa OpenPDF 3.0.5.
+		-->
+		<!--
+		  El correo: el contrato firmado se manda a cada firmante y a quien preparó
+		  la firma (SignedContractMailer). Sin servidor configurado no se manda nada.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcprov-jdk18on</artifactId>
+			<version>1.84</version>
+		</dependency>
+		<dependency>
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcpkix-jdk18on</artifactId>
+			<version>1.84</version>
+		</dependency>
+
 		<dependency>
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>

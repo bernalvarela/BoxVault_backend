@@ -7,6 +7,7 @@ import com.storagemanager.storage_management.model.Document;
 import com.storagemanager.storage_management.model.RentalAgreement;
 import com.storagemanager.storage_management.model.RentalDocument;
 import com.storagemanager.storage_management.model.enums.DocumentType;
+import com.storagemanager.storage_management.repository.ContractSigningRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 import com.storagemanager.storage_management.repository.RentalDocumentRepository;
 import com.storagemanager.storage_management.security.UnitScope;
@@ -32,6 +33,7 @@ public class RentalDocumentService {
     private final RentalAgreementRepository rentalRepository;
     private final DocumentService documents;
     private final UnitScope unitScope;
+    private final ContractSigningRepository signings;
 
     public List<RentalDocumentDTO> getDocuments(Long rentalId) {
         requireRental(rentalId);
@@ -91,6 +93,13 @@ public class RentalDocumentService {
     @Transactional
     public void delete(Long rentalId, Long documentId) {
         RentalDocument link = requireLink(rentalId, documentId);
+
+        // El PDF que se firmó en BoxVault y el firmado son la prueba de la firma:
+        // sin ellos, el registro de quién firmó qué se queda sin el qué.
+        if (signings.usesDocument(documentId)) {
+            throw new BadRequestException("Este contrato se firmó (o se está firmando) en BoxVault "
+                    + "y es la prueba de esa firma: no se puede borrar");
+        }
 
         // Si lo que se borra es el contrato que generó la aplicación, el alquiler
         // deja de apuntar a él ANTES de que desaparezca: si no, queda señalando a

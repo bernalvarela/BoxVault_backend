@@ -150,7 +150,14 @@ services:
       BOXVAULT_ISSUER_EMAIL: ${BOXVAULT_ISSUER_EMAIL:-}
       BOXVAULT_ISSUER_PHONE: ${BOXVAULT_ISSUER_PHONE:-}
       BOXVAULT_ISSUER_IBAN: ${BOXVAULT_ISSUER_IBAN:-}
-      # Native images accept the usual heap flags; far less is needed than on the JVM
+      # Firma de contratos en BoxVault. La dirección pública va en los enlaces y
+      # los QR para firmar desde el móvil; la contraseña protege el certificado
+      # con el que se sella cada contrato firmado (openssl rand -base64 32).
+      # Sin contraseña se firma igual, pero no se sella hasta que se ponga. No se
+      # cambia una vez puesta: el certificado guardado ya no abriría.
+      BOXVAULT_PUBLIC_URL: ${BOXVAULT_PUBLIC_URL:-https://boxvault.duckdns.org}
+      BOXVAULT_SIGNING_PASSWORD: ${BOXVAULT_SIGNING_PASSWORD:-}
+      BOXVAULT_TSA_ENABLED: ${BOXVAULT_TSA_ENABLED:-true}      # Native images accept the usual heap flags; far less is needed than on the JVM
       JAVA_OPTS: "-Xmx512m"
       TZ: Europe/Madrid
     volumes:

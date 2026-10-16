@@ -93,6 +93,21 @@ boxvault:
     # Serie de facturación; el número queda A2026/0001, correlativo por año.
     invoice-series: ${BOXVAULT_INVOICE_SERIES:A}
 
+  # Firma de los contratos (ContractSigningService). La dirección pública es la
+  # que va en los enlaces y en los QR que se mandan a firmar: un móvil que está
+  # fuera de casa no llega a http://servidor:8088. Si se deja vacía, se usa la
+  # dirección desde la que se abrió BoxVault. La contraseña protege el
+  # certificado con el que se sella cada contrato firmado; sin ella no se sella.
+  signing:
+    public-url: ${BOXVAULT_PUBLIC_URL:}
+    link-ttl: 7d
+    copy-ttl: 30d
+    keystore-password: ${BOXVAULT_SIGNING_PASSWORD:}
+    tsa-enabled: ${BOXVAULT_TSA_ENABLED:true}
+    tsa-url: ${BOXVAULT_TSA_URL:https://freetsa.org/tsr}
+  # El servidor de correo no se configura aquí: se pone desde la aplicación,
+  # en Administración › Configuración (MailSettingsService).
+
 ---
 # ---------------------------------------------------------------------
 # dev — embedded H2 database, kept in memory, seeded by DataSeeder from
@@ -128,6 +143,11 @@ boxvault:
     secure-cookies: false
     bootstrap-username: admin
     bootstrap-password: "admin-local-2026"
+  # Ni contraseña real ni sello de tiempo: en local no se llama a FreeTSA cada
+  # vez que se prueba una firma.
+  signing:
+    keystore-password: "firma-de-desarrollo"
+    tsa-enabled: false
 
 ---
 # ---------------------------------------------------------------------

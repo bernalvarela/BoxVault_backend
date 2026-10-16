@@ -5,7 +5,11 @@ import com.storagemanager.storage_management.exception.BadRequestException;
 import com.storagemanager.storage_management.model.enums.RentalStatus;
 import com.storagemanager.storage_management.model.Document;
 import com.storagemanager.storage_management.model.RentalAgreement;
+import com.storagemanager.storage_management.model.Owner;
 import com.storagemanager.storage_management.model.enums.DocumentType;
+import com.storagemanager.storage_management.model.enums.SigningKind;
+import com.storagemanager.storage_management.model.enums.SigningStatus;
+import com.storagemanager.storage_management.repository.ContractSigningRepository;
 import com.storagemanager.storage_management.repository.RentalAgreementRepository;
 import com.storagemanager.storage_management.service.pdf.ContractPdfService;
 import com.storagemanager.storage_management.service.pdf.Pdfs;
@@ -15,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * El contrato de alquiler en papel: se compone desde la plantilla con los datos
@@ -45,6 +50,7 @@ public class ContractService {
     private final InvoiceIssuer issuers;
     private final ContractTemplateService templates;
     private final TemplateImageService images;
+    private final ContractSigningRepository signings;
 
     /** Un contrato compuesto que todavía no es de nadie: sólo bytes y un nombre. */
     public record Draft(String fileName, byte[] content) {}
@@ -71,6 +77,7 @@ public class ContractService {
     @Transactional
     public Document generate(Long rentalId) {
         RentalAgreement rental = rentals.getAgreementById(rentalId);
+        requireNoSigning(rental, SigningKind.ENTRADA);
         byte[] content = compose(rental);
 
         Document previous = rental.getContractDocument();
@@ -82,11 +89,7 @@ public class ContractService {
 
         // Después de apuntar el nuevo, no antes: si esto falla, lo que queda es
         // un PDF de más, no un alquiler apuntando a un documento que ya no está.
-        if (previous != null && !previous.getId().equals(document.getId())) {
-            rentalDocuments.delete(rentalId, previous.getId());
-            log.info("Rehecho el contrato del alquiler {}: se retira el borrador anterior ({})",
-                    rentalId, previous.getFileName());
-        }
+        retire(rentalId, previous, document, "el borrador anterior");
 
         log.info("Generado el contrato del alquiler {} ({})", rentalId, rental.getAgreementNumber());
         return document;
@@ -145,6 +148,7 @@ public class ContractService {
     /** Archiva el contrato de salida; si ya había uno generado, lo sustituye. */
     private Document generateExit(RentalAgreement rental) {
         Long rentalId = rental.getId();
+        requireNoSigning(rental, SigningKind.SALIDA);
         byte[] content = composeExit(rental);
 
         Document previous = rental.getExitContractDocument();
@@ -155,13 +159,78 @@ public class ContractService {
         rentalRepository.save(rental);
 
         // Como en generate: primero se apunta el nuevo y luego se retira el viejo.
-        if (previous != null && !previous.getId().equals(document.getId())) {
-            rentalDocuments.delete(rentalId, previous.getId());
-            log.info("Rehecho el contrato de salida del alquiler {}: se retira el anterior ({})",
-                    rentalId, previous.getFileName());
-        }
+        retire(rentalId, previous, document, "el contrato de salida anterior");
         log.info("Generado el contrato de salida del alquiler {} ({})", rentalId, rental.getAgreementNumber());
         return document;
+    }
+
+    // --- Para firmar en BoxVault ---------------------------------------------
+
+    /** El contrato compuesto para firmarlo, ya archivado, y dónde quedaron sus huecos de firma. */
+    public record ForSigning(Document document, byte[] content, List<ContractPdfService.Slot> slots) {}
+
+    /**
+     * Compone el contrato una última vez para firmarlo en BoxVault y lo archiva
+     * como el contrato del alquiler (o el de salida), en lugar del borrador que
+     * hubiera. Ese PDF es el que se congela: quien llama guarda su huella.
+     *
+     * @param onBehalf si la única arrendadora es una comunidad de bienes, el
+     *                 comunero que firma por ella; null si no
+     */
+    @Transactional
+    public ForSigning generateForSigning(Long rentalId, SigningKind kind, Owner onBehalf) {
+        RentalAgreement rental = rentals.getAgreementById(rentalId);
+        requireNoSigning(rental, kind);
+        boolean exit = kind == SigningKind.SALIDA;
+        if (exit && rental.getStatus() == RentalStatus.ACTIVE && !rental.isTerminationScheduled()) {
+            throw new BadRequestException("El contrato " + rental.getAgreementNumber()
+                    + " sigue en vigor sin baja: el contrato de salida se firma al finalizarlo");
+        }
+        String template = exit ? templates.exitTextFor(rental) : templates.textFor(rental);
+        ContractPdfService.Rendered rendered = pdf.renderForSigning(
+                rental, issuers.forUnit(rental.getStorageUnit()), template, images::bytesOf, onBehalf);
+
+        Document previous = exit ? rental.getExitContractDocument() : rental.getContractDocument();
+        Document document = rentalDocuments.attach(rentalId,
+                exit ? exitFileNameOf(rental) : fileNameOf(rental), "application/pdf", rendered.content(),
+                exit ? DocumentType.CONTRATO_SALIDA : DocumentType.CONTRATO_ALQUILER,
+                (exit ? "Contrato de salida" : "Contrato") + " preparado para firmar en BoxVault el "
+                        + Pdfs.day(LocalDate.now()));
+        if (exit) rental.setExitContractDocument(document);
+        else rental.setContractDocument(document);
+        rentalRepository.save(rental);
+        retire(rentalId, previous, document, exit ? "el contrato de salida anterior" : "el borrador anterior");
+
+        log.info("Preparado para firmar el contrato {} del alquiler {} ({} hueco(s) de firma)",
+                kind, rentalId, rendered.slots().size());
+        return new ForSigning(document, rendered.content(), rendered.slots());
+    }
+
+    /**
+     * Mientras se firma un contrato, no se rehace: lo que unos ya han firmado
+     * tiene que ser lo mismo que firmen los demás. Para cambiarlo, se cancela
+     * la firma y se prepara otra.
+     */
+    private void requireNoSigning(RentalAgreement rental, SigningKind kind) {
+        if (signings.existsByRentalAgreementIdAndKindAndStatus(rental.getId(), kind, SigningStatus.EN_CURSO)) {
+            throw new BadRequestException("El " + (kind == SigningKind.SALIDA ? "contrato de salida" : "contrato")
+                    + " " + rental.getAgreementNumber() + " se está firmando: cancela la firma antes de rehacerlo");
+        }
+    }
+
+    /**
+     * Retira el contrato generado antes, ya sustituido por el nuevo. Si ése se
+     * firmó (o se intentó firmar) en BoxVault, no se borra: es la prueba de lo
+     * que se firmó, y se queda en los documentos del alquiler.
+     */
+    private void retire(Long rentalId, Document previous, Document replacement, String what) {
+        if (previous == null || previous.getId().equals(replacement.getId())) return;
+        if (signings.usesDocument(previous.getId())) {
+            log.info("Alquiler {}: {} ({}) se conserva porque se firmó en BoxVault", rentalId, what, previous.getFileName());
+            return;
+        }
+        rentalDocuments.delete(rentalId, previous.getId());
+        log.info("Rehecho el contrato del alquiler {}: se retira {} ({})", rentalId, what, previous.getFileName());
     }
 
     private byte[] composeExit(RentalAgreement rental) {
