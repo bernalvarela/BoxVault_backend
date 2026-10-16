@@ -30,6 +30,7 @@ import java.nio.charset.StandardCharsets;
 public class PublicSigningController {
 
     static final String TOKEN_HEADER = "X-Sign-Token";
+    static final String CODE_HEADER = "X-Sign-Code";
 
     private final ContractSigningService signing;
 
@@ -38,19 +39,28 @@ public class PublicSigningController {
         return ResponseEntity.ok(signing.publicInfo(token, RequestOrigin.of(http)));
     }
 
+    /** Que le manden el código a su correo. */
+    @PostMapping("/code")
+    public ResponseEntity<SigningDTOs.CodeSent> sendCode(@RequestHeader(TOKEN_HEADER) String token, HttpServletRequest http) {
+        return ResponseEntity.ok(signing.publicSendCode(token, RequestOrigin.of(http)));
+    }
+
+    /** El contrato, sólo con el código: lleva DNI, domicilio y renta. */
     @GetMapping("/document")
-    public ResponseEntity<InputStreamResource> document(@RequestHeader(TOKEN_HEADER) String token) {
-        return pdf(signing.publicDocument(token));
+    public ResponseEntity<InputStreamResource> document(@RequestHeader(TOKEN_HEADER) String token,
+                                                        @RequestHeader(CODE_HEADER) String code,
+                                                        HttpServletRequest http) {
+        return pdf(signing.publicDocument(token, code, RequestOrigin.of(http)));
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<SigningDTOs.PublicInfo> sign(@RequestHeader(TOKEN_HEADER) String token,
                                                        @RequestPart("signature") MultipartFile signature,
-                                                       @RequestParam("taxId") String taxId,
+                                                       @RequestParam("code") String code,
                                                        @RequestParam(defaultValue = "false") boolean accepted,
                                                        HttpServletRequest http) {
         return ResponseEntity.ok(signing.publicSign(token, ContractSigningController.bytesOf(signature),
-                taxId, accepted, RequestOrigin.of(http)));
+                code, accepted, RequestOrigin.of(http)));
     }
 
     @GetMapping("/signed")

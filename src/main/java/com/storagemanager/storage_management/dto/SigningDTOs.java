@@ -39,7 +39,9 @@ public final class SigningDTOs {
                              boolean identityChecked, String identityCheckedBy,
                              /** Si tiene un enlace que todavía vale. */
                              boolean linkActive, Instant linkExpiresAt, boolean linkOpened,
-                             boolean linkBlocked) {}
+                             boolean linkBlocked,
+                             /** Si tiene un código que vale, y hasta cuándo. */
+                             boolean codeActive, Instant codeExpiresAt) {}
 
     public record EventView(Long id, Instant at, SigningEventType type, String actor, String signerName,
                             String ip, String detail) {}
@@ -71,8 +73,24 @@ public final class SigningDTOs {
 
     // --- Para quien firma con el enlace, sin sesión ---------------------------
 
+    /**
+     * @param codeEmail  a qué correo se le puede mandar el código, enmascarado
+     *                   ("a***@gmail.com"); null si no tiene o no hay correo configurado
+     * @param codeActive si ya tiene un código que vale (pedido o entregado a mano)
+     */
     public record PublicInfo(String title, String unitName, String agreementNumber,
                              String signerName, String role, String onBehalfOf,
                              boolean signed, boolean completed, boolean copyAvailable,
-                             Instant expiresAt, String preparedBy) {}
+                             Instant expiresAt, String preparedBy,
+                             String codeEmail, boolean codeActive) {}
+
+    /** El código se ha mandado a ese correo (enmascarado) y vale hasta entonces. */
+    public record CodeSent(String maskedEmail, Instant expiresAt) {}
+
+    /**
+     * Un código para entregar a mano: se enseña una sola vez.
+     *
+     * @param whatsappUrl el código, listo para mandarlo por WhatsApp; null sin móvil válido
+     */
+    public record ManualCode(String code, Instant expiresAt, String whatsappUrl) {}
 }

@@ -64,7 +64,6 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -126,6 +125,7 @@ public class ContractSigningService {
     private final SigningProperties properties;
     private final AppUserRepository users;
     private final ApplicationEventPublisher publisher;
+    private final SigningCodeMailer codeMailer;
 
     /** De dónde llega una petición, para el registro. */
     public record Origin(String ip, String userAgent) {}
@@ -226,10 +226,9 @@ public class ContractSigningService {
         if (signer.hasSigned()) {
             throw new BadRequestException(signer.getFullName() + " ya ha firmado");
         }
-        if (signer.getTaxId() == null || signer.getTaxId().isBlank()) {
-            throw new BadRequestException("Falta el DNI/NIE de " + signer.getFullName() + " en su ficha. "
-                    + "Con el enlace hay que teclearlo para firmar; sin él, sólo puede firmar en persona.");
-        }
+        // Con el enlace, antes de ver el contrato hay que teclear un código: o se
+        // lo pide él a su correo, o se lo hace llegar quien gestiona por otro
+        // camino (ver manualCode). Por eso el enlace no exige correo.
         String base = baseUrl(origin);
 
         String token = newToken();
@@ -239,6 +238,10 @@ public class ContractSigningService {
         signer.setTokenExpiresAt(now.plus(properties.getLinkTtl()).truncatedTo(ChronoUnit.MILLIS));
         signer.setFailedAttempts(0);
         signer.setLinkOpenedAt(null);
+        signer.setCodeHash(null);
+        signer.setCodeSentAt(null);
+        signer.setCodeExpiresAt(null);
+        signer.setCodeSends(0);
         signings.save(signing);
         event(signing, signer, SigningEventType.ENLACE_CREADO, currentActor(), from,
                 "Caduca el " + DAY_TIME.format(signer.getTokenExpiresAt()));
@@ -307,22 +310,111 @@ public class ContractSigningService {
         return publicInfoOf(signing, signer);
     }
 
-    /** El PDF congelado, para leerlo antes de firmar. */
-    @Transactional(readOnly = true)
-    public DocumentService.Content publicDocument(String token) {
-        ContractSigner signer = byToken(token, false);
-        return documents.open(signer.getSigning().getOriginalDocument());
+    /**
+     * Manda al correo de la ficha el código para ver y firmar el contrato. Uno
+     * por minuto como mucho, y {@value #MAX_CODE_SENDS} por enlace: un enlace
+     * en malas manos no puede servir para llenarle el buzón a nadie.
+     */
+    @Transactional
+    public SigningDTOs.CodeSent publicSendCode(String token, Origin origin) {
+        ContractSigner found = byToken(token, false);
+        ContractSigning signing = lock(found.getSigning().getId());
+        ContractSigner signer = signerOf(signing, found.getId());
+        if (!signing.isInProgress() || signer.hasSigned() || signer.getFailedAttempts() >= MAX_ATTEMPTS) throw gone();
+        String email = validEmail(signer.getEmail());
+        if (email == null) {
+            throw new BadRequestException("Tu ficha no tiene correo: pide a quien te envió el enlace que lo añada.");
+        }
+        Instant now = now();
+        if (signer.getCodeSentAt() != null && signer.getCodeSentAt().plus(CODE_RESEND).isAfter(now)) {
+            throw new BadRequestException("Ya te hemos mandado un código hace menos de un minuto. Mira tu correo "
+                    + "(también la carpeta de spam) o espera un poco para pedir otro.");
+        }
+        if (signer.getCodeSends() >= MAX_CODE_SENDS) {
+            throw new BadRequestException("Has pedido demasiados códigos con este enlace. Pide uno nuevo a quien te lo envió.");
+        }
+
+        String code = issueCode(signer, CODE_TTL);
+        signer.setCodeSends(signer.getCodeSends() + 1);
+        signer.setCodeEmail(email);
+        signer.setCodeDeliveredBy(null);
+        // Si el correo no sale, no queda nada anotado: se puede pedir otra vez.
+        codeMailer.send(email, signer.getFullName(), titleOf(signing), code, (int) CODE_TTL.toMinutes());
+        signings.save(signing);
+        event(signing, signer, SigningEventType.CODIGO_ENVIADO, SIGNER_ACTOR, origin, "Por correo a " + email);
+        return new SigningDTOs.CodeSent(maskEmail(email), signer.getCodeExpiresAt());
+    }
+
+    /**
+     * Un código para que quien gestiona se lo haga llegar al firmante por el
+     * camino que quiera: WhatsApp, SMS, de palabra por teléfono. Se enseña una
+     * sola vez; pedir otro anula el anterior. Vale {@link #MANUAL_CODE_TTL}:
+     * un mensaje se puede leer horas después.
+     * <p>
+     * Conviene que no vaya por el mismo sitio que el enlace: si los dos van en
+     * el mismo WhatsApp, quien tenga ese móvil tiene las dos cosas.
+     */
+    @Transactional
+    public SigningDTOs.ManualCode manualCode(Long rentalId, Long signingId, Long signerId, Origin from) {
+        ContractSigning signing = lockOwned(rentalId, signingId);
+        requireInProgress(signing);
+        ContractSigner signer = signerOf(signing, signerId);
+        if (signer.hasSigned()) throw new BadRequestException(signer.getFullName() + " ya ha firmado");
+        if (signer.getTokenHash() == null || signer.getTokenExpiresAt() == null
+                || !signer.getTokenExpiresAt().isAfter(Instant.now()) || signer.getFailedAttempts() >= MAX_ATTEMPTS) {
+            throw new BadRequestException("Primero crea un enlace para " + signer.getFullName() + ": el código va con él");
+        }
+        String code = issueCode(signer, MANUAL_CODE_TTL);
+        String user = currentActor();
+        signer.setCodeEmail(null);
+        signer.setCodeDeliveredBy(user);
+        signings.save(signing);
+        event(signing, signer, SigningEventType.CODIGO_ENVIADO, user, from,
+                "Generado por " + user + " para hacérselo llegar por otro medio (WhatsApp, SMS, teléfono)");
+
+        String whatsapp = whatsappTo(signer.getPhone(), "Tu código para ver y firmar el "
+                + shortTitle(signing) + " es " + code + ". Vale hasta el "
+                + DAY_TIME.format(signer.getCodeExpiresAt()) + ".");
+        return new SigningDTOs.ManualCode(code, signer.getCodeExpiresAt(), whatsapp);
+    }
+
+    /** Lo que vale un código que se entrega a mano. */
+    static final java.time.Duration MANUAL_CODE_TTL = java.time.Duration.ofHours(24);
+
+    /** Un código nuevo de seis cifras: guarda su huella y su caducidad, y devuelve el código en claro. */
+    private String issueCode(ContractSigner signer, java.time.Duration ttl) {
+        String code = String.format("%06d", RANDOM.nextInt(1_000_000));
+        Instant now = now();
+        signer.setCodeHash(codeHash(signer, code));
+        signer.setCodeSentAt(now);
+        signer.setCodeExpiresAt(now.plus(ttl));
+        return code;
+    }
+
+    /**
+     * El PDF congelado, para leerlo antes de firmar. Pide el código: el
+     * contrato lleva DNI, domicilio y renta, y no se enseña a quien sólo tiene
+     * el enlace.
+     */
+    @Transactional(noRollbackFor = BadRequestException.class)
+    public DocumentService.Content publicDocument(String token, String code, Origin origin) {
+        ContractSigner found = byToken(token, false);
+        ContractSigning signing = lock(found.getSigning().getId());
+        ContractSigner signer = signerOf(signing, found.getId());
+        if (!signing.isInProgress() || signer.hasSigned() || signer.getFailedAttempts() >= MAX_ATTEMPTS) throw gone();
+        requireCode(signing, signer, code, origin);
+        return documents.open(signing.getOriginalDocument());
     }
 
     /**
      * Firma con el enlace. Hay que haber marcado que se acepta el contrato y
-     * teclear el DNI/NIE, que tiene que ser el de su ficha.
+     * teclear el código que llegó a su correo.
      * <p>
-     * Un DNI incorrecto no deshace nada de lo anotado: el intento cuenta, y por
-     * eso este método no se revierte con un BadRequestException.
+     * Un código incorrecto no deshace nada de lo anotado: el intento cuenta, y
+     * por eso este método no se revierte con un BadRequestException.
      */
     @Transactional(noRollbackFor = BadRequestException.class)
-    public SigningDTOs.PublicInfo publicSign(String token, byte[] signature, String taxId, boolean accepted,
+    public SigningDTOs.PublicInfo publicSign(String token, byte[] signature, String code, boolean accepted,
                                              Origin origin) {
         ContractSigner found = byToken(token, false);
         ContractSigning signing = lock(found.getSigning().getId());
@@ -332,30 +424,84 @@ public class ContractSigningService {
             throw new BadRequestException("Marca que has leído el contrato y lo aceptas");
         }
         requirePng(signature);
-
-        if (!sameTaxId(taxId, signer.getTaxId())) {
-            signer.setFailedAttempts(signer.getFailedAttempts() + 1);
-            signings.save(signing);
-            event(signing, signer, SigningEventType.NIF_INCORRECTO, SIGNER_ACTOR, origin,
-                    "Intento " + signer.getFailedAttempts() + " de " + MAX_ATTEMPTS);
-            int left = MAX_ATTEMPTS - signer.getFailedAttempts();
-            if (left <= 0) {
-                event(signing, signer, SigningEventType.ENLACE_BLOQUEADO, SIGNER_ACTOR, origin, null);
-                throw new BadRequestException("El documento no coincide con el de tu ficha. "
-                        + "El enlace ha dejado de valer: pide uno nuevo a quien te lo envió.");
-            }
-            throw new BadRequestException("El documento no coincide con el de tu ficha. Revísalo: "
-                    + (left == 1 ? "queda 1 intento." : "quedan " + left + " intentos."));
-        }
+        requireCode(signing, signer, code, origin);
 
         asPreparer(signing, () -> {
             keepSignature(signing, signer, signature, SigningChannel.ENLACE, origin);
+            signer.setCodeVerifiedAt(signer.getSignedAt());
+            // El código ya no sirve para nada más.
+            signer.setCodeHash(null);
             signings.save(signing);
             event(signing, signer, SigningEventType.FIRMADO, SIGNER_ACTOR, origin,
-                    "Con su enlace, desde su dispositivo; DNI/NIE tecleado y comprobado");
+                    "Con su enlace, desde su dispositivo; código confirmado, " + codeDelivery(signer));
             completeIfReady(signing, origin);
         });
         return publicInfoOf(signing, signer);
+    }
+
+    /** Lo que dura un código desde que se manda. */
+    static final java.time.Duration CODE_TTL = java.time.Duration.ofMinutes(15);
+    /** Lo que hay que esperar para pedir otro. */
+    static final java.time.Duration CODE_RESEND = java.time.Duration.ofSeconds(60);
+    /** Códigos que se pueden pedir con un mismo enlace. */
+    static final int MAX_CODE_SENDS = 5;
+
+    /**
+     * Comprueba el código. Uno equivocado cuenta como intento fallido; al
+     * quinto, el enlace se bloquea.
+     */
+    private void requireCode(ContractSigning signing, ContractSigner signer, String code, Origin origin) {
+        if (signer.getCodeHash() == null || signer.getCodeExpiresAt() == null) {
+            throw new BadRequestException("Pide el código que te mandamos por correo.");
+        }
+        if (!signer.getCodeExpiresAt().isAfter(Instant.now())) {
+            throw new BadRequestException("El código ha caducado. Pide otro.");
+        }
+        String typed = code == null ? "" : code.replaceAll("\\D", "");
+        if (typed.length() == 6 && MessageDigest.isEqual(
+                codeHash(signer, typed).getBytes(StandardCharsets.UTF_8),
+                signer.getCodeHash().getBytes(StandardCharsets.UTF_8))) {
+            return;
+        }
+        signer.setFailedAttempts(signer.getFailedAttempts() + 1);
+        signings.save(signing);
+        event(signing, signer, SigningEventType.CODIGO_INCORRECTO, SIGNER_ACTOR, origin,
+                "Intento " + signer.getFailedAttempts() + " de " + MAX_ATTEMPTS);
+        int left = MAX_ATTEMPTS - signer.getFailedAttempts();
+        if (left <= 0) {
+            event(signing, signer, SigningEventType.ENLACE_BLOQUEADO, SIGNER_ACTOR, origin, null);
+            throw new BadRequestException("El código no es correcto. El enlace ha dejado de valer: "
+                    + "pide uno nuevo a quien te lo envió.");
+        }
+        throw new BadRequestException("El código no es correcto. Revísalo: "
+                + (left == 1 ? "queda 1 intento." : "quedan " + left + " intentos."));
+    }
+
+    /** Por dónde le llegó el código, en palabras, para el registro y la hoja de evidencias. */
+    static String codeDelivery(ContractSigner signer) {
+        if (signer.getCodeEmail() != null) return "mandado por BoxVault a su correo " + signer.getCodeEmail();
+        if (signer.getCodeDeliveredBy() != null) {
+            return "que le hizo llegar " + signer.getCodeDeliveredBy() + " por otro medio (WhatsApp, SMS o teléfono)";
+        }
+        return "de origen no anotado";
+    }
+
+    /** La huella de un código, atada al firmante: el mismo código de otro no vale. */
+    private static String codeHash(ContractSigner signer, String code) {
+        return sha256Hex((signer.getId() + ":" + code).getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** "a***@gmail.com": lo justo para que sepa a qué correo mirar. */
+    static String maskEmail(String email) {
+        int at = email.indexOf('@');
+        if (at <= 1) return "***" + email.substring(Math.max(at, 0));
+        return email.charAt(0) + "***" + email.substring(at);
+    }
+
+    private static String validEmail(String email) {
+        if (email == null) return null;
+        String value = email.trim();
+        return value.matches("[^@\\s]+@[^@\\s]+\\.[^@\\s]+") ? value : null;
     }
 
     /** La copia firmada, con el mismo enlace, durante {@code copy-ttl} desde que se completó. */
@@ -488,6 +634,8 @@ public class ContractSigningService {
                         signer.getSignedAt(), signer.getSignedIp(), signer.getSignedUserAgent(),
                         Boolean.TRUE.equals(signer.getIdentityChecked()), signer.getIdentityCheckedBy(),
                         signer.getWitnessedBy(), signer.getDocumentSha256(), signer.getSignatureSha256(),
+                        signer.getChannel() == SigningChannel.ENLACE && signer.getCodeVerifiedAt() != null
+                                ? "código de un solo uso " + codeDelivery(signer) : null,
                         read(storage.open(signer.getSignatureKey()))))
                 .toList();
 
@@ -628,7 +776,10 @@ public class ContractSigningService {
                                 && s.getTokenExpiresAt() != null && s.getTokenExpiresAt().isAfter(now)
                                 && s.getFailedAttempts() < MAX_ATTEMPTS,
                         s.getTokenExpiresAt(), s.getLinkOpenedAt() != null,
-                        s.getFailedAttempts() >= MAX_ATTEMPTS))
+                        s.getFailedAttempts() >= MAX_ATTEMPTS,
+                        !s.hasSigned() && s.getCodeHash() != null && s.getCodeExpiresAt() != null
+                                && s.getCodeExpiresAt().isAfter(now),
+                        s.getCodeExpiresAt()))
                 .toList();
         List<SigningDTOs.EventView> eventViews = chain.stream()
                 .map(e -> new SigningDTOs.EventView(e.getId(), e.getAt(), e.getType(), e.getActor(),
@@ -651,11 +802,16 @@ public class ContractSigningService {
         String preparedBy = users.findById(signing.getPreparedByUserId())
                 .map(user -> user.getFullName() == null || user.getFullName().isBlank() ? user.getUsername() : user.getFullName())
                 .orElse(null);
+        String email = validEmail(signer.getEmail());
+        boolean codeActive = signer.getCodeHash() != null && signer.getCodeExpiresAt() != null
+                && signer.getCodeExpiresAt().isAfter(Instant.now());
         return new SigningDTOs.PublicInfo(titleOf(signing),
                 rental.getStorageUnit() == null ? null : rental.getStorageUnit().getName(),
                 rental.getAgreementNumber(), signer.getFullName(), roleLabel(signer, signing), signer.getOnBehalfOf(),
                 signer.hasSigned(), completed, completed && signing.getSignedDocument() != null,
-                signer.getTokenExpiresAt(), preparedBy);
+                signer.getTokenExpiresAt(), preparedBy,
+                email != null && codeMailer.available() ? maskEmail(email) : null,
+                codeActive);
     }
 
     // ==================================================================
@@ -761,25 +917,26 @@ public class ContractSigningService {
      * móvil español de nueve cifras lleva el prefijo de España delante.
      */
     private String whatsappUrl(ContractSigner signer, ContractSigning signing, String url) {
-        String digits = signer.getPhone() == null ? "" : signer.getPhone().replaceAll("\\D", "");
+        String firstName = signer.getFullName().split("\\s+")[0];
+        String text = "Hola " + firstName + ", aquí tienes el " + shortTitle(signing)
+                + " para leerlo y firmarlo desde el móvil: " + url
+                + "\nEl enlace es personal y caduca el " + DAY_TIME.format(signer.getTokenExpiresAt()) + "."
+                + "\nPara abrirlo te pedirá un código de seis cifras que te mandaremos aparte.";
+        return whatsappTo(signer.getPhone(), text);
+    }
+
+    /** wa.me con el mensaje escrito, o null si el teléfono no vale para WhatsApp. */
+    private static String whatsappTo(String phone, String text) {
+        String digits = phone == null ? "" : phone.replaceAll("\\D", "");
         if (digits.startsWith("00")) digits = digits.substring(2);
         if (digits.length() == 9 && "6789".indexOf(digits.charAt(0)) >= 0) digits = "34" + digits;
         if (digits.length() < 10) return null;
-
-        String firstName = signer.getFullName().split("\\s+")[0];
-        String text = "Hola " + firstName + ", aquí tienes el " + titleOf(signing).toLowerCase(Pdfs.ES)
-                .replace("contrato de arrendamiento", "contrato")
-                + " para leerlo y firmarlo desde el móvil: " + url
-                + "\nEl enlace es personal y caduca el " + DAY_TIME.format(signer.getTokenExpiresAt()) + ".";
         return "https://wa.me/" + digits + "?text=" + URLEncoder.encode(text, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
-    /** Si el DNI/NIE tecleado es el de la ficha: sin espacios, guiones ni puntos, y sin distinguir mayúsculas. */
-    static boolean sameTaxId(String typed, String expected) {
-        if (typed == null || expected == null) return false;
-        String a = typed.replaceAll("[\\s.\\-]", "").toUpperCase(Locale.ROOT);
-        String b = expected.replaceAll("[\\s.\\-]", "").toUpperCase(Locale.ROOT);
-        return !a.isEmpty() && MessageDigest.isEqual(a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8));
+    /** "contrato CON-2026-03 · trastero 3", para un mensaje. */
+    private String shortTitle(ContractSigning signing) {
+        return titleOf(signing).toLowerCase(Pdfs.ES).replace("contrato de arrendamiento", "contrato");
     }
 
     /** Una firma es un PNG pequeño; cualquier otra cosa no se guarda. */

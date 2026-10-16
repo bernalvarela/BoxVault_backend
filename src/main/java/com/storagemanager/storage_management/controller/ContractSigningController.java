@@ -63,6 +63,14 @@ public class ContractSigningController {
                 request == null ? null : request.origin(), RequestOrigin.of(http)));
     }
 
+    /** Un código para entregárselo al firmante a mano (WhatsApp, SMS, teléfono). Se enseña una vez. */
+    @PreAuthorize("@access.can('ALQUILERES','ESCRIBIR')")
+    @PostMapping("/{signingId}/signers/{signerId}/code")
+    public ResponseEntity<SigningDTOs.ManualCode> manualCode(@PathVariable Long rentalId, @PathVariable Long signingId,
+                                                             @PathVariable Long signerId, HttpServletRequest http) {
+        return ResponseEntity.ok(signing.manualCode(rentalId, signingId, signerId, RequestOrigin.of(http)));
+    }
+
     @PreAuthorize("@access.can('ALQUILERES','ESCRIBIR')")
     @PostMapping(value = "/{signingId}/signers/{signerId}/sign", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<SigningDTOs.SigningView> signInPerson(@PathVariable Long rentalId, @PathVariable Long signingId,

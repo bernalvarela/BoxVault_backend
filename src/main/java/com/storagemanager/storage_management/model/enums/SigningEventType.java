@@ -8,8 +8,12 @@ public enum SigningEventType {
     ENLACE_CREADO,
     /** El firmante abrió su enlace. */
     ENLACE_ABIERTO,
-    /** Tecleó un DNI que no es el suyo. */
+    /** Tecleó un DNI que no es el suyo. Ya no se usa: queda por las firmas de antes. */
     NIF_INCORRECTO,
+    /** Se mandó un código para firmar al correo del firmante. */
+    CODIGO_ENVIADO,
+    /** Tecleó un código que no es el que se le mandó. */
+    CODIGO_INCORRECTO,
     /** Demasiados DNI incorrectos: el enlace deja de valer. */
     ENLACE_BLOQUEADO,
     /** Firmó. */

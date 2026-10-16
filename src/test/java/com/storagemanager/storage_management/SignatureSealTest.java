@@ -95,6 +95,7 @@ class SignatureSealTest {
         assertTrue(all.contains("Ana Gómez Pérez"), all);
         assertTrue(all.contains("Identidad comprobada"), all);
         assertTrue(all.contains("enlace personal"), "el firmante con enlace: " + all);
+        assertTrue(all.contains("código de un solo uso"), "cómo se comprobó que era él: " + all);
         assertFalse(last.isBlank());
     }
 
@@ -146,7 +147,9 @@ class SignatureSealTest {
                         slot.key().startsWith("ARRENDADOR"),
                         Instant.parse("2026-10-16T10:15:30Z"), "192.168.1.20", "Mozilla/5.0 (Tablet)",
                         slot.key().startsWith("ARRENDADOR"), "admin", "admin",
-                        sha256(rendered.content()), pngHash, png))
+                        sha256(rendered.content()), pngHash,
+                        slot.key().startsWith("ARRENDADOR") ? null : "código de un solo uso mandado por BoxVault a su correo ana@ejemplo.es",
+                        png))
                 .toList();
         return new SignatureSealService.SealRequest("Contrato de arrendamiento CON-PRUEBA · Trastero 3",
                 rendered.content(), sha256(rendered.content()), rendered.slots(), signers);

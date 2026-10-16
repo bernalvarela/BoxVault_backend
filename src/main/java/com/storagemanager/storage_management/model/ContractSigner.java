@@ -77,12 +77,42 @@ public class ContractSigner {
 
     private Instant tokenExpiresAt;
 
-    /** DNI tecleados mal con el enlace; al quinto, el enlace deja de valer. */
+    /** Códigos tecleados mal con el enlace; al quinto, el enlace deja de valer. */
     @Column(nullable = false)
     @Builder.Default
     private Integer failedAttempts = 0;
 
     private Instant linkOpenedAt;
+
+    // --- El código por correo ---------------------------------------------
+    //
+    // El enlace solo no basta: se puede reenviar o abrir en otro móvil. Antes de
+    // ver el contrato y para firmarlo hay que teclear un código que se manda al
+    // correo de su ficha, y eso prueba que quien firma lee ese correo. Del
+    // código, como del enlace, sólo se guarda la huella.
+
+    @Column(length = 64)
+    private String codeHash;
+
+    private Instant codeSentAt;
+
+    private Instant codeExpiresAt;
+
+    /** Cuántos códigos se han pedido con este enlace. */
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer codeSends = 0;
+
+    /** A qué correo mandó BoxVault el código; null si lo entregó alguien a mano. */
+    @Column(length = 150)
+    private String codeEmail;
+
+    /** Quién generó el código para hacérselo llegar por otro medio (WhatsApp, SMS...). */
+    @Column(length = 60)
+    private String codeDeliveredBy;
+
+    /** Cuándo tecleó bien el código con el que firmó. */
+    private Instant codeVerifiedAt;
 
     // --- La firma ------------------------------------------------------------
 

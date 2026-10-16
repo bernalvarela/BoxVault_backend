@@ -122,10 +122,9 @@ class ContractSigningTest {
         assertFalse(view.signers().isEmpty());
         assertTrue(view.chainIntact());
 
-        // El que firmará con el enlace: un arrendatario con NIF. Los demás, en persona.
+        // El que firmará con el enlace: un arrendatario. Los demás, en persona.
         SigningDTOs.SignerView remote = view.signers().stream()
                 .filter(s -> s.role() == com.storagemanager.storage_management.model.enums.SignerRole.ARRENDATARIO)
-                .filter(s -> s.taxId() != null)
                 .findFirst().orElseThrow();
         for (SigningDTOs.SignerView signer : view.signers()) {
             if (signer.id().equals(remote.id())) continue;
@@ -140,17 +139,27 @@ class ContractSigningTest {
         SigningDTOs.PublicInfo info = signing.publicInfo(token, PHONE);
         assertEquals(remote.fullName(), info.signerName());
         assertFalse(info.signed());
-        assertNotNull(read(signing.publicDocument(token)));
+        assertFalse(info.codeActive());
 
-        // Un DNI que no es el suyo no firma, y el intento cuenta.
+        // Sin código no se ve el contrato: lleva DNI, domicilio y renta.
+        assertThrows(BadRequestException.class, () -> signing.publicDocument(token, null, PHONE));
+
+        // El código lo genera quien gestiona y se lo hace llegar por otro camino.
+        String code = signing.manualCode(rentalId, view.id(), remote.id(), TABLET).code();
+        assertTrue(code.matches("\\d{6}"), code);
+        String wrongCode = code.equals("000000") ? "111111" : "000000";
+
+        // Uno que no es el suyo no abre nada, y el intento cuenta.
         BadRequestException wrong = assertThrows(BadRequestException.class,
-                () -> signing.publicSign(token, signaturePng(), "00000000T", true, PHONE));
+                () -> signing.publicDocument(token, wrongCode, PHONE));
         assertTrue(wrong.getMessage().contains("quedan 4 intentos"), wrong.getMessage());
-        // Sin aceptar el contrato, tampoco.
-        assertThrows(BadRequestException.class,
-                () -> signing.publicSign(token, signaturePng(), remote.taxId(), false, PHONE));
+        assertNotNull(read(signing.publicDocument(token, code, PHONE)));
 
-        info = signing.publicSign(token, signaturePng(), " " + remote.taxId().toLowerCase() + " ", true, PHONE);
+        // Sin aceptar el contrato no firma, ni con un código que no es.
+        assertThrows(BadRequestException.class, () -> signing.publicSign(token, signaturePng(), code, false, PHONE));
+        assertThrows(BadRequestException.class, () -> signing.publicSign(token, signaturePng(), wrongCode, true, PHONE));
+
+        info = signing.publicSign(token, signaturePng(), code.substring(0, 3) + " " + code.substring(3), true, PHONE);
         assertTrue(info.signed());
         assertTrue(info.completed(), "con la última firma se sella");
 
@@ -163,7 +172,7 @@ class ContractSigningTest {
 
         // Con el mismo enlace se descarga la copia firmada; para firmar ya no vale.
         assertNotNull(read(signing.publicCopy(token, PHONE)));
-        assertThrows(ResourceNotFoundException.class, () -> signing.publicDocument(token));
+        assertThrows(ResourceNotFoundException.class, () -> signing.publicDocument(token, code, PHONE));
     }
 
     @Test
@@ -194,7 +203,7 @@ class ContractSigningTest {
     void anUnknownOrExpiredTokenGivesNothingAway() {
         assertThrows(ResourceNotFoundException.class, () -> signing.publicInfo("no-existe", PHONE));
         assertThrows(ResourceNotFoundException.class, () -> signing.publicInfo("", PHONE));
-        assertThrows(ResourceNotFoundException.class, () -> signing.publicDocument(null));
+        assertThrows(ResourceNotFoundException.class, () -> signing.publicDocument(null, "123456", PHONE));
     }
 
     // ------------------------------------------------------------------

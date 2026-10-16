@@ -85,7 +85,10 @@ public class SignatureSealService {
     public record SignerEvidence(String key, String role, String fullName, String taxId, String onBehalfOf,
                                  boolean inPerson, Instant signedAt, String ip, String userAgent,
                                  boolean identityChecked, String identityCheckedBy, String witnessedBy,
-                                 String documentSha256, String signatureSha256, byte[] signaturePng) {}
+                                 String documentSha256, String signatureSha256,
+                                 /** Con enlace: cómo se comprobó que era él ("código de un solo uso mandado a ..."). */
+                                 String linkVerification,
+                                 byte[] signaturePng) {}
 
     /**
      * Lo que hay que sellar.
@@ -178,8 +181,10 @@ public class SignatureSealService {
                         ? "Identidad comprobada con su documento de identidad por " + orUnknown(signer.identityCheckedBy()) + "."
                         : "Sin comprobación de identidad anotada.");
             } else {
-                how.append("Desde su propio dispositivo, con un enlace personal de un solo uso, "
-                        + "tras teclear su documento de identidad, que coincidió con el de su ficha.");
+                how.append("Desde su propio dispositivo, con un enlace personal, tras teclear el ")
+                        .append(signer.linkVerification() == null ? "código de un solo uso que se le hizo llegar"
+                                : signer.linkVerification())
+                        .append(", sin el que no podía ver ni firmar el contrato.");
             }
             column.addElement(text(how.toString(), Pdfs.BODY, 2));
             column.addElement(text("Dirección IP: " + orUnknown(signer.ip())
