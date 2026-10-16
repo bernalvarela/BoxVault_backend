@@ -613,7 +613,10 @@ public class ContractSigningService {
         if (!signing.isInProgress() || !signing.allSigned()) return;
         try {
             seal(signing, origin);
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | LinkageError e) {
+            // LinkageError también: una clase que no está en la imagen nativa
+            // (pasó con ImageIO, ver PngImages) no es una excepción sino un
+            // Error, y sin esto deshacía la petición entera, firma incluida.
             log.warn("No se pudo sellar la firma {}: {}", signing.getId(), e.getMessage(), e);
             event(signing, null, SigningEventType.SELLO_FALLIDO, actorOrSigner(), origin, trim(e.getMessage(), 500));
         }

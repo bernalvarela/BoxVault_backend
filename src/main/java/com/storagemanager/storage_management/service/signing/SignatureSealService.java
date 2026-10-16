@@ -2,6 +2,7 @@ package com.storagemanager.storage_management.service.signing;
 
 import com.storagemanager.storage_management.config.SigningProperties;
 import com.storagemanager.storage_management.service.pdf.ContractPdfService.Slot;
+import com.storagemanager.storage_management.service.pdf.PngImages;
 import com.storagemanager.storage_management.service.pdf.Pdfs;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -129,7 +130,7 @@ public class SignatureSealService {
                 // Una plantilla sin [[firmas]] no deja huecos: entonces la firma
                 // sale sólo en la hoja de evidencias, que es donde manda igual.
                 if (slot == null || slot.page() < 1 || slot.page() > pages) continue;
-                Image image = Image.getInstance(signer.signaturePng());
+                Image image = PngImages.toImage(signer.signaturePng());
                 float width = slot.urx() - slot.llx() - 8;
                 float height = slot.ury() - slot.lly() - 4;
                 image.scaleToFit(width, height);
@@ -192,7 +193,7 @@ public class SignatureSealService {
             column.addElement(text("Contrato que tenía delante (SHA-256): " + orUnknown(signer.documentSha256()), Pdfs.SMALL, 0));
             column.addElement(text("Su firma (SHA-256): " + orUnknown(signer.signatureSha256()), Pdfs.SMALL, 0));
 
-            Image image = Image.getInstance(signer.signaturePng());
+            Image image = PngImages.toImage(signer.signaturePng());
             image.scaleToFit(170, 56);
             image.setAlignment(Element.ALIGN_LEFT);
             column.addElement(image);

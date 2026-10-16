@@ -497,7 +497,8 @@ public class ContractPdfService {
             return missing;
         }
         try {
-            Image image = Image.getInstance(bytes);
+            // Los PNG, sin ImageIO: en la imagen nativa no existe (ver PngImages).
+            Image image = PngImages.isPng(bytes) ? PngImages.toImage(bytes) : Image.getInstance(bytes);
             float percent = widthPercent == null ? 50f : Math.min(100f, Math.max(5f, Float.parseFloat(widthPercent)));
             // scaleToFit sobre el ancho de la caja de texto de un A4 con los
             // márgenes de este documento; el alto se deja libre y se ajusta solo.
