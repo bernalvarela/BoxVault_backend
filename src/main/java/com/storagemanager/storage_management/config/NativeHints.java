@@ -9,6 +9,7 @@ import org.springframework.aot.hint.BindingReflectionHintsRegistrar;
 import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.RuntimeHintsRegistrar;
+import org.springframework.aot.hint.TypeReference;
 
 /**
  * Hints the GraalVM native image needs beyond what Spring Boot infers on its own:
@@ -54,6 +55,17 @@ public class NativeHints implements RuntimeHintsRegistrar {
         // AOT tampoco lo registra por su cuenta: se ejecuta sin perfil, o sea
         // con H2, y nunca ve este dialecto.
         hints.reflection().registerType(PostgreSQLDialect.class, MemberCategory.INVOKE_DECLARED_CONSTRUCTORS);
+
+        // Las imágenes de OpenPDF. Al meter una imagen en un párrafo o en una
+        // columna, OpenPDF la copia llamando por reflexión a un constructor
+        // escondido de su clase —ImgRaw(Image), Jpeg(Image)...—, y en la imagen
+        // nativa un constructor que nadie declara no existe: sellar el contrato
+        // firmado reventaba con "ImgRaw.<init>(Image)" al poner las firmas en la
+        // hoja de evidencias, y los logotipos de las plantillas, igual.
+        for (String image : new String[]{"ImgRaw", "Jpeg", "Jpeg2000", "ImgTemplate", "ImgWMF", "ImgCCITT", "ImgJBIG2"}) {
+            hints.reflection().registerType(TypeReference.of("org.openpdf.text." + image),
+                    MemberCategory.INVOKE_DECLARED_CONSTRUCTORS);
+        }
 
         BindingReflectionHintsRegistrar registrar = new BindingReflectionHintsRegistrar();
         registrar.registerReflectionHints(hints.reflection(),
