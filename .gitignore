@@ -36,3 +36,6 @@ build/
 
 # Ficheros adjuntos guardados en disco en desarrollo (boxvault.storage.local-path)
 data/
+
+# Volcados de Git Bash cuando un proceso se cuelga en Windows
+*.stackdump

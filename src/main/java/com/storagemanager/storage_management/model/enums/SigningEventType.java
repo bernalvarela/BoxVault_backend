@@ -14,7 +14,7 @@ public enum SigningEventType {
     CODIGO_ENVIADO,
     /** Tecleó un código que no es el que se le mandó. */
     CODIGO_INCORRECTO,
-    /** Demasiados DNI incorrectos: el enlace deja de valer. */
+    /** Demasiados intentos incorrectos: el enlace deja de valer. */
     ENLACE_BLOQUEADO,
     /** Firmó. */
     FIRMADO,

@@ -41,7 +41,8 @@ import java.util.Optional;
 /**
  * Manda el contrato firmado por correo a todos: a cada firmante que tenga correo
  * en su ficha, a quien preparó la firma y, si se configuró, a una dirección que
- * recibe siempre copia ({@code boxvault.signing.mail-copy-to}).
+ * recibe siempre copia (la de Administración › Configuración, ver
+ * {@link com.storagemanager.storage_management.service.MailSettingsService}).
  * <p>
  * Un correo por persona y no uno con todos en copia: nadie ve la dirección de
  * los demás. Cada envío, bien o mal, queda en el registro de la firma.

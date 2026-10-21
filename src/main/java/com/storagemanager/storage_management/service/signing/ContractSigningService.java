@@ -79,7 +79,8 @@ import java.util.stream.Collectors;
  *       su NIF de ese momento.</li>
  *   <li><b>Firmar.</b> En persona, en la tableta de quien gestiona, que deja
  *       anotado que comprobó el DNI; o con un enlace personal en el móvil de
- *       cada uno, que pide teclear el DNI y que coincida con el de su ficha.
+ *       cada uno, que pide un código de seis cifras mandado a su correo o
+ *       entregado por quien gestiona.
  *       De cada firma queda la imagen, cuándo, desde qué IP y dispositivo y la
  *       huella del contrato que tenía delante.</li>
  *   <li><b>Sellar.</b> Con la última firma, las firmas se estampan en el PDF,
@@ -97,7 +98,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ContractSigningService {
 
-    /** DNI incorrectos que admite un enlace antes de dejar de valer. */
+    /** Códigos incorrectos que admite un enlace antes de dejar de valer. */
     static final int MAX_ATTEMPTS = 5;
 
     /** Lo más que puede pesar la imagen de una firma. */
