@@ -4,13 +4,11 @@ import com.storagemanager.storage_management.config.StorageProperties;
 import com.storagemanager.storage_management.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -48,11 +46,7 @@ public class DocumentFiles {
         String fileName = cleanFileName(file.getOriginalFilename());
         String key = keyPrefix + "/" + UUID.randomUUID() + extensionOf(fileName);
 
-        try (InputStream in = file.getInputStream()) {
-            fileStorage.put(key, file.getContentType(), file.getSize(), in);
-        } catch (IOException e) {
-            throw new UncheckedIOException("No se pudo leer el fichero subido", e);
-        }
+        fileStorage.put(key, file.getContentType(), file.getSize(), file);
         return new Stored(key, fileName, file.getContentType(), file.getSize());
     }
 
@@ -67,7 +61,7 @@ public class DocumentFiles {
         }
         String name = cleanFileName(fileName);
         String key = keyPrefix + "/" + UUID.randomUUID() + extensionOf(name);
-        fileStorage.put(key, contentType, content.length, new ByteArrayInputStream(content));
+        fileStorage.put(key, contentType, content.length, new ByteArrayResource(content));
         return new Stored(key, name, contentType, (long) content.length);
     }
 

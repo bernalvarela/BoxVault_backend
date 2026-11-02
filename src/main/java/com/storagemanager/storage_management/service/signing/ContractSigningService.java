@@ -39,6 +39,7 @@ import com.storagemanager.storage_management.service.pdf.Pdfs;
 import com.storagemanager.storage_management.service.storage.FileStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContext;
@@ -46,7 +47,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -595,7 +595,7 @@ public class ContractSigningService {
     private void keepSignature(ContractSigning signing, ContractSigner signer, byte[] signature,
                         SigningChannel channel, Origin origin) {
         String key = "firmas/" + signing.getId() + "/" + signer.getId() + "-" + UUID.randomUUID() + ".png";
-        storage.put(key, "image/png", signature.length, new ByteArrayInputStream(signature));
+        storage.put(key, "image/png", signature.length, new ByteArrayResource(signature));
         signer.setSignedAt(now());
         signer.setChannel(channel);
         signer.setSignedIp(trim(origin.ip(), 64));

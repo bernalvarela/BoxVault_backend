@@ -16,11 +16,11 @@ import com.storagemanager.storage_management.security.UnitScope;
 import com.storagemanager.storage_management.service.storage.FileStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -390,7 +390,7 @@ public class ContractTemplateService {
     }
 
     private void write(String key, byte[] content) {
-        fileStorage.put(key, "text/plain; charset=utf-8", content.length, new ByteArrayInputStream(content));
+        fileStorage.put(key, "text/plain; charset=utf-8", content.length, new ByteArrayResource(content));
     }
 
     private void safeDelete(String key) {

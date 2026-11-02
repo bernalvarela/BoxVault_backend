@@ -13,6 +13,7 @@ import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayInputStream;
@@ -92,7 +93,7 @@ public class SigningKeyStore {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             keyStore.store(out, password);
             byte[] bytes = out.toByteArray();
-            storage.put(KEY, "application/x-pkcs12", bytes.length, new ByteArrayInputStream(bytes));
+            storage.put(KEY, "application/x-pkcs12", bytes.length, new ByteArrayResource(bytes));
             log.info("Creado el certificado del sello de los contratos firmados ({}), válido hasta {}",
                     SUBJECT, created.certificate().getNotAfter());
             return created;

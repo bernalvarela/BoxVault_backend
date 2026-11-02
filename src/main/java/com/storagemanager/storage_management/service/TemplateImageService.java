@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -70,11 +69,7 @@ public class TemplateImageService {
         }
 
         String storageKey = KEY_PREFIX + UUID.randomUUID() + extensionOf(contentType);
-        try (InputStream in = file.getInputStream()) {
-            fileStorage.put(storageKey, contentType, file.getSize(), in);
-        } catch (IOException e) {
-            throw new UncheckedIOException("No se pudo leer la imagen subida", e);
-        }
+        fileStorage.put(storageKey, contentType, file.getSize(), file);
 
         try {
             TemplateImage saved = images.save(TemplateImage.builder()

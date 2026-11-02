@@ -44,9 +44,9 @@ class SignatureSealTest {
         final Map<String, byte[]> objects = new HashMap<>();
 
         @Override
-        public void put(String key, String contentType, long sizeBytes, InputStream content) {
+        public void put(String key, String contentType, long sizeBytes, org.springframework.core.io.InputStreamSource content) {
             try {
-                objects.put(key, content.readAllBytes());
+                objects.put(key, content.getInputStream().readAllBytes());
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }

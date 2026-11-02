@@ -3,7 +3,9 @@ package com.storagemanager.storage_management.service.storage;
 import com.storagemanager.storage_management.config.StorageProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.InputStreamSource;
 import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.http.ContentStreamProvider;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
@@ -14,7 +16,9 @@ import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 
 /**
  * Almacén sobre un servicio compatible con S3; en el servidor, RustFS.
@@ -53,7 +57,7 @@ public class S3FileStorage implements FileStorage {
     }
 
     @Override
-    public void put(String key, String contentType, long sizeBytes, InputStream content) {
+    public void put(String key, String contentType, long sizeBytes, InputStreamSource content) {
         ensureBucket();
         PutObjectRequest request = PutObjectRequest.builder()
                 .bucket(bucket())
@@ -61,7 +65,43 @@ public class S3FileStorage implements FileStorage {
                 .contentType(contentType)
                 .contentLength(sizeBytes)
                 .build();
-        s3.putObject(request, RequestBody.fromInputStream(content, sizeBytes));
+        // RequestBody no admite un tipo nulo; el que vale es el de la petición.
+        String bodyType = contentType != null ? contentType : "application/octet-stream";
+        s3.putObject(request, RequestBody.fromContentProvider(reopening(key, content), sizeBytes, bodyType));
+    }
+
+    /**
+     * Un proveedor que abre el contenido de nuevo cada vez que el SDK lo pide.
+     * Contra un endpoint http (RustFS dentro de la red de Docker) el SDK firma
+     * también el cuerpo y para eso lo lee antes de enviarlo; con
+     * {@code RequestBody.fromInputStream} esa segunda lectura fallaba con
+     * "Content input stream does not support mark/reset" en cuanto el stream no
+     * admitía {@code reset()}, que es el caso del de un fichero subido.
+     */
+    private static ContentStreamProvider reopening(String key, InputStreamSource source) {
+        return new ContentStreamProvider() {
+            private InputStream current;
+
+            @Override
+            public InputStream newStream() {
+                closeQuietly(current);
+                try {
+                    current = source.getInputStream();
+                } catch (IOException e) {
+                    throw new UncheckedIOException("No se pudo leer el fichero " + key, e);
+                }
+                return current;
+            }
+        };
+    }
+
+    private static void closeQuietly(InputStream in) {
+        if (in == null) return;
+        try {
+            in.close();
+        } catch (IOException ignored) {
+            // Ya se ha leído lo que había que leer.
+        }
     }
 
     @Override

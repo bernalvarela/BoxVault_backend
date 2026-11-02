@@ -1,6 +1,7 @@
 package com.storagemanager.storage_management.service.storage;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.InputStreamSource;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -39,11 +40,11 @@ public class LocalFileStorage implements FileStorage {
     }
 
     @Override
-    public void put(String key, String contentType, long sizeBytes, InputStream content) {
+    public void put(String key, String contentType, long sizeBytes, InputStreamSource content) {
         Path path = resolve(key);
-        try {
+        try (InputStream in = content.getInputStream()) {
             Files.createDirectories(path.getParent());
-            Files.copy(content, path, StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(in, path, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             throw new UncheckedIOException("No se pudo guardar el fichero " + key, e);
         }

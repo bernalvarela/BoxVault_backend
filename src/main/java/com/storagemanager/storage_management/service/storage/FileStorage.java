@@ -1,5 +1,7 @@
 package com.storagemanager.storage_management.service.storage;
 
+import org.springframework.core.io.InputStreamSource;
+
 import java.io.InputStream;
 
 /**
@@ -10,10 +12,15 @@ import java.io.InputStream;
 public interface FileStorage {
 
     /**
-     * Guarda (o reemplaza) el objeto de esa clave. No cierra {@code content}:
-     * lo cierra quien lo abrió.
+     * Guarda (o reemplaza) el objeto de esa clave. Recibe de dónde <em>abrir</em> el
+     * contenido, no un stream ya abierto: el almacén puede necesitar leerlo más de
+     * una vez (el cliente de S3 lo recorre para firmar la petición y otra vez para
+     * enviarla, y de nuevo si reintenta), y el stream de un fichero subido sólo se
+     * puede leer una. {@code MultipartFile} ya es un {@link InputStreamSource}; para
+     * unos bytes, {@code new ByteArrayResource(bytes)}. Cada stream que abre, lo
+     * cierra el almacén.
      */
-    void put(String key, String contentType, long sizeBytes, InputStream content);
+    void put(String key, String contentType, long sizeBytes, InputStreamSource content);
 
     /** Abre el objeto para leerlo. El que llama es responsable de cerrarlo. */
     InputStream open(String key);
