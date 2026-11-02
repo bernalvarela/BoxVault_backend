@@ -12,6 +12,7 @@ import com.storagemanager.storage_management.model.enums.OwnerType;
 import com.storagemanager.storage_management.repository.OwnerMembershipRepository;
 import com.storagemanager.storage_management.repository.OwnerRepository;
 import com.storagemanager.storage_management.repository.OwnershipRepository;
+import com.storagemanager.storage_management.repository.TaxFilingRepository;
 import com.storagemanager.storage_management.security.UnitScope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -30,6 +31,7 @@ public class OwnerService {
     private final OwnerRepository ownerRepository;
     private final OwnershipRepository ownershipRepository;
     private final OwnerMembershipRepository ownerMembershipRepository;
+    private final TaxFilingRepository taxFilingRepository;
     private final OwnershipService ownershipService;
     private final UnitScope unitScope;
 
@@ -147,6 +149,13 @@ public class OwnerService {
         if (memberships > 0) {
             throw new BadRequestException("Cannot delete owner '" + owner.getFullName()
                     + "' while they are a member of " + memberships + " entity(ies). Remove them from the entity first.");
+        }
+        // Tax filings store the owner id without a foreign key: deleting the owner
+        // would leave them pointing at nobody, and they could no longer be checked.
+        long taxFilings = taxFilingRepository.countByOwnerId(id);
+        if (taxFilings > 0) {
+            throw new BadRequestException("Cannot delete owner '" + owner.getFullName()
+                    + "' while they have " + taxFilings + " tax filing(s) registered. Reassign or delete those filings first.");
         }
         ownerMembershipRepository.deleteByEntityId(id);
         ownerRepository.delete(owner);

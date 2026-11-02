@@ -130,4 +130,25 @@ class FilingDriftTest {
             filings.delete(broken);
         }
     }
+
+    @Test
+    void aFilingOfAnOwnerThatNoLongerExistsIsSkipped() {
+        // What happened in production: a Modelo 184 filed by a comunidad de bienes
+        // that was later deleted. There is nothing to compare it with, and it is not a drift.
+        TaxFiling orphan = filings.save(TaxFiling.builder()
+                .model(TaxModel.MODELO_184)
+                .year(YEAR)
+                .ownerId(999_999L)
+                .ownerName("Comunidad borrada")
+                .filedDate(LocalDate.of(YEAR + 1, 1, 31))
+                .snapshot(objectMapper.writeValueAsString(taxService.modelo184(YEAR, null)))
+                .notes("FilingDriftTest")
+                .build());
+        try {
+            List<FilingDriftDTO> drifts = assertDoesNotThrow(() -> driftService.drifts());
+            assertTrue(drifts.stream().noneMatch(d -> d.filingId().equals(orphan.getId())));
+        } finally {
+            filings.delete(orphan);
+        }
+    }
 }

@@ -9,4 +9,7 @@ import java.util.List;
 @Repository
 public interface TaxFilingRepository extends JpaRepository<TaxFiling, Long> {
     List<TaxFiling> findAllByOrderByYearDescQuarterDescFiledDateDescIdDesc();
+
+    /** Filings registered by (or for) that owner or entity. */
+    long countByOwnerId(Long ownerId);
 }

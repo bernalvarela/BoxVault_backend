@@ -7,7 +7,10 @@ import com.storagemanager.storage_management.dto.OwnerRequest;
 import com.storagemanager.storage_management.dto.OwnershipDTO;
 import com.storagemanager.storage_management.dto.OwnershipRequest;
 import com.storagemanager.storage_management.model.StorageUnit;
+import com.storagemanager.storage_management.model.TaxFiling;
 import com.storagemanager.storage_management.model.enums.OwnerType;
+import com.storagemanager.storage_management.model.enums.TaxModel;
+import com.storagemanager.storage_management.repository.TaxFilingRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
@@ -18,6 +21,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +31,9 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
 class OwnerControllerTest {
+
+    @Autowired
+    private TaxFilingRepository taxFilings;
 
     @Autowired
     private TestRestTemplate restTemplate;
@@ -262,5 +269,26 @@ class OwnerControllerTest {
         assertEquals(204, delete("/api/owners/" + entity.getId()));
         assertEquals(204, delete("/api/owners/" + personA.getId()));
         assertEquals(204, delete("/api/owners/" + personB.getId()));
+    }
+
+    @Test
+    void anOwnerWithTaxFilingsCannotBeDeleted() {
+        OwnerDTO owner = create(person("Con declaraciones"));
+        TaxFiling filing = taxFilings.save(TaxFiling.builder()
+                .model(TaxModel.IRPF)
+                .year(2025)
+                .ownerId(owner.getId())
+                .ownerName(owner.getFullName())
+                .filedDate(LocalDate.of(2026, 6, 30))
+                .notes("OwnerControllerTest")
+                .build());
+        try {
+            // The filing keeps the owner id without a foreign key: deleting the owner
+            // would leave it pointing at nobody.
+            assertEquals(400, delete("/api/owners/" + owner.getId()));
+        } finally {
+            taxFilings.delete(filing);
+        }
+        assertEquals(204, delete("/api/owners/" + owner.getId()));
     }
 }

@@ -5,6 +5,7 @@ import com.storagemanager.storage_management.dto.IrpfReportDTO;
 import com.storagemanager.storage_management.dto.Modelo184DTO;
 import com.storagemanager.storage_management.dto.Modelo303DTO;
 import com.storagemanager.storage_management.model.TaxFiling;
+import com.storagemanager.storage_management.repository.OwnerRepository;
 import com.storagemanager.storage_management.repository.TaxFilingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,7 +45,22 @@ public class FilingDriftService {
 
     private final TaxFilingRepository filings;
     private final TaxService taxService;
+    private final OwnerRepository owners;
     private final ObjectMapper objectMapper;
+
+    /**
+     * A filing of an owner that no longer exists has nothing to be compared
+     * against: it is skipped quietly instead of logging a WARN on every load of
+     * the screen. Owners with filings can no longer be deleted; this covers the
+     * ones orphaned before that. No owner ({@code null}) means the report for
+     * everyone, which can always be computed.
+     */
+    private boolean ownerGone(Long ownerId, Map<String, Object> cache) {
+        if (ownerId == null) return false;
+        boolean gone = !(Boolean) cache.computeIfAbsent("owner|" + ownerId, k -> owners.existsById(ownerId));
+        if (gone) log.debug("Filing of an owner that no longer exists ({}): not compared", ownerId);
+        return gone;
+    }
 
     /** Las declaraciones presentadas que ya no cuadran, la más reciente primero. */
     public List<FilingDriftDTO> drifts() {
@@ -81,6 +97,7 @@ public class FilingDriftService {
         Integer quarter = filing.getQuarter();
         if (quarter == null) return List.of();
         Long ownerId = filed.getOwnerId();
+        if (ownerGone(ownerId, cache)) return List.of();
         Modelo303DTO now = (Modelo303DTO) cache.computeIfAbsent("303|" + filing.getYear() + "|" + ownerId,
                 k -> taxService.modelo303(filing.getYear(), ownerId));
 
@@ -108,7 +125,7 @@ public class FilingDriftService {
     private List<FilingDriftDTO.Change> compare184(TaxFiling filing, Map<String, Object> cache) {
         Modelo184DTO filed = objectMapper.readValue(filing.getSnapshot(), Modelo184DTO.class);
         Long entityId = filing.getOwnerId() != null ? filing.getOwnerId() : filed.getEntityId();
-        if (entityId == null) return List.of();
+        if (entityId == null || ownerGone(entityId, cache)) return List.of();
         Modelo184DTO now = (Modelo184DTO) cache.computeIfAbsent("184|" + filing.getYear() + "|" + entityId,
                 k -> taxService.modelo184(filing.getYear(), entityId));
 
@@ -131,7 +148,9 @@ public class FilingDriftService {
     // --- IRPF: lo de cada propietario ---------------------------------------
 
     private List<FilingDriftDTO.Change> compareIrpf(TaxFiling filing, Map<String, Object> cache) {
-        if (filing.getOwnerId() == null) return List.of();
+        // Without this check a deleted owner would show up as "their income dropped
+        // to zero", which is not true: they are simply gone.
+        if (filing.getOwnerId() == null || ownerGone(filing.getOwnerId(), cache)) return List.of();
         IrpfReportDTO filed = objectMapper.readValue(filing.getSnapshot(), IrpfReportDTO.class);
         IrpfReportDTO now = (IrpfReportDTO) cache.computeIfAbsent("irpf|" + filing.getYear(),
                 k -> taxService.irpf(filing.getYear()));
