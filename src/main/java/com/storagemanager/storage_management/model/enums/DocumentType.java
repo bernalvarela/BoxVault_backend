@@ -39,6 +39,12 @@ import java.util.List;
  * NOTIFICACION: la notificación recibida (requerimiento, propuesta, acuerdo de
  *   sanción...) o lo que se contestó; el pago va como JUSTIFICANTE.
  * <p>
+ * De un gasto:
+ * JUSTIFICANTE (el recibo o la carta de pago), FACTURA (la del proveedor) u OTRO.
+ * <p>
+ * De una entrada de documentos de una unidad:
+ * NOTIFICACION, JUSTIFICANTE, FACTURA, FOTO u OTRO.
+ * <p>
  * OTRO: lo que no encaja en las anteriores.
  */
 public enum DocumentType {
@@ -67,6 +73,10 @@ public enum DocumentType {
     private static final List<DocumentType> FOR_TAX_FILING = List.of(JUSTIFICANTE, DECLARACION, OTRO);
 
     private static final List<DocumentType> FOR_TAX_NOTICE = List.of(NOTIFICACION, JUSTIFICANTE, OTRO);
+
+    private static final List<DocumentType> FOR_EXPENSE = List.of(JUSTIFICANTE, FACTURA, OTRO);
+
+    private static final List<DocumentType> FOR_UNIT = List.of(NOTIFICACION, JUSTIFICANTE, FACTURA, FOTO, OTRO);
 
     /**
      * Lo que se puede archivar en la ficha de un cliente. CONTRATO_ALQUILER no
@@ -98,5 +108,23 @@ public enum DocumentType {
      */
     public static List<DocumentType> forTaxNotice() {
         return FOR_TAX_NOTICE;
+    }
+
+    /**
+     * Lo que se puede archivar en un gasto: el justificante del pago (recibo,
+     * transferencia, carta de pago de una tasa), la factura del proveedor y lo
+     * demás.
+     */
+    public static List<DocumentType> forExpense() {
+        return FOR_EXPENSE;
+    }
+
+    /**
+     * Lo que se puede archivar en una entrada de documentos de una unidad: una
+     * notificación (la de una licencia), un justificante, una factura, una foto
+     * o lo demás (la licencia en sí, un certificado).
+     */
+    public static List<DocumentType> forUnit() {
+        return FOR_UNIT;
     }
 }

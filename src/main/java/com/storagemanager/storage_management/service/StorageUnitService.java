@@ -21,6 +21,7 @@ import com.storagemanager.storage_management.repository.RentalAgreementRepositor
 import com.storagemanager.storage_management.repository.ContractTemplateRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
 import com.storagemanager.storage_management.repository.UnitPriceHistoryRepository;
+import com.storagemanager.storage_management.repository.UnitDocumentEntryRepository;
 import com.storagemanager.storage_management.security.UnitScope;
 import org.springframework.security.access.AccessDeniedException;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +44,7 @@ public class StorageUnitService {
     private final PaymentRepository paymentRepository;
     private final ExpenseRepository expenseRepository;
     private final OwnershipRepository ownershipRepository;
+    private final UnitDocumentEntryRepository unitDocumentEntryRepository;
     private final UnitScope unitScope;
 
     /**
@@ -238,6 +240,11 @@ public class StorageUnitService {
         if (expenses > 0) {
             throw new BadRequestException("Cannot delete '" + unit.getName() + "' while " + expenses
                     + " expense(s) are attributed to it.");
+        }
+        long documentEntries = unitDocumentEntryRepository.countByStorageUnitId(id);
+        if (documentEntries > 0) {
+            throw new BadRequestException("Cannot delete '" + unit.getName() + "' while it has "
+                    + documentEntries + " document entr" + (documentEntries == 1 ? "y" : "ies") + ".");
         }
         unitPriceHistoryRepository.deleteAll(
                 unitPriceHistoryRepository.findByStorageUnitIdOrderByEffectiveFromAscIdAsc(id));

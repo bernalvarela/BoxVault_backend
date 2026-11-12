@@ -32,6 +32,7 @@ public class ExpenseService {
     private final ExpenseRepository expenseRepository;
     private final StorageUnitRepository storageUnitRepository;
     private final UnitScope unitScope;
+    private final ExpenseDocumentService expenseDocuments;
 
     /** The root unit (local / flat) an expense counts towards; null for a general expense. */
     public static Long rootOf(Expense expense) {
@@ -150,9 +151,12 @@ public class ExpenseService {
         return expenseRepository.save(expense);
     }
 
+    /** Borra el gasto y los documentos archivados en él. */
     @Transactional
     public void deleteExpense(Long id) {
-        expenseRepository.delete(getExpenseById(id));
+        Expense expense = getExpenseById(id);
+        expenseDocuments.deleteByExpense(id);
+        expenseRepository.delete(expense);
     }
 
     private void applyRequest(Expense expense, ExpenseRequest request) {
