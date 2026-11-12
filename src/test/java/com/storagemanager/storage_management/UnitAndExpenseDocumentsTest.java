@@ -141,6 +141,79 @@ class UnitAndExpenseDocumentsTest {
     }
 
     @Test
+    void elTipoYLaDescripcionDeUnFicheroSeCambianSinVolverASubirlo() {
+        StorageUnit unit = anyUnit();
+        UnitDocumentEntryDTO entry = unitDocuments.createEntry(unit.getId(),
+                new UnitDocumentEntryDTO.Request("Licencia", LocalDate.of(2026, 1, 1), null));
+        entryIds.add(new Long[]{unit.getId(), entry.getId()});
+        Long docId = unitDocuments.upload(unit.getId(), entry.getId(), pdf("carta.pdf"), null, null)
+                .getDocuments().get(0).getId();
+
+        UnitDocumentEntryDTO.FileDTO changed = unitDocuments.updateDocument(unit.getId(), entry.getId(), docId,
+                DocumentType.JUSTIFICANTE, "  Carta de pago  ").getDocuments().get(0);
+        assertEquals(DocumentType.JUSTIFICANTE, changed.getDocumentType());
+        assertEquals("Carta de pago", changed.getDescription());
+        assertEquals("carta.pdf", changed.getFileName(), "el fichero es el mismo");
+
+        assertNull(unitDocuments.updateDocument(unit.getId(), entry.getId(), docId, null, " ")
+                .getDocuments().get(0).getDescription(), "vacía, se quita");
+        assertThrows(BadRequestException.class, () ->
+                unitDocuments.updateDocument(unit.getId(), entry.getId(), docId, DocumentType.DNI, null));
+    }
+
+    @Test
+    void unGastoRelacionadoSaleDentroDeLaEntradaYNoSuelto() {
+        StorageUnit unit = anyUnit();
+        Expense expense = licenceFee(unit);
+        Long docId = expenseDocuments.upload(expense.getId(), pdf("carta-de-pago.pdf"), null, null).getId();
+        UnitDocumentEntryDTO entry = unitDocuments.createEntry(unit.getId(),
+                new UnitDocumentEntryDTO.Request("Notificación de licencia", LocalDate.of(2026, 11, 5), null));
+        entryIds.add(new Long[]{unit.getId(), entry.getId()});
+
+        unitDocuments.linkExpense(unit.getId(), entry.getId(), expense.getId());
+        unitDocuments.linkExpense(unit.getId(), entry.getId(), expense.getId()); // otra vez: no pasa nada
+
+        UnitDocumentEntryDTO listed = unitDocuments.getEntries(unit.getId(), true).stream()
+                .filter(e -> e.getId().equals(entry.getId())).findFirst().orElseThrow();
+        assertEquals(1, listed.getExpenses().size());
+        assertEquals("Tasa de la licencia", listed.getExpenses().get(0).getDescription());
+        assertEquals(docId, listed.getExpenses().get(0).getDocuments().get(0).getId());
+        assertTrue(expenseDocuments.getDocumentsForUnit(unit.getId()).stream()
+                .noneMatch(d -> d.getExpenseId().equals(expense.getId())), "no sale también suelto");
+        assertNull(unitDocuments.getEntries(unit.getId(), false).get(0).getExpenses(),
+                "sin permiso de gastos no vienen");
+
+        // En otra entrada no puede ir a la vez.
+        UnitDocumentEntryDTO other = unitDocuments.createEntry(unit.getId(),
+                new UnitDocumentEntryDTO.Request("Otra", LocalDate.of(2026, 11, 6), null));
+        entryIds.add(new Long[]{unit.getId(), other.getId()});
+        assertThrows(BadRequestException.class, () ->
+                unitDocuments.linkExpense(unit.getId(), other.getId(), expense.getId()));
+
+        // Quitar la relación lo devuelve a la lista suelta; borrar el gasto la quita sola.
+        unitDocuments.unlinkExpense(unit.getId(), entry.getId(), expense.getId());
+        assertTrue(expenseDocuments.getDocumentsForUnit(unit.getId()).stream()
+                .anyMatch(d -> d.getExpenseId().equals(expense.getId())));
+        unitDocuments.linkExpense(unit.getId(), other.getId(), expense.getId());
+        expenseService.deleteExpense(expense.getId());
+        assertTrue(unitDocuments.getEntries(unit.getId(), true).stream()
+                .allMatch(e -> e.getExpenses().isEmpty()));
+    }
+
+    @Test
+    void soloSeRelacionanGastosDeLaMismaUnidad() {
+        List<StorageUnit> all = units.findAll();
+        StorageUnit unit = all.get(0);
+        Expense foreign = licenceFee(all.get(1));
+        UnitDocumentEntryDTO entry = unitDocuments.createEntry(unit.getId(),
+                new UnitDocumentEntryDTO.Request("Licencia", LocalDate.of(2026, 1, 1), null));
+        entryIds.add(new Long[]{unit.getId(), entry.getId()});
+
+        assertThrows(BadRequestException.class, () ->
+                unitDocuments.linkExpense(unit.getId(), entry.getId(), foreign.getId()));
+    }
+
+    @Test
     void laEntradaSoloSeVeDesdeSuUnidad() {
         List<StorageUnit> all = units.findAll();
         StorageUnit unit = all.get(0);

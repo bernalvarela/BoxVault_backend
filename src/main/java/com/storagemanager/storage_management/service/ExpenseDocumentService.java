@@ -11,6 +11,7 @@ import com.storagemanager.storage_management.model.enums.DocumentType;
 import com.storagemanager.storage_management.repository.ExpenseDocumentRepository;
 import com.storagemanager.storage_management.repository.ExpenseRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
+import com.storagemanager.storage_management.repository.UnitDocumentEntryExpenseRepository;
 import com.storagemanager.storage_management.security.UnitScope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,8 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Los documentos archivados en un gasto: el justificante del pago, la factura o
@@ -38,6 +41,7 @@ public class ExpenseDocumentService {
     private final ExpenseDocumentRepository expenseDocumentRepository;
     private final ExpenseRepository expenseRepository;
     private final StorageUnitRepository storageUnitRepository;
+    private final UnitDocumentEntryExpenseRepository entryExpenseRepository;
     private final UnitScope unitScope;
     private final DocumentService documents;
 
@@ -49,15 +53,20 @@ public class ExpenseDocumentService {
     }
 
     /**
-     * Los documentos de todos los gastos de una unidad, con los datos del gasto:
-     * los que se enseñan en la pestaña de documentos de la unidad.
+     * Los documentos de los gastos de una unidad, con los datos del gasto: los
+     * que se enseñan en la pestaña de documentos de la unidad. Los de gastos
+     * relacionados con una entrada no vienen: salen dentro de la entrada.
      */
     public List<ExpenseDocumentDTO> getDocumentsForUnit(Long unitId) {
         StorageUnit unit = storageUnitRepository.findById(unitId)
                 .orElseThrow(() -> new ResourceNotFoundException("Storage unit not found with id: " + unitId));
         unitScope.requireAccessible(unit);
+        Set<Long> inEntries = entryExpenseRepository.findByEntryStorageUnitId(unitId).stream()
+                .map(link -> link.getExpense().getId())
+                .collect(Collectors.toSet());
         return expenseDocumentRepository
                 .findByExpenseStorageUnitIdOrderByExpenseExpenseDateDescExpenseIdDescDocumentIdAsc(unitId).stream()
+                .filter(link -> !inEntries.contains(link.getExpense().getId()))
                 .map(ExpenseDocumentDTO::of)
                 .toList();
     }
@@ -99,12 +108,14 @@ public class ExpenseDocumentService {
     }
 
     /**
-     * Borra los documentos de un gasto que se va a borrar. Lo llama
-     * {@link ExpenseService#deleteExpense}: sin esto la fila del gasto no se
-     * podría borrar (la clave ajena) y los ficheros se quedarían en el almacén.
+     * Borra los documentos de un gasto que se va a borrar, y su relación con una
+     * entrada de documentos si la tiene. Lo llama {@link ExpenseService#deleteExpense}:
+     * sin esto la fila del gasto no se podría borrar (las claves ajenas) y los
+     * ficheros se quedarían en el almacén.
      */
     @Transactional
     public void deleteByExpense(Long expenseId) {
+        entryExpenseRepository.findByExpenseId(expenseId).ifPresent(entryExpenseRepository::delete);
         List<ExpenseDocument> links =
                 expenseDocumentRepository.findByExpenseIdOrderByDocumentUploadedAtDescDocumentIdDesc(expenseId);
         if (links.isEmpty()) return;

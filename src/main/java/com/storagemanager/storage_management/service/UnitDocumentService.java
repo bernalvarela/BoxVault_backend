@@ -1,15 +1,22 @@
 package com.storagemanager.storage_management.service;
 
+import com.storagemanager.storage_management.dto.ExpenseDocumentDTO;
 import com.storagemanager.storage_management.dto.UnitDocumentEntryDTO;
 import com.storagemanager.storage_management.exception.BadRequestException;
 import com.storagemanager.storage_management.exception.ResourceNotFoundException;
 import com.storagemanager.storage_management.model.Document;
+import com.storagemanager.storage_management.model.Expense;
 import com.storagemanager.storage_management.model.StorageUnit;
 import com.storagemanager.storage_management.model.UnitDocumentEntry;
 import com.storagemanager.storage_management.model.UnitDocumentEntryDocument;
+import com.storagemanager.storage_management.model.UnitDocumentEntryExpense;
 import com.storagemanager.storage_management.model.enums.DocumentType;
+import com.storagemanager.storage_management.repository.DocumentRepository;
+import com.storagemanager.storage_management.repository.ExpenseDocumentRepository;
+import com.storagemanager.storage_management.repository.ExpenseRepository;
 import com.storagemanager.storage_management.repository.StorageUnitRepository;
 import com.storagemanager.storage_management.repository.UnitDocumentEntryDocumentRepository;
+import com.storagemanager.storage_management.repository.UnitDocumentEntryExpenseRepository;
 import com.storagemanager.storage_management.repository.UnitDocumentEntryRepository;
 import com.storagemanager.storage_management.security.UnitScope;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -41,8 +49,21 @@ public class UnitDocumentService {
     private final StorageUnitRepository storageUnitRepository;
     private final UnitScope unitScope;
     private final DocumentService documents;
+    private final DocumentRepository documentRepository;
+    private final UnitDocumentEntryExpenseRepository entryExpenseRepository;
+    private final ExpenseRepository expenseRepository;
+    private final ExpenseDocumentRepository expenseDocumentRepository;
 
+    /** Las entradas de la unidad, sin los gastos relacionados (para quien no puede ver gastos). */
     public List<UnitDocumentEntryDTO> getEntries(Long unitId) {
+        return getEntries(unitId, false);
+    }
+
+    /**
+     * Las entradas de la unidad con sus ficheros y, con {@code withExpenses}, los
+     * gastos relacionados con cada una y sus justificantes.
+     */
+    public List<UnitDocumentEntryDTO> getEntries(Long unitId, boolean withExpenses) {
         requireUnit(unitId);
         List<UnitDocumentEntry> entries = entryRepository.findByStorageUnitIdOrderByEntryDateDescIdDesc(unitId);
         if (entries.isEmpty()) return List.of();
@@ -51,9 +72,57 @@ public class UnitDocumentService {
                         entries.stream().map(UnitDocumentEntry::getId).toList())
                 .stream()
                 .collect(Collectors.groupingBy(link -> link.getEntry().getId()));
-        return entries.stream()
+        List<UnitDocumentEntryDTO> result = entries.stream()
                 .map(e -> UnitDocumentEntryDTO.of(e, byEntry.getOrDefault(e.getId(), List.of())))
                 .toList();
+        if (withExpenses) {
+            Map<Long, List<UnitDocumentEntryDTO.LinkedExpenseDTO>> expensesByEntry = entryExpenseRepository
+                    .findByEntryIdInOrderByExpenseExpenseDateDescExpenseIdDesc(
+                            entries.stream().map(UnitDocumentEntry::getId).toList())
+                    .stream()
+                    .collect(Collectors.groupingBy(link -> link.getEntry().getId(),
+                            Collectors.mapping(link -> UnitDocumentEntryDTO.LinkedExpenseDTO.of(link.getExpense(),
+                                    expenseDocumentRepository
+                                            .findByExpenseIdOrderByDocumentUploadedAtDescDocumentIdDesc(link.getExpense().getId())
+                                            .stream().map(ExpenseDocumentDTO::of).toList()),
+                                    Collectors.toList())));
+            result.forEach(dto -> dto.setExpenses(expensesByEntry.getOrDefault(dto.getId(), List.of())));
+        }
+        return result;
+    }
+
+    /**
+     * Relaciona un gasto de la unidad con la entrada, para que salgan juntos. Un
+     * gasto va como mucho en una entrada: si ya está en otra, hay que quitarlo
+     * de allí antes.
+     */
+    @Transactional
+    public void linkExpense(Long unitId, Long entryId, Long expenseId) {
+        UnitDocumentEntry entry = requireEntry(unitId, entryId);
+        Expense expense = expenseRepository.findById(expenseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Expense not found with id: " + expenseId));
+        unitScope.requireAccessible(expense.getStorageUnit());
+        if (expense.getStorageUnit() == null || !unitId.equals(expense.getStorageUnit().getId())) {
+            throw new BadRequestException("El gasto no es de esta unidad");
+        }
+        Optional<UnitDocumentEntryExpense> existing = entryExpenseRepository.findByExpenseId(expenseId);
+        if (existing.isPresent()) {
+            if (existing.get().getEntry().getId().equals(entryId)) return;
+            throw new BadRequestException("El gasto ya está relacionado con la entrada «"
+                    + existing.get().getEntry().getTitle() + "»");
+        }
+        entryExpenseRepository.save(UnitDocumentEntryExpense.builder().entry(entry).expense(expense).build());
+    }
+
+    /** Quita la relación del gasto con la entrada; el gasto y sus documentos se quedan. */
+    @Transactional
+    public void unlinkExpense(Long unitId, Long entryId, Long expenseId) {
+        requireEntry(unitId, entryId);
+        UnitDocumentEntryExpense link = entryExpenseRepository.findByExpenseId(expenseId)
+                .filter(l -> l.getEntry().getId().equals(entryId))
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Expense " + expenseId + " is not linked to entry " + entryId));
+        entryExpenseRepository.delete(link);
     }
 
     @Transactional
@@ -71,10 +140,11 @@ public class UnitDocumentService {
         return toDto(entryRepository.save(entry));
     }
 
-    /** Borra la entrada con todos sus ficheros. */
+    /** Borra la entrada con todos sus ficheros. Los gastos relacionados se quedan, sueltos. */
     @Transactional
     public void deleteEntry(Long unitId, Long entryId) {
         UnitDocumentEntry entry = requireEntry(unitId, entryId);
+        entryExpenseRepository.deleteAll(entryExpenseRepository.findByEntryId(entryId));
         List<UnitDocumentEntryDocument> links =
                 entryDocumentRepository.findByEntryIdOrderByDocumentUploadedAtAscDocumentIdAsc(entryId);
         entryDocumentRepository.deleteAll(links);
@@ -116,6 +186,25 @@ public class UnitDocumentService {
         UnitDocumentEntryDocument link = requireLink(unitId, entryId, documentId);
         entryDocumentRepository.delete(link);
         documents.delete(link.getDocument());
+        return toDto(link.getEntry());
+    }
+
+    /**
+     * Cambia el tipo y la descripción de un fichero de la entrada, sin volver a
+     * subirlo. Una descripción vacía la quita.
+     */
+    @Transactional
+    public UnitDocumentEntryDTO updateDocument(Long unitId, Long entryId, Long documentId,
+                                               DocumentType type, String description) {
+        UnitDocumentEntryDocument link = requireLink(unitId, entryId, documentId);
+        Document document = link.getDocument();
+        document.setDocumentType(requireUnitType(type == null ? document.getDocumentType() : type));
+        String trimmed = description == null ? null : description.trim();
+        if (trimmed != null && trimmed.length() > 255) {
+            throw new BadRequestException("La descripción no puede pasar de 255 caracteres");
+        }
+        document.setDescription(trimmed == null || trimmed.isEmpty() ? null : trimmed);
+        documentRepository.save(document);
         return toDto(link.getEntry());
     }
 

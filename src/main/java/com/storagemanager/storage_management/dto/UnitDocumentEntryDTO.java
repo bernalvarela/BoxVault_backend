@@ -1,9 +1,11 @@
 package com.storagemanager.storage_management.dto;
 
 import com.storagemanager.storage_management.model.Document;
+import com.storagemanager.storage_management.model.Expense;
 import com.storagemanager.storage_management.model.UnitDocumentEntry;
 import com.storagemanager.storage_management.model.UnitDocumentEntryDocument;
 import com.storagemanager.storage_management.model.enums.DocumentType;
+import com.storagemanager.storage_management.model.enums.ExpenseCategory;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -12,6 +14,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -31,6 +34,36 @@ public class UnitDocumentEntryDTO {
     private LocalDateTime createdAt;
     private String createdBy;
     private List<FileDTO> documents;
+    /**
+     * Los gastos relacionados con la entrada, con sus justificantes. Sólo viene
+     * en el listado y para quien puede ver los gastos; si no, es null.
+     */
+    private List<LinkedExpenseDTO> expenses;
+
+    /** Un gasto relacionado con la entrada: lo que se enseña de él y sus documentos. */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class LinkedExpenseDTO {
+        private Long id;
+        private String description;
+        private LocalDate expenseDate;
+        private BigDecimal amount;
+        private ExpenseCategory category;
+        private List<ExpenseDocumentDTO> documents;
+
+        public static LinkedExpenseDTO of(Expense expense, List<ExpenseDocumentDTO> documents) {
+            return LinkedExpenseDTO.builder()
+                    .id(expense.getId())
+                    .description(expense.getDescription())
+                    .expenseDate(expense.getExpenseDate())
+                    .amount(expense.getAmount())
+                    .category(expense.getCategory())
+                    .documents(documents)
+                    .build();
+        }
+    }
 
     public static UnitDocumentEntryDTO of(UnitDocumentEntry entry, List<UnitDocumentEntryDocument> links) {
         Long unitId = entry.getStorageUnit().getId();
@@ -75,6 +108,16 @@ public class UnitDocumentEntryDTO {
                             + "/documents/" + doc.getId() + "/download")
                     .build();
         }
+    }
+
+    /** Lo que se manda al cambiar un fichero ya subido: su tipo y su descripción. */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class FileUpdate {
+        private DocumentType documentType;
+        @Size(max = 255)
+        private String description;
     }
 
     /** Lo que se manda al crear o cambiar una entrada; los ficheros se suben aparte, uno a uno. */
