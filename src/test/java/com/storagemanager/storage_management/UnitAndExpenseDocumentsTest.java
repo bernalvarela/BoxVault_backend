@@ -157,15 +157,31 @@ class UnitAndExpenseDocumentsTest {
 
     @Test
     void unaUnidadConDocumentosNoSeBorra() {
-        StorageUnit unit = units.findAll().stream()
-                .filter(u -> units.countByParentId(u.getId()) == 0 && expenses.countByStorageUnitId(u.getId()) == 0)
-                .filter(u -> u.getStatus() != com.storagemanager.storage_management.model.enums.UnitStatus.OCCUPIED)
-                .findFirst().orElseThrow();
-        UnitDocumentEntryDTO entry = unitDocuments.createEntry(unit.getId(),
-                new UnitDocumentEntryDTO.Request("Certificado", LocalDate.of(2026, 1, 1), null));
-        entryIds.add(new Long[]{unit.getId(), entry.getId()});
+        // Una unidad propia, libre: sin gastos, sin unidades dentro y sin alquilar,
+        // para que lo único que impida borrarla sean sus documentos. Los datos
+        // sembrados no tienen por qué tener ninguna así.
+        StorageUnit unit = units.save(StorageUnit.builder()
+                .unitNumber("TEST-DOCS-" + System.nanoTime())
+                .name("Unidad de prueba de documentos")
+                .sizeSquareMeters(1.0)
+                .baseMonthlyRate(new BigDecimal("10.00"))
+                .build());
+        try {
+            UnitDocumentEntryDTO entry = unitDocuments.createEntry(unit.getId(),
+                    new UnitDocumentEntryDTO.Request("Certificado", LocalDate.of(2026, 1, 1), null));
 
-        BadRequestException e = assertThrows(BadRequestException.class, () -> storageUnitService.deleteUnit(unit.getId()));
-        assertTrue(e.getMessage().contains("document"));
+            BadRequestException e = assertThrows(BadRequestException.class,
+                    () -> storageUnitService.deleteUnit(unit.getId()));
+            assertTrue(e.getMessage().contains("document"));
+
+            // Sin la entrada, ya se puede borrar.
+            unitDocuments.deleteEntry(unit.getId(), entry.getId());
+            storageUnitService.deleteUnit(unit.getId());
+            assertFalse(units.existsById(unit.getId()));
+        } finally {
+            entries.findByStorageUnitIdOrderByEntryDateDescIdDesc(unit.getId())
+                    .forEach(e -> unitDocuments.deleteEntry(unit.getId(), e.getId()));
+            if (units.existsById(unit.getId())) units.deleteById(unit.getId());
+        }
     }
 }
